@@ -1,0 +1,11 @@
+[package]
+name = "parser"
+version = "0.1.0"
+authors = ["Tim Patterson <tim.wanaka@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+ast = { path = "../ast" }
+data = { path = "../data" }
+
+nom = "5.1.2"

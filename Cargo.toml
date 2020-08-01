@@ -6,7 +6,10 @@ edition = "2018"
 
 [workspace]
 members = [
-    "src/data"
+    "src/ast",
+    "src/data",
+    "src/functions",
+    "src/parser"
 ]
 
 [dependencies]

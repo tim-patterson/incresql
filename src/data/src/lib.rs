@@ -1,7 +1,8 @@
-use rust_decimal::Decimal;
+// Re-exported as almost every crate using data will also need decimal
+pub use rust_decimal::Decimal;
 
 /// Datum - in memory representation of sql value.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Datum<'a> {
     Null,
     Boolean(bool),
@@ -33,6 +34,30 @@ impl Default for Datum<'_> {
     }
 }
 
+impl From<bool> for Datum<'static> {
+    fn from(b: bool) -> Self {
+        Datum::Boolean(b)
+    }
+}
+
+impl From<i64> for Datum<'static> {
+    fn from(i: i64) -> Self {
+        Datum::Integer(i)
+    }
+}
+
+impl From<Decimal> for Datum<'static> {
+    fn from(d: Decimal) -> Self {
+        Datum::Decimal(d)
+    }
+}
+
+impl From<String> for Datum<'static> {
+    fn from(d: String) -> Self {
+        Datum::TextOwned(d.into_boxed_str())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -45,5 +70,32 @@ mod tests {
         // word sized alignment for the &str pointers we actually end up at 24 bytes in size,
         // this means we've got enough room for 23 byte of data for short strings etc.
         assert_eq!(24, size_of::<Datum>());
+    }
+
+    #[test]
+    fn test_datum_from_boolean() {
+        assert_eq!(Datum::from(true), Datum::Boolean(true));
+        assert_eq!(Datum::from(false), Datum::Boolean(false));
+    }
+
+    #[test]
+    fn test_datum_from_integer() {
+        assert_eq!(Datum::from(1234), Datum::Integer(1234));
+    }
+
+    #[test]
+    fn test_datum_from_decimal() {
+        assert_eq!(
+            Datum::from(Decimal::new(12345, 2)),
+            Datum::Decimal(Decimal::new(12345, 2))
+        );
+    }
+
+    #[test]
+    fn test_datum_from_string() {
+        assert_eq!(
+            Datum::from(String::from("Hello world")),
+            Datum::TextOwned(Box::from("Hello world"))
+        );
     }
 }
