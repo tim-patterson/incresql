@@ -4,8 +4,12 @@ version = "0.1.0"
 authors = ["Tim Patterson <tim.wanaka@gmail.com>"]
 edition = "2018"
 
-[dependencies]
+[workspace]
+members = [
+    "src/data"
+]
 
+[dependencies]
 
 [profile.release]
 debug = true
