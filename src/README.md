@@ -6,5 +6,7 @@ using the compiler to help us enforce modularity and encapsulation between the d
 ## Crates
 * **ast** - Contains AST nodes for rel and expressions
 * **data** - Contains Datum structures and their related serialization code.
+* **executor** - Code that actually runs the plans from the planner.
 * **functions** - Contains functions used in expressions
 * **parser** - Contains parser
+* **planner** - Validates the parsed sql and optimizes and plans how to then execute

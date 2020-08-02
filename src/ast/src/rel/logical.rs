@@ -6,7 +6,7 @@ use crate::expr::NamedExpression;
 pub enum LogicalOperator {
     // These may appear anywhere in a logical operator at anytime
     Single, // No from clause, ie select 1 + 1
-    Project(Project<LogicalOperator>),
+    Project(Project),
 }
 
 impl Default for LogicalOperator {
@@ -16,8 +16,8 @@ impl Default for LogicalOperator {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Project<S> {
+pub struct Project {
     pub distinct: bool, // Comes from parser, planner will rewrite to a group by
     pub expressions: Vec<NamedExpression>,
-    pub source: Box<S>,
+    pub source: Box<LogicalOperator>,
 }
