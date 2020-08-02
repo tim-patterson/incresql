@@ -8,8 +8,10 @@ edition = "2018"
 members = [
     "src/ast",
     "src/data",
+    "src/executor",
     "src/functions",
-    "src/parser"
+    "src/parser",
+    "src/planner"
 ]
 
 [dependencies]
