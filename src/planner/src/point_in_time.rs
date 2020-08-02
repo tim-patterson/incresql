@@ -11,7 +11,7 @@ pub fn plan_for_point_in_time(query: LogicalOperator) -> PointInTimeOperator {
         }) => {
             assert!(!distinct, "Distinct should not be true at this point!");
             PointInTimeOperator::Project(point_in_time::Project {
-                expressions,
+                expressions: expressions.into_iter().map(|ne| ne.expression).collect(),
                 source: Box::new(plan_for_point_in_time(*source)),
             })
         }
@@ -36,10 +36,7 @@ mod tests {
         });
 
         let expected = PointInTimeOperator::Project(point_in_time::Project {
-            expressions: vec![NamedExpression {
-                alias: None,
-                expression: Expression::Literal(Datum::Null),
-            }],
+            expressions: vec![Expression::Literal(Datum::Null)],
             source: Box::new(PointInTimeOperator::Single),
         });
 

@@ -1,4 +1,4 @@
-use crate::expr::NamedExpression;
+use crate::expr::Expression;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum PointInTimeOperator {
@@ -14,6 +14,6 @@ impl Default for PointInTimeOperator {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Project {
-    pub expressions: Vec<NamedExpression>,
+    pub expressions: Vec<Expression>,
     pub source: Box<PointInTimeOperator>,
 }
