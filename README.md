@@ -22,3 +22,12 @@ Once this is done you can use the standard cargo commands to build/test/run.
   # Build Incresql
   cargo build --release
 ```
+
+### Developing
+Before checking in all tests need to pass,
+the code needs to be formatted and lints need to pass.
+```sh
+  cargo test --all
+  cargo fmt --all
+  cargo clippy --all
+```
