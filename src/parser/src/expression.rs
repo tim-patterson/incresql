@@ -1,10 +1,10 @@
 use crate::atoms::{identifier_str, kw};
 use crate::literals::literal;
-use crate::whitespace::ws_0;
+use crate::whitespace::{ws_0, ws_1};
 use crate::ParserResult;
 use ast::expr::{Expression, NamedExpression};
 use nom::combinator::{map, opt};
-use nom::sequence::{pair, preceded, tuple};
+use nom::sequence::{pair, preceded};
 
 /// Parses a bog standard expression, ie 1 + 2
 pub fn expression(input: &str) -> ParserResult<Expression> {
@@ -17,7 +17,7 @@ pub fn named_expression(input: &str) -> ParserResult<NamedExpression> {
         pair(
             expression,
             opt(preceded(
-                pair(ws_0, opt(pair(kw("AS"), ws_0))),
+                pair(opt(pair(ws_0, kw("AS"))), ws_1),
                 identifier_str,
             )),
         ),
@@ -26,7 +26,7 @@ pub fn named_expression(input: &str) -> ParserResult<NamedExpression> {
 }
 
 fn literal_expression(input: &str) -> ParserResult<Expression> {
-    map(literal, |datum| Expression::Literal(datum))(input)
+    map(literal, Expression::Literal)(input)
 }
 
 #[cfg(test)]
