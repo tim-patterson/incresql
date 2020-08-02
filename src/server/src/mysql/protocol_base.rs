@@ -78,6 +78,53 @@ pub fn read_enc_int(buffer: &[u8]) -> (u64, &[u8]) {
     }
 }
 
+pub fn write_null_string<S: AsRef<[u8]>>(s: S, buffer: &mut Vec<u8>) {
+    buffer.extend_from_slice(s.as_ref());
+    buffer.push(0);
+}
+
+pub fn read_null_string(buffer: &[u8]) -> (String, &[u8]) {
+    let mut len = 0_usize;
+    for b in buffer {
+        if *b == 0 {
+            break;
+        }
+        len += 1;
+    }
+    let mut vec = Vec::with_capacity(len);
+    vec.extend_from_slice(&buffer[..len]);
+
+    let s = unsafe { String::from_utf8_unchecked(vec) };
+
+    (s, &buffer[(len + 1)..])
+}
+
+pub fn write_eof_string<S: AsRef<[u8]>>(s: S, buffer: &mut Vec<u8>) {
+    buffer.extend_from_slice(s.as_ref());
+}
+
+pub fn read_eof_string(buffer: &[u8]) -> (String, &[u8]) {
+    let s = unsafe { String::from_utf8_unchecked(buffer.to_vec()) };
+    (s, [].as_ref())
+}
+
+pub fn write_enc_string<S: AsRef<[u8]>>(s: S, buffer: &mut Vec<u8>) {
+    write_enc_int(s.as_ref().len() as u64, buffer);
+    write_eof_string(s, buffer);
+}
+
+pub fn read_enc_string(buffer: &[u8]) -> (String, &[u8]) {
+    let (length, rem) = read_enc_int(buffer);
+    read_fixed_length_string(length as usize, rem)
+}
+
+pub fn read_fixed_length_string(length: usize, buffer: &[u8]) -> (String, &[u8]) {
+    let mut vec = Vec::with_capacity(length);
+    vec.extend_from_slice(&buffer[..length]);
+    let s = unsafe { String::from_utf8_unchecked(vec) };
+    (s, &buffer[length..])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -134,5 +181,42 @@ mod tests {
         assert_eq!(b, 9123);
         assert_eq!(c, 7832432);
         assert_eq!(d, 8920398049823);
+    }
+
+    #[test]
+    fn test_null_string() {
+        let mut buf = vec![];
+        write_null_string("hello", &mut buf);
+        write_null_string("world".as_bytes(), &mut buf);
+
+        let (h, rem) = read_null_string(&buf);
+        let (w, rem) = read_null_string(rem);
+        assert_eq!(h, "hello");
+        assert_eq!(w, "world");
+        assert!(rem.is_empty())
+    }
+
+    #[test]
+    fn test_eof_string() {
+        let mut buf = vec![];
+        write_eof_string("hello", &mut buf);
+
+        let (h, rem) = read_eof_string(&buf);
+        assert_eq!(h, "hello");
+        assert_eq!(buf.len(), "hello".len());
+        assert!(rem.is_empty())
+    }
+
+    #[test]
+    fn test_enc_string() {
+        let mut buf = vec![];
+        write_enc_string("hello", &mut buf);
+        write_enc_string("world".as_bytes(), &mut buf);
+
+        let (h, rem) = read_enc_string(&buf);
+        let (w, rem) = read_enc_string(rem);
+        assert_eq!(h, "hello");
+        assert_eq!(w, "world");
+        assert!(rem.is_empty())
     }
 }
