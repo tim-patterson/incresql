@@ -2,12 +2,13 @@ use crate::ParserResult;
 use data::Decimal;
 use nom::branch::alt;
 use nom::bytes::complete::{
-    escaped_transform, is_not, tag, tag_no_case, take, take_while, take_while1,
+    escaped_transform, is_not, tag, tag_no_case, take, take_until, take_while, take_while1,
+    take_while_m_n,
 };
 use nom::character::complete::alphanumeric1;
 use nom::combinator::{cut, map, map_res, not, opt, peek, recognize, value};
 use nom::error::{context, ErrorKind, VerboseError, VerboseErrorKind};
-use nom::sequence::{delimited, pair, terminated, tuple};
+use nom::sequence::{delimited, pair, preceded, terminated, tuple};
 use nom::AsChar;
 use std::str::FromStr;
 
@@ -96,6 +97,34 @@ pub fn kw(keyword: &'static str) -> impl Fn(&str) -> ParserResult<&str> {
             ))),
         )(input)
     }
+}
+
+/// Parse an identifier string, to avoid ambiguity a non quoted identifier must not have any
+/// embedded mathematical operators etc in it.
+/// A purely numeric identifier would also cause ambiguity so we're enforce that the first char
+/// should be non-numeric, while we will allow using some keywords as identifiers in some cases we
+/// need to exclude these to allow unambiguous parsing.
+/// Alternatively backticks can be used to quote the identifiers, will lowercase all identifiers
+pub fn identifier_str(input: &str) -> ParserResult<String> {
+    map(
+        alt((
+            recognize(preceded(
+                not(peek(kw("FROM"))),
+                pair(
+                    take_while_m_n(1, 1, |c: char| {
+                        c.is_alpha() || c == '_' || c == '$' || c == '@'
+                    }),
+                    take_while(|c: char| c.is_alphanumeric() || c == '_' || c == '$' || c == '@'),
+                ),
+            )),
+            delimited(
+                tag("`"),
+                take_until("`"),
+                cut(context("Missing closing backtick on identifier", tag("`"))),
+            ),
+        )),
+        |s| s.to_lowercase(),
+    )(input)
 }
 
 #[cfg(test)]
@@ -197,5 +226,16 @@ mod tests {
         assert_eq!(kw("null")("null foo").unwrap().1, "null");
 
         kw("null")("nulls_removed").expect_err("Expected to fail");
+    }
+
+    #[test]
+    fn test_identifier_string() {
+        assert_eq!(identifier_str("abcC123").unwrap().1, "abcc123");
+
+        assert_eq!(identifier_str("abcC123 fsd").unwrap().1, "abcc123");
+
+        assert!(identifier_str("1bcC123 fsd").is_err());
+
+        assert_eq!(identifier_str("`1bcC123 fsd`").unwrap().1, "1bcc123 fsd");
     }
 }

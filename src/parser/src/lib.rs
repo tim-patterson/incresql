@@ -2,6 +2,7 @@ use nom::error::VerboseError;
 use nom::IResult;
 
 mod atoms;
+mod expression;
 mod literals;
 mod whitespace;
 
