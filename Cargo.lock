@@ -124,6 +124,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "server"
 version = "0.1.0"
+dependencies = [
+ "data 0.1.0",
+]
 
 [[package]]
 name = "static_assertions"
