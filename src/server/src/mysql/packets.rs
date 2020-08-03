@@ -156,6 +156,31 @@ impl ClientPacket for HandshakeResponsePacket {
     }
 }
 
+#[derive(Debug)]
+struct AuthSwitchRequestPacket {
+    status_tag: u8,
+    plugin_name: String,
+    plugin_data: Vec<u8>,
+}
+
+impl AuthSwitchRequestPacket {
+    fn new() -> Self {
+        AuthSwitchRequest {
+            status_tag: 0xFE,
+            plugin_name: "mysql_native_password".to_string(),
+            plugin_data: vec![1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5],
+        }
+    }
+}
+
+impl ServerPacket for AuthSwitchRequestPacket {
+    fn write(&self, _capabilities_lower: u16, _capabilities_upper: u16, buffer: &mut Vec<u8>) {
+        write_int_1(self.status_tag, buffer);
+        write_null_string(&self.plugin_name, buffer);
+        write_null_string(&self.plugin_data, buffer);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -230,5 +255,15 @@ mod tests {
         );
         assert_eq!(packet.client_connection_attrs["_platform"], "x86_64");
         Ok(())
+    }
+
+    #[test]
+    fn test_auth_switch_request_packet() {
+        let mut buf = vec![];
+        AuthSwitchRequestPacket::new().write(0, 0, &mut buf);
+        assert_eq!(
+            buf.as_slice(),
+            [].as_ref()
+        );
     }
 }
