@@ -2,6 +2,7 @@ use crate::mysql::packets::{ClientPacket, ComFieldListPacket, ComInitDbPacket, C
 use std::net::TcpStream;
 use std::num::Wrapping;
 
+mod constants;
 mod packets;
 mod protocol_base;
 
@@ -9,8 +10,7 @@ pub struct Connection {
     stream: TcpStream,
     packet_header_buf: Vec<u8>,
     packet_buf: Vec<u8>,
-    capabilities_lower: u16,
-    capabilities_upper: u16,
+    capabilities: u32,
     sequence_id: Wrapping<u8>,
 }
 
@@ -20,13 +20,13 @@ impl Connection {
             stream,
             packet_header_buf: Vec::new(),
             packet_buf: Vec::new(),
-            capabilities_lower: 0,
-            capabilities_upper: 0,
+            capabilities: 0,
             sequence_id: Wrapping(0),
         }
     }
 }
 
+#[allow(clippy::enum_variant_names)]
 #[derive(Debug, PartialEq)]
 enum CommandPacket {
     ComQuit,

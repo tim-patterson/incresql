@@ -1,11 +1,8 @@
+use crate::mysql::constants::*;
 use crate::mysql::protocol_base::*;
 use data::DataType;
 use std::collections::HashMap;
 use std::fmt::Debug;
-
-pub trait ServerPacket: Debug {
-    fn write(&self, capabilities_lower: u16, capabilities_upper: u16, buffer: &mut Vec<u8>);
-}
 
 pub trait ClientPacket
 where
@@ -14,77 +11,49 @@ where
     fn read(buffer: &[u8]) -> Result<Self, std::io::Error>;
 }
 
+const SERVER_SUPPORTED_CAPABILITIES: u32 = CAPABILITY_CLIENT_LONG_PASSWORD
+    | CAPABILITY_CLIENT_FOUND_ROWS
+    | CAPABILITY_CLIENT_LONG_FLAG
+    | CAPABILITY_CLIENT_CONNECT_WITH_DB
+    | CAPABILITY_CLIENT_NO_SCHEMA
+    | CAPABILITY_CLIENT_PROTOCOL_41
+    | CAPABILITY_CLIENT_SECURE_CONNECTION
+    | CAPABILITY_CLIENT_CONNECT_ATTRS
+    | CAPABILITY_CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA
+    | CLIENT_DEPRECATE_EOF;
+
 /// https://dev.mysql.com/doc/dev/mysql-server/8.0.12/page_protocol_connection_phase_packets_protocol_handshake_v10.html
-#[derive(Debug)]
-pub struct HandshakePacket {
-    protocol_version: u8,             // int<1> - Always 10
-    server_version: String,           // string<NUL> - human readable status information
-    connection_id: u32,               // int<4>
-    auth_plugin_data_part_1: [u8; 8], // string[8] - first 8 bytes of the plugin provided data (scramble)
-    filler: u8, // int<1> - 0x00 byte, terminating the first part of a scramble
-    //https://github.com/mysql/mysql-server/blob/8e797a5d6eb3a87f16498edcb7261a75897babae/router/src/mysql_protocol/include/mysqlrouter/mysql_protocol/constants.h#L105
-    capability_flags_1: u16, // int<2> - The lower 2 bytes of the Capabilities Flags
-    character_set: u8, // int<1> - default server a_protocol_character_set, only the lower 8-bits
-    status_flags: u16, // int<2> - SERVER_STATUS_flags_enum
-    capability_flags_2: u16, // int<2> - The upper 2 bytes of the Capabilities Flags
-    auth_plugin_data_len: u8, // int<1> - length of the combined auth_plugin_data (scramble), if auth_plugin_data_len is > 0
-    reserved: [u8; 10],       // string[10] - reserved. All 0s.
-    auth_plugin_data_part_2: Vec<u8>, // $length - Rest of the plugin provided data (scramble), $len=MAX(13, length of auth-plugin-data - 8)
-    auth_plugin_name: String, // NULL - name of the auth_method that the auth_plugin_data belongs to
-}
+pub fn write_handshake_packet(connection_id: u32, buffer: &mut Vec<u8>) {
+    let protocol_version = 10;
+    let server_version = "8.0.0-incresql";
+    let auth_plugin_data_part_1 = [1, 2, 3, 4, 5, 6, 7, 0];
+    let filler = 0;
+    let character_set = CHARSET_UTF8_GENERAL_CI;
+    let status_flags = 0;
+    let auth_plugin_data_len = 20;
+    let reserved = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    let auth_plugin_data_part_2 = [1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 1, 1, 0];
+    let auth_plugin_name = "mysql_native_password";
 
-impl HandshakePacket {
-    pub fn new(connection_id: u32) -> Self {
-        HandshakePacket {
-            protocol_version: 10,
-            server_version: "8.0.0-incresql".to_string(),
-            connection_id,
-            auth_plugin_data_part_1: [1, 2, 3, 4, 5, 6, 7, 0], // A Nonce
-            filler: 0,
-            // CLIENT_PROTOCOL_41, CLIENT_CONNECT_WITH_DB, CLIENT_INTERACTIVE, CLIENT_LONG_PASSWORD, CLIENT_ODBC, CLIENT_TRANSACTIONS,
-            // CLIENT_SECURE_CONNECTION (needed for jdbc driver v8..)
-            capability_flags_1: 512 + 8 + 1024 + 1 + 64 + 8192 + 32768,
-            character_set: 33, // utf8_general_ci
-            status_flags: 0,
-            // CLIENT_CONNECT_ATTRS, CLIENT_DEPRECATE_EOF, CLIENT_MULTI_RESULTS, CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA, CLIENT_PLUGIN_AUTH
-            capability_flags_2: (1_u16 << 4)
-                + (1_u16 << 8)
-                + (1_u16 << 1)
-                + (1_u16 << 5)
-                + (1_u16 << 3),
-            auth_plugin_data_len: 20,
-            reserved: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            auth_plugin_data_part_2: vec![1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 1, 1, 0],
-            auth_plugin_name: "mysql_native_password".to_string(),
-        }
-    }
-}
-
-impl ServerPacket for HandshakePacket {
-    /// At this point we haven't established the capabilities so these values are ignored for
-    /// this packet
-    fn write(&self, _capabilities_lower: u16, _capabilities_upper: u16, buffer: &mut Vec<u8>) {
-        write_int_1(self.protocol_version, buffer);
-        write_null_string(&self.server_version, buffer);
-        write_int_4(self.connection_id, buffer);
-        buffer.extend_from_slice(&self.auth_plugin_data_part_1);
-        write_int_1(self.filler, buffer);
-        write_int_2(self.capability_flags_1, buffer);
-        write_int_1(self.character_set, buffer);
-        write_int_2(self.status_flags, buffer);
-        write_int_2(self.capability_flags_2, buffer);
-        write_int_1(self.auth_plugin_data_len, buffer);
-        buffer.extend_from_slice(&self.reserved);
-        buffer.extend_from_slice(&self.auth_plugin_data_part_2);
-        write_null_string(&self.auth_plugin_name, buffer);
-    }
+    write_int_1(protocol_version, buffer);
+    write_null_string(server_version, buffer);
+    write_int_4(connection_id, buffer);
+    buffer.extend_from_slice(&auth_plugin_data_part_1);
+    write_int_1(filler, buffer);
+    write_int_2(SERVER_SUPPORTED_CAPABILITIES as u16, buffer);
+    write_int_1(character_set, buffer);
+    write_int_2(status_flags, buffer);
+    write_int_2((SERVER_SUPPORTED_CAPABILITIES >> 16) as u16, buffer);
+    write_int_1(auth_plugin_data_len, buffer);
+    buffer.extend_from_slice(&reserved);
+    buffer.extend_from_slice(&auth_plugin_data_part_2);
+    write_null_string(auth_plugin_name, buffer);
 }
 
 /// https://dev.mysql.com/doc/dev/mysql-server/8.0.12/page_protocol_connection_phase_packets_protocol_handshake_response.html
 #[derive(Default, Debug, PartialEq)]
 pub struct HandshakeResponsePacket {
-    pub client_flag_lower: u16, // int<2>
-    pub client_flag_upper: u16, // int<2>
+    pub client_flags: u32,
     pub max_packet_size: u32,
     pub character_set: u8,
     pub username: String,
@@ -97,16 +66,17 @@ pub struct HandshakeResponsePacket {
 impl ClientPacket for HandshakeResponsePacket {
     fn read(mut buffer: &[u8]) -> Result<Self, std::io::Error> {
         let mut packet = Self::default();
-        buffer = read_int_2(&mut packet.client_flag_lower, buffer);
-        // If client protocol 41
-        if (packet.client_flag_lower & 512) != 0 {
-            buffer = read_int_2(&mut packet.client_flag_upper, buffer);
+        let mut lower_capibilities = 0;
+        buffer = read_int_2(&mut lower_capibilities, buffer);
+        if (lower_capibilities as u32 & CAPABILITY_CLIENT_PROTOCOL_41) != 0 {
+            let mut upper_capibilities = 0;
+            buffer = read_int_2(&mut upper_capibilities, buffer);
+            packet.client_flags = lower_capibilities as u32 + ((upper_capibilities as u32) << 16);
             buffer = read_int_4(&mut packet.max_packet_size, buffer);
             buffer = read_int_1(&mut packet.character_set, buffer);
             buffer = &buffer[23..]; // filler
             buffer = read_null_string(&mut packet.username, buffer);
-            // CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA (1UL << 21), 21 - 16 = 5...
-            if (packet.client_flag_upper & (1_u16 << 5)) != 0 {
+            if (packet.client_flags & CAPABILITY_CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA) != 0 {
                 buffer = read_enc_bytestring(&mut packet.auth_response, buffer);
             } else {
                 let mut len = 0_u8;
@@ -115,18 +85,15 @@ impl ClientPacket for HandshakeResponsePacket {
                     read_fixed_length_bytestring(&mut packet.auth_response, len as usize, buffer);
             }
 
-            // CLIENT_CONNECT_WITH_DB (8)
-            if (packet.client_flag_lower & 8) != 0 {
+            if (packet.client_flags & CAPABILITY_CLIENT_CONNECT_WITH_DB) != 0 {
                 buffer = read_null_string(&mut packet.database, buffer);
             }
 
-            // //  CLIENT_PLUGIN_AUTH (1UL << 19), 19 - 16 = 3...
-            if !buffer.is_empty() && (packet.client_flag_upper & (1_u16 << 3)) != 0 {
+            if !buffer.is_empty() && (packet.client_flags & CAPABILITY_CLIENT_PLUGIN_AUTH) != 0 {
                 buffer = read_null_string(&mut packet.client_plugin_name, buffer);
             }
 
-            //  CLIENT_CONNECT_ATTRS (1UL << 20), 20 - 16 = 4...
-            if !buffer.is_empty() && (packet.client_flag_upper & (1_u16 << 4)) != 0 {
+            if !buffer.is_empty() && (packet.client_flags & CAPABILITY_CLIENT_CONNECT_ATTRS) != 0 {
                 let mut len_kvs = 0_u64;
                 buffer = read_enc_int(&mut len_kvs, buffer);
 
@@ -139,10 +106,11 @@ impl ClientPacket for HandshakeResponsePacket {
                 }
             }
         } else {
+            packet.client_flags = lower_capibilities as u32;
             buffer = read_int_3(&mut packet.max_packet_size, buffer);
             buffer = read_null_string(&mut packet.username, buffer);
-            // CLIENT_CONNECT_WITH_DB
-            if (packet.client_flag_lower & 8) != 0 {
+
+            if (packet.client_flags & CAPABILITY_CLIENT_CONNECT_WITH_DB) != 0 {
                 buffer = read_null_bytestring(&mut packet.auth_response, buffer);
                 buffer = read_null_string(&mut packet.database, buffer);
             } else {
@@ -157,29 +125,14 @@ impl ClientPacket for HandshakeResponsePacket {
     }
 }
 
-#[derive(Debug)]
-pub struct AuthSwitchRequestPacket {
-    status_tag: u8,
-    plugin_name: String,
-    plugin_data: Vec<u8>,
-}
+pub fn write_auth_switch_request_packet(buffer: &mut Vec<u8>) {
+    let status_tag = 0xFE;
+    let plugin_name = "mysql_native_password";
+    let plugin_data = [1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5];
 
-impl AuthSwitchRequestPacket {
-    pub fn new() -> Self {
-        AuthSwitchRequestPacket {
-            status_tag: 0xFE,
-            plugin_name: "mysql_native_password".to_string(),
-            plugin_data: vec![1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5],
-        }
-    }
-}
-
-impl ServerPacket for AuthSwitchRequestPacket {
-    fn write(&self, _capabilities_lower: u16, _capabilities_upper: u16, buffer: &mut Vec<u8>) {
-        write_int_1(self.status_tag, buffer);
-        write_null_string(&self.plugin_name, buffer);
-        write_null_string(&self.plugin_data, buffer);
-    }
+    write_int_1(status_tag, buffer);
+    write_null_string(plugin_name, buffer);
+    write_null_string(&plugin_data, buffer);
 }
 
 #[derive(Default, Debug, PartialEq)]
@@ -236,89 +189,51 @@ impl ClientPacket for ComFieldListPacket {
     }
 }
 
-#[derive(Debug)]
-pub struct ErrPacket {
-    header: u8,
+pub fn write_err_packet(
     error_code: u16,
-    sql_state_marker: u8,
-    sql_state: String,
-    error_message: String,
-}
+    error_message: &str,
+    capabilities: u32,
+    buffer: &mut Vec<u8>,
+) {
+    let header = 0xFF;
+    let sql_state_marker = b'#';
+    let sql_state = "HY000";
 
-impl ErrPacket {
-    pub fn new(error_code: u16, error_message: String) -> Self {
-        ErrPacket {
-            header: 0xFF,
-            error_code,
-            sql_state_marker: b'#',
-            sql_state: "HY000".to_string(),
-            error_message,
-        }
+    write_int_1(header, buffer);
+    write_int_2(error_code, buffer);
+    if (capabilities & CAPABILITY_CLIENT_PROTOCOL_41) != 0 {
+        write_int_1(sql_state_marker, buffer);
+        buffer.extend_from_slice(sql_state.as_bytes());
     }
-}
-
-impl ServerPacket for ErrPacket {
-    fn write(&self, capabilities_lower: u16, _capabilities_upper: u16, buffer: &mut Vec<u8>) {
-        write_int_1(self.header, buffer);
-        write_int_2(self.error_code, buffer);
-        // CLIENT_PROTOCOL_41
-        if (capabilities_lower & 512) != 0 {
-            write_int_1(self.sql_state_marker, buffer);
-            buffer.extend_from_slice(self.sql_state.as_bytes());
-        }
-        write_eof_string(&self.error_message, buffer);
-    }
+    write_eof_string(error_message, buffer);
 }
 
 /// https://dev.mysql.com/doc/dev/mysql-server/8.0.12/page_protocol_basic_ok_packet.html
-#[derive(Debug)]
-pub struct OkPacket {
-    header: u8,
-    affected_rows: u64,
-    last_insert_id: u64,
-    status_flags: u16,
-    warnings: u16,
-    info: String,
-    session_state_info: String,
-}
+pub fn write_ok_packet(eof: bool, affected_rows: u64, capabilities: u32, buffer: &mut Vec<u8>) {
+    let header = if eof { 0xFE } else { 0 };
+    let last_insert_id = 0;
+    let status_flags = STATUS_FLAG_AUTOCOMMIT; // autocommit
+    let warnings = 0;
+    let info = "";
+    //let session_state_info = "";
 
-impl OkPacket {
-    pub fn new(eof: bool, affected_rows: u64) -> Self {
-        OkPacket {
-            header: if eof { 0xFE } else { 0 },
-            affected_rows,
-            last_insert_id: 0,
-            status_flags: 2, // autocommit
-            warnings: 0,
-            info: "".to_string(),
-            session_state_info: "".to_string(),
-        }
+    write_int_1(header, buffer);
+    write_enc_int(affected_rows, buffer);
+    write_enc_int(last_insert_id, buffer);
+    if (capabilities & CAPABILITY_CLIENT_PROTOCOL_41) != 0 {
+        write_int_2(status_flags, buffer);
+        write_int_2(warnings, buffer);
+    } else if (capabilities & CAPABILITY_CLIENT_TRANSACTIONS) != 0 {
+        write_int_2(status_flags, buffer);
     }
-}
 
-impl ServerPacket for OkPacket {
-    fn write(&self, capabilities_lower: u16, capabilities_upper: u16, buffer: &mut Vec<u8>) {
-        write_int_1(self.header, buffer);
-        write_enc_int(self.affected_rows, buffer);
-        write_enc_int(self.last_insert_id, buffer);
-        // CLIENT_PROTOCOL_41
-        if (capabilities_lower & 512) != 0 {
-            write_int_2(self.status_flags, buffer);
-            write_int_2(self.warnings, buffer);
-        // CLIENT_TRANSACTIONS
-        } else if (capabilities_lower & 8192) != 0 {
-            write_int_2(self.status_flags, buffer);
-        }
-
-        // // CLIENT_SESSION_TRACK
-        if (capabilities_upper & (1u16 << 7)) != 0 {
-            write_null_string(&self.info, buffer);
-        //self.session_state_info.write_null_string(buffer);
-        } else {
-            write_eof_string(&self.info, buffer);
-        }
-        write_eof_string(&self.info, buffer);
+    if (capabilities & CAPABILITY_CLIENT_SESSION_TRACK) != 0 {
+        write_null_string(info, buffer);
+    //self.session_state_info.write_null_string(buffer);
+    } else {
+        write_eof_string(info, buffer);
     }
+    write_eof_string(info, buffer);
 }
 
 /// https://dev.mysql.com/doc/dev/mysql-server/8.0.12/page_protocol_basic_ok_packet.html
@@ -339,131 +254,94 @@ impl EofPacket {
     }
 }
 
-impl ServerPacket for EofPacket {
-    fn write(&self, capabilities_lower: u16, _capabilities_upper: u16, buffer: &mut Vec<u8>) {
-        write_int_1(self.header, buffer);
-        // CLIENT_PROTOCOL_41
-        if (capabilities_lower & 512) != 0 {
-            write_int_2(self.warnings, buffer);
-            write_int_2(self.status_flags, buffer);
-        }
+pub fn write_eof_packet(capabilities: u32, buffer: &mut Vec<u8>) {
+    let header = 0xFE;
+    let warnings = 0;
+    let status_flags = STATUS_FLAG_AUTOCOMMIT; // Autocommit
+
+    write_int_1(header, buffer);
+    if (capabilities & CAPABILITY_CLIENT_PROTOCOL_41) != 0 {
+        write_int_2(warnings, buffer);
+        write_int_2(status_flags, buffer);
     }
 }
 
-#[derive(Debug)]
-pub struct ResultsetPacket {
-    metadata_follows: u8,
-    column_count: usize,
-}
-
-impl ResultsetPacket {
-    pub fn new(column_count: usize) -> Self {
-        ResultsetPacket {
-            metadata_follows: 1,
-            column_count,
-        }
+pub fn write_resultset_packet(column_count: usize, capabilities: u32, buffer: &mut Vec<u8>) {
+    let metadata_follows = 1;
+    if (capabilities & CAPABILITY_CLIENT_MULTI_RESULTS) != 0 {
+        write_int_1(metadata_follows, buffer);
     }
-}
-
-impl ServerPacket for ResultsetPacket {
-    fn write(&self, _capabilities_lower: u16, capabilities_upper: u16, buffer: &mut Vec<u8>) {
-        // CLIENT_OPTIONAL_RESULTSET_METADATA
-        if (capabilities_upper & (1_u16 << 9)) != 0 {
-            write_int_1(self.metadata_follows, buffer);
-        }
-        write_enc_int(self.column_count as u64, buffer);
-    }
+    write_enc_int(column_count as u64, buffer);
 }
 
 /// https://dev.mysql.com/doc/dev/mysql-server/8.0.12/page_protocol_com_query_response_text_resultset_column_definition.html
-#[derive(Debug)]
-struct ColumnPacket {
-    table: String,
-    name: String,
-    character_set: u16,
-    column_length: u32,
-    column_type: u8,
-    flags: u16,
-    decimals: u8,
-}
+pub fn write_column_packet(
+    table: &str,
+    name: &str,
+    data_type: DataType,
+    capabilities: u32,
+    buffer: &mut Vec<u8>,
+) {
+    // 32768 is to be set for number fields, TIMESTAMP_FLAG   1024
+    let flags = 0_u16;
+    let character_set = CHARSET_UTF8_GENERAL_CI;
 
-impl ColumnPacket {
-    fn new(table: String, name: String, data_type: DataType) -> Self {
-        // 32768 is to be set for number fields, TIMESTAMP_FLAG   1024
-        let flags = 0_u16;
+    // Just used for client formatting
+    // 0x00 for integers and static strings
+    // 0x1f for dynamic strings, double, float
+    // 0x00 to 0x51 for decimals
+    let mut decimals = 0;
+    // Used for client formatting, ie varchar(1024)
+    let mut column_length = 1024;
 
-        // Just used for client formatting
-        // 0x00 for integers and static strings
-        // 0x1f for dynamic strings, double, float
-        // 0x00 to 0x51 for decimals
-        let mut decimals = 0;
-        // Used for client formatting, ie varchar(1024)
-        let mut column_length = 1024;
-
-        // https://dev.mysql.com/doc/dev/mysql-server/latest/field__types_8h.html
-        let column_type = match data_type {
-            DataType::Text => {
-                decimals = 0x1f;
-                15
-            }
-            DataType::Integer => 8,
-            DataType::Boolean => 1, // Mysql tinyint
-            DataType::Decimal(precision, scale) => {
-                column_length = precision as u32;
-                // Assuming this is meant to be the scale...
-                decimals = scale;
-                // New Decimal
-                22
-            }
-        };
-
-        ColumnPacket {
-            table,
-            name,
-            character_set: 33, // UTF8
-            column_length,
-            column_type,
-            flags,
-            decimals,
+    // https://dev.mysql.com/doc/dev/mysql-server/latest/field__types_8h.html
+    let column_type = match data_type {
+        DataType::Text => {
+            decimals = 0x1f;
+            15
         }
-    }
-}
+        DataType::Integer => 8,
+        DataType::Boolean => 1, // Mysql tinyint
+        DataType::Decimal(precision, scale) => {
+            column_length = precision as u32;
+            // Assuming this is meant to be the scale...
+            decimals = scale;
+            // New Decimal
+            22
+        }
+    };
 
-impl ServerPacket for ColumnPacket {
-    fn write(&self, capabilities_lower: u16, _capabilities_upper: u16, buffer: &mut Vec<u8>) {
-        // CLIENT_PROTOCOL_41
-        if (capabilities_lower & 512) != 0 {
-            write_enc_string("def", buffer);
-            write_enc_string("", buffer);
-            write_enc_string(&self.table, buffer);
-            write_enc_string("", buffer);
-            write_enc_string(&self.name, buffer);
-            write_enc_string("", buffer);
-            write_enc_int(0x0C, buffer);
-            write_int_2(self.character_set, buffer);
-            write_int_4(self.column_length, buffer);
-            write_int_1(self.column_type, buffer);
-            write_int_2(self.flags, buffer);
-            write_int_1(self.decimals, buffer);
-            // These 2 types don't seem to be mentioned in the spec but yet seem to be required to
-            // make up the 0x0c length as per the spec
-            write_int_2(0, buffer);
+    if (capabilities & CAPABILITY_CLIENT_PROTOCOL_41) != 0 {
+        write_enc_string("def", buffer);
+        write_enc_string("", buffer);
+        write_enc_string(table, buffer);
+        write_enc_string("", buffer);
+        write_enc_string(name, buffer);
+        write_enc_string("", buffer);
+        write_enc_int(0x0C, buffer);
+        write_int_2(character_set as u16, buffer);
+        write_int_4(column_length, buffer);
+        write_int_1(column_type, buffer);
+        write_int_2(flags, buffer);
+        write_int_1(decimals, buffer);
+        // These 2 types don't seem to be mentioned in the spec but yet seem to be required to
+        // make up the 0x0c length as per the spec
+        write_int_2(0, buffer);
+    } else {
+        write_enc_string(table, buffer);
+        write_enc_string(name, buffer);
+        write_int_1(1_u8, buffer);
+        write_int_1(column_type, buffer);
+
+        if (capabilities & CAPABILITY_CLIENT_LONG_FLAG) != 0 {
+            write_enc_int(3, buffer);
+            write_int_2(flags, buffer);
+            write_int_1(decimals, buffer);
         } else {
-            write_enc_string(&self.table, buffer);
-            write_enc_string(&self.name, buffer);
-            write_int_1(1_u8, buffer);
-            write_int_1(self.column_type, buffer);
-            // CLIENT_LONG_FLAG
-            if (capabilities_lower & 4) != 0 {
-                write_enc_int(3, buffer);
-                write_int_2(self.flags, buffer);
-                write_int_1(self.decimals, buffer);
-            } else {
-                write_enc_int(2, buffer);
-                // This doesn't agree with spec but I suspect spec has a typo in it
-                write_int_1(self.flags as u8, buffer);
-                write_int_1(self.decimals, buffer);
-            }
+            write_enc_int(2, buffer);
+            // This doesn't agree with spec but I suspect spec has a typo in it
+            write_int_1(flags as u8, buffer);
+            write_int_1(decimals, buffer);
         }
     }
 }
@@ -476,12 +354,12 @@ mod tests {
     #[test]
     fn test_handshake_packet() {
         let mut buf = vec![];
-        HandshakePacket::new(1).write(0, 0, &mut buf);
+        write_handshake_packet(1, &mut buf);
         assert_eq!(
             buf.as_slice(),
             [
                 10, 56, 46, 48, 46, 48, 45, 105, 110, 99, 114, 101, 115, 113, 108, 0, 1, 0, 0, 0,
-                1, 2, 3, 4, 5, 6, 7, 0, 0, 73, 166, 33, 0, 0, 58, 1, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                1, 2, 3, 4, 5, 6, 7, 0, 0, 31, 130, 33, 0, 0, 48, 1, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 1, 1, 0, 109, 121, 115, 113, 108, 95, 110, 97,
                 116, 105, 118, 101, 95, 112, 97, 115, 115, 119, 111, 114, 100, 0
             ]
@@ -547,7 +425,7 @@ mod tests {
     #[test]
     fn test_auth_switch_request_packet() {
         let mut buf = vec![];
-        AuthSwitchRequestPacket::new().write(0, 0, &mut buf);
+        write_auth_switch_request_packet(&mut buf);
         assert_eq!(
             buf.as_slice(),
             [
@@ -609,7 +487,12 @@ mod tests {
     #[test]
     fn test_err_packet() {
         let mut buf = vec![];
-        ErrPacket::new(1096, String::from("No tables used")).write(0xffff, 0, &mut buf);
+        write_err_packet(
+            1096,
+            "No tables used",
+            SERVER_SUPPORTED_CAPABILITIES,
+            &mut buf,
+        );
         // Expected response from https://dev.mysql.com/doc/dev/mysql-server/8.0.12/page_protocol_basic_err_packet.html
         assert_eq!(
             buf.as_slice(),
@@ -624,7 +507,7 @@ mod tests {
     #[test]
     fn test_ok_packet() {
         let mut buf = vec![];
-        OkPacket::new(false, 0).write(0xffff, 0, &mut buf);
+        write_ok_packet(false, 0, SERVER_SUPPORTED_CAPABILITIES, &mut buf);
         // Expected response from https://dev.mysql.com/doc/dev/mysql-server/8.0.12/page_protocol_basic_ok_packet.html
         assert_eq!(
             buf.as_slice(),
@@ -635,7 +518,7 @@ mod tests {
     #[test]
     fn test_eof_packet() {
         let mut buf = vec![];
-        EofPacket::new().write(0xffff, 0, &mut buf);
+        write_eof_packet(SERVER_SUPPORTED_CAPABILITIES, &mut buf);
         // Expected response from https://dev.mysql.com/doc/dev/mysql-server/8.0.12/page_protocol_basic_eof_packet.html
         assert_eq!(buf.as_slice(), [0xfe, 0x00, 0x00, 0x02, 0x00].as_ref());
     }
@@ -643,8 +526,13 @@ mod tests {
     #[test]
     fn test_column_packet() {
         let mut buf = vec![];
-        ColumnPacket::new("foo".to_string(), "bar".to_string(), DataType::Integer)
-            .write(0xffff, 0, &mut buf);
+        write_column_packet(
+            "foo",
+            "bar",
+            DataType::Integer,
+            SERVER_SUPPORTED_CAPABILITIES,
+            &mut buf,
+        );
         assert_eq!(
             buf.as_slice(),
             [
@@ -658,7 +546,7 @@ mod tests {
     #[test]
     fn test_resultset_packet_packet() {
         let mut buf = vec![];
-        ResultsetPacket::new(4).write(0xffff, 0, &mut buf);
+        write_resultset_packet(4, SERVER_SUPPORTED_CAPABILITIES, &mut buf);
         assert_eq!(buf.as_slice(), [4].as_ref());
     }
 }
