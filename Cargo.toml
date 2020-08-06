@@ -16,6 +16,7 @@ members = [
 ]
 
 [dependencies]
+server = { path = "src/server" }
 
 [profile.release]
 debug = true
