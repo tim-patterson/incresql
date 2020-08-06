@@ -10,4 +10,5 @@ using the compiler to help us enforce modularity and encapsulation between the d
 * **functions** - Contains functions used in expressions
 * **parser** - Contains parser
 * **planner** - Validates the parsed sql and optimizes and plans how to then execute
-* **server** - Server 
+* **runtime** - Responsible for coordinating/scheduling everything around the lifecycle of a session.
+* **server** - Server, wraps the runtime with a tcp server and contains the mysql protocol

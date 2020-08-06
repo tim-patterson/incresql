@@ -1,5 +1,6 @@
 use crate::point_in_time::project::ProjectExecutor;
 use crate::point_in_time::single::SingleExecutor;
+use crate::ExecutionError;
 use ast::rel::point_in_time::PointInTimeOperator;
 use data::Datum;
 
@@ -9,13 +10,13 @@ mod single;
 /// Point in time executor, essentially a streaming iterator
 pub trait Executor {
     /// Advance the iterator to the next position, should be called before get for a new iter
-    fn advance(&mut self) -> Result<(), ()>;
+    fn advance(&mut self) -> Result<(), ExecutionError>;
 
     /// Get the data at the current position of the iterator, the i32 is a frequency/
     fn get(&self) -> Option<(&[Datum], i32)>;
 
     /// Short cut function that calls advance followed by get.
-    fn next(&mut self) -> Result<Option<(&[Datum], i32)>, ()> {
+    fn next(&mut self) -> Result<Option<(&[Datum], i32)>, ExecutionError> {
         self.advance()?;
         Ok(self.get())
     }
@@ -41,7 +42,7 @@ mod tests {
     use ast::rel::point_in_time;
 
     #[test]
-    fn test_build_executor() -> Result<(), ()> {
+    fn test_build_executor() -> Result<(), ExecutionError> {
         let plan = PointInTimeOperator::Project(point_in_time::Project {
             expressions: vec![Expression::Literal(Datum::from(1))],
             source: Box::new(PointInTimeOperator::Single),

@@ -12,4 +12,5 @@ fn plan_common(query: LogicalOperator) -> Result<LogicalOperator, PlannerError> 
     validate::validate(query)
 }
 
+#[derive(Debug)]
 pub struct PlannerError {}

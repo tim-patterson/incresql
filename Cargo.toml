@@ -12,6 +12,7 @@ members = [
     "src/functions",
     "src/parser",
     "src/planner",
+    "src/runtime",
     "src/server"
 ]
 

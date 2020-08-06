@@ -1,0 +1,12 @@
+[package]
+name = "runtime"
+version = "0.1.0"
+authors = ["Tim Patterson <tim.wanaka@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+ast = { path = "../ast" }
+data = { path = "../data" }
+executor = { path = "../executor" }
+parser = { path = "../parser" }
+planner = { path = "../planner" }
