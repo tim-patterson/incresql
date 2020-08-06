@@ -17,6 +17,7 @@ members = [
 ]
 
 [dependencies]
+runtime = { path = "src/runtime" }
 server = { path = "src/server" }
 
 [profile.release]

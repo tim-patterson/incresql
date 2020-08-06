@@ -4,41 +4,41 @@ use crate::mysql::packets::{
     HandshakeResponsePacket,
 };
 use crate::mysql::protocol_base::{read_int_1, read_int_3, write_int_3};
-use data::Session;
+use runtime::connection::Connection;
 use std::cmp::min;
 use std::fmt::Debug;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::num::Wrapping;
+use std::sync::Arc;
 
 mod constants;
 mod packets;
 mod protocol_base;
 
-pub struct Connection {
+pub struct MysqlConnection<'a> {
     stream: TcpStream,
     packet_header_buf: Vec<u8>,
     packet_buf: Vec<u8>,
     capabilities: u32,
     sequence_id: Wrapping<u8>,
-    session: Session,
+    connection: Arc<Connection<'a>>,
 }
 
-impl Connection {
-    pub fn new(stream: TcpStream, session: Session) -> Self {
-        Connection {
+impl<'a> MysqlConnection<'a> {
+    pub fn new(stream: TcpStream, connection: Arc<Connection<'a>>) -> Self {
+        MysqlConnection {
             stream,
             packet_header_buf: Vec::new(),
             packet_buf: Vec::new(),
             capabilities: 0,
             sequence_id: Wrapping(0),
-            session,
+            connection,
         }
     }
 
     pub fn connect(&mut self) -> Result<(), std::io::Error> {
         self.handshake()?;
-        let connection_id = self.session.connection_id;
         let capabilities = self.capabilities;
 
         loop {
@@ -51,7 +51,8 @@ impl Connection {
                         CommandPacket::ComPing => {
                             self.send_packet(|buf| write_ok_packet(false, 0, capabilities, buf))?;
                         }
-                        CommandPacket::ComInitDb(_com_init_db) => {
+                        CommandPacket::ComInitDb(com_init_db) => {
+                            self.connection.change_database(&com_init_db.schema);
                             self.send_packet(|buf| write_ok_packet(false, 0, capabilities, buf))?;
                         }
                         CommandPacket::ComQuery(com_query) => {
@@ -62,8 +63,7 @@ impl Connection {
                     }
                 }
                 Err(io_error) => {
-                    println!("Connection {} bailed due to {}", connection_id, io_error);
-                    break;
+                    return Err(io_error)
                 }
             }
         }
@@ -74,7 +74,7 @@ impl Connection {
     /// Set up the initial handshake with the server
     fn handshake(&mut self) -> Result<(), std::io::Error> {
         // Note that these handshake packets in the connection phase don't have the command byte.
-        let connection_id = self.session.connection_id;
+        let connection_id = self.connection.connection_id;
 
         self.send_packet(|buf| write_handshake_packet(connection_id, buf))?;
 
@@ -82,7 +82,7 @@ impl Connection {
         let handshake_response = self.receive_packet::<HandshakeResponsePacket>()?;
         let capabilities = handshake_response.client_flags;
         self.capabilities = self.capabilities;
-        self.session.user = handshake_response.username;
+        *self.connection.session.user.write().unwrap() = handshake_response.username;
 
         // Ask for user's password
         self.send_packet(write_auth_switch_request_packet)?;
@@ -109,9 +109,7 @@ impl Connection {
 
             write_int_3(packet_length, &mut self.packet_header_buf);
             self.packet_header_buf.push(self.sequence_id.0);
-
             self.stream.write_all(&self.packet_header_buf)?;
-
             self.stream
                 .write_all(&payload_byte[..(packet_length as usize)])?;
 

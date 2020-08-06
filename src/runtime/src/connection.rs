@@ -31,8 +31,9 @@ impl Connection<'_> {
         }
     }
 
-    pub fn change_database(&self, database: &str) {
+    pub fn change_database(&self, database: &str) -> Result<(), QueryError> {
         *self.session.current_database.write().unwrap() = String::from(database);
+        Ok(())
     }
 }
 
@@ -47,6 +48,18 @@ mod tests {
         let connection = runtime.new_connection();
         let mut executor = connection.execute_statement("select 1")?;
         assert_eq!(executor.next()?, Some(([Datum::from(1)].as_ref(), 1)));
+        Ok(())
+    }
+
+    #[test]
+    fn test_change_database() -> Result<(), QueryError> {
+        let runtime = Runtime::new();
+        let connection = runtime.new_connection();
+        connection.change_database("change_to_foo")?;
+        assert_eq!(
+            *connection.session.current_database.read().unwrap(),
+            "change_to_foo"
+        );
         Ok(())
     }
 }

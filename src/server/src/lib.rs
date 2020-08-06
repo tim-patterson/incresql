@@ -1,37 +1,46 @@
-use crate::mysql::Connection;
-use data::Session;
+use crate::mysql::MysqlConnection;
+use runtime::Runtime;
+use scoped_threadpool::Pool;
 use std::net::TcpListener;
-use std::thread;
+use std::panic::catch_unwind;
 
 // Something to do with the infinite loop for the listen loop means that we trip up rusts deadcode
 // detection, we'll just make mysql public to get around it even though there's probably no use for
 // it outside of the server
 pub mod mysql;
 
-pub struct Server {}
-
-impl Server {
-    pub fn new() -> Self {
-        Server {}
-    }
-
-    pub fn listen(&mut self, addr: &str) -> Result<(), std::io::Error> {
-        let listener = TcpListener::bind(addr)?;
-        let mut connection_id = 1;
-        loop {
-            if let Ok((stream, _)) = listener.accept() {
-                let session = Session::new(connection_id);
-                connection_id += 1;
-                thread::spawn(move || {
-                    Connection::new(stream, session);
-                });
-            }
-        }
-    }
+/// Implements a tcp server that accepts mysql connections
+pub struct Server {
+    runtime: Runtime,
 }
 
-impl Default for Server {
-    fn default() -> Self {
-        Server::new()
+impl Server {
+    pub fn new(runtime: Runtime) -> Self {
+        Server { runtime }
+    }
+
+    /// Starts listening for mysql connections. This method doesn't normally terminate.
+    pub fn listen(&mut self, addr: &str) -> Result<(), std::io::Error> {
+        let listener = TcpListener::bind(addr)?;
+        let mut pool = Pool::new(500);
+
+        loop {
+            if let Ok((stream, _)) = listener.accept() {
+                pool.scoped(|scope| {
+                    let connection = self.runtime.new_connection();
+                    let connection_id = connection.connection_id;
+                    scope.execute(move || {
+                        if let Err(err) = catch_unwind(|| {
+                            let mut mysql_connection = MysqlConnection::new(stream, connection);
+                            if let Err(err) = mysql_connection.connect() {
+                                println!("IO Error for {}\n {:?}", connection_id, err);
+                            }
+                        }) {
+                            println!("Thread panic for connection {}\n {:?}", connection_id, err);
+                        }
+                    });
+                })
+            }
+        }
     }
 }

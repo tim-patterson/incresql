@@ -19,6 +19,7 @@ const SERVER_SUPPORTED_CAPABILITIES: u32 = CAPABILITY_CLIENT_LONG_PASSWORD
     | CAPABILITY_CLIENT_PROTOCOL_41
     | CAPABILITY_CLIENT_SECURE_CONNECTION
     | CAPABILITY_CLIENT_CONNECT_ATTRS
+    | CAPABILITY_CLIENT_PLUGIN_AUTH
     | CAPABILITY_CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA
     | CLIENT_DEPRECATE_EOF;
 
@@ -44,10 +45,16 @@ pub fn write_handshake_packet(connection_id: u32, buffer: &mut Vec<u8>) {
     write_int_1(character_set, buffer);
     write_int_2(status_flags, buffer);
     write_int_2((SERVER_SUPPORTED_CAPABILITIES >> 16) as u16, buffer);
-    write_int_1(auth_plugin_data_len, buffer);
+    if (SERVER_SUPPORTED_CAPABILITIES & CAPABILITY_CLIENT_PLUGIN_AUTH) != 0 {
+        write_int_1(auth_plugin_data_len, buffer);
+    } else {
+        write_int_1(0, buffer);
+    }
     buffer.extend_from_slice(&reserved);
     buffer.extend_from_slice(&auth_plugin_data_part_2);
-    write_null_string(auth_plugin_name, buffer);
+    if (SERVER_SUPPORTED_CAPABILITIES & CAPABILITY_CLIENT_PLUGIN_AUTH) != 0 {
+        write_null_string(auth_plugin_name, buffer);
+    }
 }
 
 /// https://dev.mysql.com/doc/dev/mysql-server/8.0.12/page_protocol_connection_phase_packets_protocol_handshake_response.html
@@ -359,7 +366,7 @@ mod tests {
             buf.as_slice(),
             [
                 10, 56, 46, 48, 46, 48, 45, 105, 110, 99, 114, 101, 115, 113, 108, 0, 1, 0, 0, 0,
-                1, 2, 3, 4, 5, 6, 7, 0, 0, 31, 130, 33, 0, 0, 48, 1, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                1, 2, 3, 4, 5, 6, 7, 0, 0, 31, 130, 33, 0, 0, 56, 1, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 1, 1, 0, 109, 121, 115, 113, 108, 95, 110, 97,
                 116, 105, 118, 101, 95, 112, 97, 115, 115, 119, 111, 114, 100, 0
             ]

@@ -6,3 +6,6 @@ edition = "2018"
 
 [dependencies]
 data = { path = "../data" }
+runtime = { path = "../runtime" }
+
+scoped_threadpool = "0.1.9"
