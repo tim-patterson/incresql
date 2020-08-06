@@ -1,4 +1,5 @@
 use crate::point_in_time::Executor;
+use crate::ExecutionError;
 use data::Datum;
 
 pub struct SingleExecutor {
@@ -20,7 +21,7 @@ impl SingleExecutor {
 }
 
 impl Executor for SingleExecutor {
-    fn advance(&mut self) -> Result<(), ()> {
+    fn advance(&mut self) -> Result<(), ExecutionError> {
         self.state = match self.state {
             State::Ready => State::Single,
             State::Single => State::Done,
@@ -47,7 +48,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_single_executor() -> Result<(), ()> {
+    fn test_single_executor() -> Result<(), ExecutionError> {
         let mut executor = SingleExecutor::new();
         assert_eq!(executor.next()?, Some((&[] as &[Datum], 1)));
         assert_eq!(executor.next()?, None);

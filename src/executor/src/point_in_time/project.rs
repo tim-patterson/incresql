@@ -1,6 +1,7 @@
 use crate::expression::EvalScalarRow;
 use crate::point_in_time::Executor;
 use crate::utils::right_size_new;
+use crate::ExecutionError;
 use ast::expr::Expression;
 use data::Datum;
 
@@ -31,7 +32,7 @@ impl Executor for ProjectExecutor {
     // We need a little unsafe to muddle with the lifetimes to get past the rust compiler
 
     #[allow(clippy::transmute_ptr_to_ptr)]
-    fn advance(&mut self) -> Result<(), ()> {
+    fn advance(&mut self) -> Result<(), ExecutionError> {
         if let Some((tuple, _freq)) = self.source.next()? {
             self.expressions.eval_scalar(tuple, unsafe {
                 std::mem::transmute::<&mut [Datum<'_>], &mut [Datum<'_>]>(&mut self.tuple_buffer)
@@ -59,9 +60,10 @@ impl Executor for ProjectExecutor {
 mod tests {
     use super::*;
     use crate::point_in_time::single::SingleExecutor;
+    use crate::ExecutionError;
 
     #[test]
-    fn test_project_executor() -> Result<(), ()> {
+    fn test_project_executor() -> Result<(), ExecutionError> {
         let mut executor = ProjectExecutor::new(
             Box::from(SingleExecutor::new()),
             vec![
