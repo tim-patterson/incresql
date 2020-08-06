@@ -10,3 +10,4 @@ using the compiler to help us enforce modularity and encapsulation between the d
 * **functions** - Contains functions used in expressions
 * **parser** - Contains parser
 * **planner** - Validates the parsed sql and optimizes and plans how to then execute
+* **runtime** - Responsible for coordinating/scheduling everything around the lifecycle of a session.
