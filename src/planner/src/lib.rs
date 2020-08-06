@@ -1,6 +1,7 @@
 use ast::rel::logical::LogicalOperator;
 use ast::rel::point_in_time::PointInTimeOperator;
 
+mod normalize;
 mod point_in_time;
 mod validate;
 
@@ -9,7 +10,8 @@ pub fn plan_for_point_in_time(query: LogicalOperator) -> Result<PointInTimeOpera
 }
 
 fn plan_common(query: LogicalOperator) -> Result<LogicalOperator, PlannerError> {
-    validate::validate(query)
+    let query = validate::validate(query)?;
+    normalize::normalize(query)
 }
 
 #[derive(Debug)]
