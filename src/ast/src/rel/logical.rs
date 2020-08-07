@@ -26,6 +26,15 @@ pub struct Project {
 impl LogicalOperator {
     /// Iterates over the named(output) expressions *owned* by this operator.
     /// To iterate over the output fields instead use one of the fields methods.
+    pub fn named_expressions(&self) -> Box<dyn Iterator<Item = &NamedExpression> + '_> {
+        match self {
+            LogicalOperator::Single => Box::from(empty()),
+            LogicalOperator::Project(project) => Box::from(project.expressions.iter()),
+        }
+    }
+
+    /// Iterates over the named(output) expressions *owned* by this operator.
+    /// To iterate over the output fields instead use one of the fields methods.
     pub fn named_expressions_mut(&mut self) -> Box<dyn Iterator<Item = &mut NamedExpression> + '_> {
         match self {
             LogicalOperator::Single => Box::from(empty()),
