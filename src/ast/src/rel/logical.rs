@@ -1,4 +1,5 @@
 use crate::expr::NamedExpression;
+use std::iter::{empty, once};
 
 /// Represents a query in the generic sense, generated from the parser, and validated and
 /// modified by the planner.
@@ -20,4 +21,98 @@ pub struct Project {
     pub distinct: bool, // Comes from parser, planner will rewrite to a group by
     pub expressions: Vec<NamedExpression>,
     pub source: Box<LogicalOperator>,
+}
+
+impl LogicalOperator {
+    /// Iterates over the named(output) expressions *owned* by this operator.
+    /// To iterate over the output fields instead use one of the fields methods.
+    pub fn named_expressions(&self) -> Box<dyn Iterator<Item = &NamedExpression> + '_> {
+        match self {
+            LogicalOperator::Single => Box::from(empty()),
+            LogicalOperator::Project(project) => Box::from(project.expressions.iter()),
+        }
+    }
+
+    /// Iterates over the named(output) expressions *owned* by this operator.
+    /// To iterate over the output fields instead use one of the fields methods.
+    pub fn named_expressions_mut(&mut self) -> Box<dyn Iterator<Item = &mut NamedExpression> + '_> {
+        match self {
+            LogicalOperator::Single => Box::from(empty()),
+            LogicalOperator::Project(project) => Box::from(project.expressions.iter_mut()),
+        }
+    }
+
+    /// Iterates over the immediate child operators of this operator
+    pub fn children_mut(&mut self) -> Box<dyn Iterator<Item = &mut LogicalOperator> + '_> {
+        match self {
+            LogicalOperator::Single => Box::from(empty()),
+            LogicalOperator::Project(project) => Box::from(once(project.source.as_mut())),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::expr::Expression;
+    use data::Datum;
+
+    #[test]
+    fn test_named_expressions_mut() {
+        let mut operator = LogicalOperator::Single;
+        let children: Vec<_> = operator.named_expressions_mut().collect();
+
+        assert_eq!(children, Vec::<&mut NamedExpression>::new());
+
+        let mut operator = LogicalOperator::Project(Project {
+            distinct: false,
+            expressions: vec![
+                NamedExpression {
+                    alias: Some(String::from("1")),
+                    expression: Expression::Literal(Datum::Null),
+                },
+                NamedExpression {
+                    alias: Some(String::from("2")),
+                    expression: Expression::Literal(Datum::Null),
+                },
+            ],
+            source: Box::new(LogicalOperator::Single),
+        });
+
+        let aliases: Vec<_> = operator
+            .named_expressions_mut()
+            .map(|ne| ne.alias.as_ref().unwrap())
+            .collect();
+
+        assert_eq!(aliases, vec!["1", "2"]);
+    }
+
+    #[test]
+    fn test_children_mut() {
+        let mut operator = LogicalOperator::Single;
+        let children: Vec<_> = operator.children_mut().collect();
+
+        assert_eq!(children, Vec::<&mut LogicalOperator>::new());
+
+        // Double level project!
+        let mut operator = LogicalOperator::Project(Project {
+            distinct: false,
+            expressions: vec![],
+            source: Box::new(LogicalOperator::Project(Project {
+                distinct: false,
+                expressions: vec![],
+                source: Box::new(LogicalOperator::Single),
+            })),
+        });
+
+        let children: Vec<_> = operator.children_mut().collect();
+
+        let mut expected = LogicalOperator::Project(Project {
+            distinct: false,
+            expressions: vec![],
+            source: Box::new(LogicalOperator::Single),
+        });
+
+        assert_eq!(children, vec![&mut expected]);
+    }
 }
