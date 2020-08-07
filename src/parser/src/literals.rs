@@ -20,9 +20,18 @@ fn boolean_literal(input: &str) -> ParserResult<Datum<'static>> {
 }
 
 fn number_literal(input: &str) -> ParserResult<Datum<'static>> {
-    // Our casts will promote ints -> decimals -> floats so that should be the preference
-    // for parsing numbers, we may actually need to parse floats...
-    alt((map(integer, Datum::from), map(decimal, Datum::from)))(input)
+    // Our casts will promote ints -> bigints -> decimals -> floats so that should be the preference
+    // for parsing numbers, we may not actually need to parse floats unless we support NaN/Inf etc
+    alt((
+        map(integer, |i| {
+            if std::i32::MIN as i64 <= i && i <= std::i32::MAX as i64 {
+                Datum::from(i as i32)
+            } else {
+                Datum::from(i)
+            }
+        }),
+        map(decimal, Datum::from),
+    ))(input)
 }
 
 fn text_literal(input: &str) -> ParserResult<Datum<'static>> {
@@ -50,6 +59,10 @@ mod tests {
     #[test]
     fn test_number_literal() {
         assert_eq!(literal("123").unwrap().1, Datum::from(123));
+        assert_eq!(
+            literal("3000000000").unwrap().1,
+            Datum::from(3000000000_i64)
+        );
         assert_eq!(
             literal("123.456").unwrap().1,
             Datum::from(Decimal::from_str("123.456").unwrap())

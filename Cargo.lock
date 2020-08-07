@@ -45,6 +45,9 @@ dependencies = [
 [[package]]
 name = "functions"
 version = "0.1.0"
+dependencies = [
+ "data 0.1.0",
+]
 
 [[package]]
 name = "incresql"

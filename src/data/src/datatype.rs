@@ -5,6 +5,7 @@ pub enum DataType {
     Boolean,
     Text,
     Integer,
+    BigInt,
     // Precision and scale
     Decimal(u8, u8),
 }
