@@ -1,0 +1,11 @@
+[package]
+name = "server"
+version = "0.1.0"
+authors = ["Tim Patterson <tim.wanaka@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+data = { path = "../data" }
+runtime = { path = "../runtime" }
+
+scoped_threadpool = "0.1.9"

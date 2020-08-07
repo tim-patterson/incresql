@@ -1,12 +1,23 @@
 use executor::ExecutionError;
 use parser::ParseError;
 use planner::PlannerError;
+use std::fmt::{Display, Formatter};
 
 #[derive(Debug)]
 pub enum QueryError {
     ParseError(ParseError),
     PlannerError(PlannerError),
     ExecutionError(ExecutionError),
+}
+
+impl Display for QueryError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            QueryError::ParseError(err) => Display::fmt(err, f),
+            QueryError::PlannerError(err) => Display::fmt(err, f),
+            QueryError::ExecutionError(err) => Display::fmt(err, f),
+        }
+    }
 }
 
 impl From<ParseError> for QueryError {

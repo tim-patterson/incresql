@@ -31,3 +31,20 @@ the code needs to be formatted and lints need to pass.
   cargo fmt --all
   cargo clippy --all
 ```
+
+### Connecting
+To connect to incresql first start it by running
+```sh
+  # Running from source
+  cargo run --release
+
+  # OR
+
+  # Running from release
+  ./incresql
+```
+
+And then in another terminal (tab) run(assuming you have the mysql client installed):
+```sh
+  mysql -h 127.0.0.1
+```

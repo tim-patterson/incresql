@@ -12,10 +12,13 @@ members = [
     "src/functions",
     "src/parser",
     "src/planner",
-    "src/runtime"
+    "src/runtime",
+    "src/server"
 ]
 
 [dependencies]
+runtime = { path = "src/runtime" }
+server = { path = "src/server" }
 
 [profile.release]
 debug = true
