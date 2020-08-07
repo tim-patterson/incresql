@@ -301,20 +301,19 @@ pub fn write_column_packet(
     // Used for client formatting, ie varchar(1024)
     let mut column_length = 1024;
 
-    // https://dev.mysql.com/doc/dev/mysql-server/latest/field__types_8h.html
     let column_type = match data_type {
+        DataType::Null => MYSQL_TYPE_NULL,
         DataType::Text => {
             decimals = 0x1f;
-            15
+            MYSQL_TYPE_VAR_STRING
         }
-        DataType::Integer => 8,
-        DataType::Boolean => 1, // Mysql tinyint
+        DataType::Integer => MYSQL_TYPE_LONGLONG,
+        DataType::Boolean => MYSQL_TYPE_TINY,
         DataType::Decimal(precision, scale) => {
             column_length = precision as u32;
             // Assuming this is meant to be the scale...
             decimals = scale;
-            // New Decimal
-            22
+            MYSQL_TYPE_NEWDECIMAL
         }
     };
 

@@ -75,3 +75,31 @@ pub const CLIENT_DEPRECATE_EOF: u32 = 0x01000000;
 pub const CHARSET_UTF8_GENERAL_CI: u8 = 33;
 
 pub const STATUS_FLAG_AUTOCOMMIT: u16 = 2;
+
+// https://dev.mysql.com/doc/internals/en/com-query-response.html#packet-ProtocolText::Resultset
+pub const MYSQL_TYPE_DECIMAL: u8 = 0x00;
+pub const MYSQL_TYPE_TINY: u8 = 0x01;
+pub const MYSQL_TYPE_SHORT: u8 = 0x02;
+pub const MYSQL_TYPE_LONG: u8 = 0x03;
+pub const MYSQL_TYPE_FLOAT: u8 = 0x04;
+pub const MYSQL_TYPE_DOUBLE: u8 = 0x05;
+pub const MYSQL_TYPE_NULL: u8 = 0x06;
+pub const MYSQL_TYPE_TIMESTAMP: u8 = 0x07;
+pub const MYSQL_TYPE_LONGLONG: u8 = 0x08;
+pub const MYSQL_TYPE_INT24: u8 = 0x09;
+pub const MYSQL_TYPE_DATE: u8 = 0x0a;
+pub const MYSQL_TYPE_TIME: u8 = 0x0b;
+pub const MYSQL_TYPE_DATETIME: u8 = 0x0c;
+pub const MYSQL_TYPE_YEAR: u8 = 0x0d;
+pub const MYSQL_TYPE_VARCHAR: u8 = 0x0f;
+pub const MYSQL_TYPE_BIT: u8 = 0x10;
+pub const MYSQL_TYPE_NEWDECIMAL: u8 = 0xf6;
+pub const MYSQL_TYPE_ENUM: u8 = 0xf7;
+pub const MYSQL_TYPE_SET: u8 = 0xf8;
+pub const MYSQL_TYPE_TINY_BLOB: u8 = 0xf9;
+pub const MYSQL_TYPE_MEDIUM_BLOB: u8 = 0xfa;
+pub const MYSQL_TYPE_LONG_BLOB: u8 = 0xfb;
+pub const MYSQL_TYPE_BLOB: u8 = 0xfc;
+pub const MYSQL_TYPE_VAR_STRING: u8 = 0xfd;
+pub const MYSQL_TYPE_STRING: u8 = 0xfe;
+pub const MYSQL_TYPE_GEOMETRY: u8 = 0xff;

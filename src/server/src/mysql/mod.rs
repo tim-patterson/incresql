@@ -62,9 +62,7 @@ impl<'a> MysqlConnection<'a> {
                         CommandPacket::ComFieldList(_com_field_list) => panic!(),
                     }
                 }
-                Err(io_error) => {
-                    return Err(io_error)
-                }
+                Err(io_error) => return Err(io_error),
             }
         }
 
