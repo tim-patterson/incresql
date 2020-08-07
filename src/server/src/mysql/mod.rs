@@ -1,10 +1,8 @@
-use crate::mysql::packets::{
-    write_auth_switch_request_packet, write_handshake_packet, write_ok_packet,
-    AuthSwitchResponsePacket, ClientPacket, ComFieldListPacket, ComInitDbPacket, ComQueryPacket,
-    HandshakeResponsePacket,
-};
+use crate::mysql::constants::*;
+use crate::mysql::packets::*;
 use crate::mysql::protocol_base::{read_int_1, read_int_3, write_int_3};
 use runtime::connection::Connection;
+use runtime::QueryError;
 use std::cmp::min;
 use std::fmt::Debug;
 use std::io::{Read, Write};
@@ -43,29 +41,113 @@ impl<'a> MysqlConnection<'a> {
 
         loop {
             match self.receive_packet::<CommandPacket>() {
-                Ok(command) => {
-                    match command {
-                        CommandPacket::ComQuit => {
-                            break;
-                        }
-                        CommandPacket::ComPing => {
-                            self.send_packet(|buf| write_ok_packet(false, 0, capabilities, buf))?;
-                        }
-                        CommandPacket::ComInitDb(com_init_db) => {
-                            self.connection.change_database(&com_init_db.schema);
-                            self.send_packet(|buf| write_ok_packet(false, 0, capabilities, buf))?;
-                        }
-                        CommandPacket::ComQuery(com_query) => {
-                            dbg!(&com_query.query);
-                            //self.process_query_command(com_query.query)?;
-                        }
-                        CommandPacket::ComFieldList(_com_field_list) => panic!(),
+                Ok(command) => match command {
+                    CommandPacket::ComQuit => {
+                        break;
                     }
-                }
+                    CommandPacket::ComPing => {
+                        self.send_packet(|buf| write_ok_packet(false, 0, capabilities, buf))?;
+                    }
+                    CommandPacket::ComInitDb(com_init_db) => {
+                        if self.connection.change_database(&com_init_db.schema).is_ok() {
+                            self.send_packet(|buf| write_ok_packet(false, 0, capabilities, buf))?;
+                        } else {
+                            self.send_packet(|buf| {
+                                write_err_packet_from_err(&MYSQL_ER_BAD_DB_ERROR, capabilities, buf)
+                            })?;
+                        }
+                    }
+                    CommandPacket::ComQuery(com_query) => {
+                        self.process_query_command(&com_query.query)?;
+                    }
+                    CommandPacket::ComUnknown => {
+                        self.send_packet(|buf| {
+                            write_err_packet_from_err(
+                                &MYSQL_ER_UNKNOWN_COM_ERROR,
+                                capabilities,
+                                buf,
+                            )
+                        })?;
+                    }
+                },
                 Err(io_error) => return Err(io_error),
             }
         }
 
+        Ok(())
+    }
+
+    fn process_query_command(&mut self, query: &str) -> Result<(), std::io::Error> {
+        let capabilities = self.capabilities;
+        match self.connection.execute_statement(query) {
+            Ok((fields, mut executor)) => {
+                if fields.is_empty() {
+                    self.send_packet(|buf| write_ok_packet(false, 0, capabilities, buf))?;
+                } else {
+                    self.send_packet(|buf| {
+                        write_resultset_packet(fields.len(), capabilities, buf)
+                    })?;
+                    for field in fields {
+                        self.send_packet(|buf| {
+                            write_column_packet(
+                                "",
+                                &field.alias,
+                                field.data_type,
+                                capabilities,
+                                buf,
+                            )
+                        })?;
+                    }
+
+                    if (capabilities & CAPABILITY_CLIENT_DEPRECATE_EOF) == 0 {
+                        self.send_packet(|buf| write_eof_packet(capabilities, buf))?;
+                    }
+
+                    loop {
+                        match executor.next() {
+                            Ok(Some((tuple, freq))) => {
+                                for _ in 0..freq {
+                                    self.send_packet(|buf| write_tuple_packet(tuple, buf))?;
+                                }
+                            }
+                            Ok(None) => break,
+                            Err(err) => {
+                                let my_err = MyError {
+                                    msg: &err.to_string(),
+                                    sql_state: "HY000",
+                                    code: 1,
+                                };
+                                self.send_packet(|buf| {
+                                    write_err_packet_from_err(&my_err, capabilities, buf)
+                                })?;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (capabilities & CAPABILITY_CLIENT_DEPRECATE_EOF) == 0 {
+                        self.send_packet(|buf| write_eof_packet(capabilities, buf))?;
+                    } else {
+                        self.send_packet(|buf| write_ok_packet(true, 0, capabilities, buf))?;
+                    }
+                }
+            }
+            Err(QueryError::ParseError(parse_error)) => {
+                let err = MyError {
+                    msg: &parse_error.to_string(),
+                    ..MYSQL_ER_PARSE_ERROR
+                };
+                self.send_packet(|buf| write_err_packet_from_err(&err, capabilities, buf))?;
+            }
+            Err(err) => {
+                let my_err = MyError {
+                    msg: &err.to_string(),
+                    sql_state: "HY000",
+                    code: 1,
+                };
+                self.send_packet(|buf| write_err_packet_from_err(&my_err, capabilities, buf))?;
+            }
+        }
         Ok(())
     }
 
@@ -79,7 +161,7 @@ impl<'a> MysqlConnection<'a> {
         // Receive response
         let handshake_response = self.receive_packet::<HandshakeResponsePacket>()?;
         let capabilities = handshake_response.client_flags;
-        self.capabilities = self.capabilities;
+        self.capabilities = capabilities;
         *self.connection.session.user.write().unwrap() = handshake_response.username;
 
         // Ask for user's password
@@ -146,8 +228,8 @@ enum CommandPacket {
     ComQuit,
     ComInitDb(ComInitDbPacket),
     ComQuery(ComQueryPacket),
-    ComFieldList(ComFieldListPacket),
     ComPing,
+    ComUnknown,
 }
 
 impl ClientPacket for CommandPacket {
@@ -156,9 +238,8 @@ impl ClientPacket for CommandPacket {
             0x01 => CommandPacket::ComQuit,
             0x02 => CommandPacket::ComInitDb(ComInitDbPacket::read(&buffer[1..])?),
             0x03 => CommandPacket::ComQuery(ComQueryPacket::read(&buffer[1..])?),
-            0x04 => CommandPacket::ComFieldList(ComFieldListPacket::read(&buffer[1..])?),
             0x0E => CommandPacket::ComPing,
-            _ => panic!("Unknown packet {:?}", buffer[0]),
+            _ => CommandPacket::ComUnknown,
         };
 
         Ok(packet)

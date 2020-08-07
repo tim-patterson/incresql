@@ -1,6 +1,6 @@
 use crate::mysql::constants::*;
 use crate::mysql::protocol_base::*;
-use data::DataType;
+use data::{DataType, Datum};
 use std::collections::HashMap;
 use std::fmt::Debug;
 
@@ -21,7 +21,7 @@ const SERVER_SUPPORTED_CAPABILITIES: u32 = CAPABILITY_CLIENT_LONG_PASSWORD
     | CAPABILITY_CLIENT_CONNECT_ATTRS
     | CAPABILITY_CLIENT_PLUGIN_AUTH
     | CAPABILITY_CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA
-    | CLIENT_DEPRECATE_EOF;
+    | CAPABILITY_CLIENT_DEPRECATE_EOF;
 
 /// https://dev.mysql.com/doc/dev/mysql-server/8.0.12/page_protocol_connection_phase_packets_protocol_handshake_v10.html
 pub fn write_handshake_packet(connection_id: u32, buffer: &mut Vec<u8>) {
@@ -181,30 +181,15 @@ impl ClientPacket for ComQueryPacket {
     }
 }
 
-#[derive(Default, Debug, PartialEq)]
-pub struct ComFieldListPacket {
-    pub table: String,
-    pub field_wildcard: Vec<u8>,
-}
-
-impl ClientPacket for ComFieldListPacket {
-    fn read(buffer: &[u8]) -> Result<Self, std::io::Error> {
-        let mut packet = Self::default();
-        let rem = read_null_string(&mut packet.table, buffer);
-        read_eof_bytestring(&mut packet.field_wildcard, rem);
-        Ok(packet)
-    }
-}
-
 pub fn write_err_packet(
     error_code: u16,
     error_message: &str,
+    sql_state: &str,
     capabilities: u32,
     buffer: &mut Vec<u8>,
 ) {
     let header = 0xFF;
     let sql_state_marker = b'#';
-    let sql_state = "HY000";
 
     write_int_1(header, buffer);
     write_int_2(error_code, buffer);
@@ -215,14 +200,31 @@ pub fn write_err_packet(
     write_eof_string(error_message, buffer);
 }
 
+pub fn write_err_packet_from_err(err: &MyError, capabilities: u32, buffer: &mut Vec<u8>) {
+    write_err_packet(err.code, err.msg, err.sql_state, capabilities, buffer)
+}
+
+pub fn write_tuple_packet(tuple: &[Datum], buffer: &mut Vec<u8>) {
+    for value in tuple {
+        match value {
+            Datum::Null => buffer.push(0xFB),
+            Datum::TextRef(s) => write_enc_string(s, buffer),
+            Datum::TextOwned(s) => write_enc_string(s.as_ref(), buffer),
+            Datum::TextInline(len, s) => write_enc_string(&s.as_ref()[..(*len as usize)], buffer),
+            Datum::Boolean(b) => write_enc_string(if *b { "1" } else { "0" }, buffer),
+            Datum::Integer(i) => write_enc_string(format!("{}", i), buffer),
+            Datum::Decimal(d) => write_enc_string(format!("{}", d), buffer),
+        }
+    }
+}
+
 /// https://dev.mysql.com/doc/dev/mysql-server/8.0.12/page_protocol_basic_ok_packet.html
 pub fn write_ok_packet(eof: bool, affected_rows: u64, capabilities: u32, buffer: &mut Vec<u8>) {
     let header = if eof { 0xFE } else { 0 };
     let last_insert_id = 0;
-    let status_flags = STATUS_FLAG_AUTOCOMMIT; // autocommit
+    let status_flags = STATUS_FLAG_AUTOCOMMIT;
     let warnings = 0;
     let info = "";
-    //let session_state_info = "";
 
     write_int_1(header, buffer);
     write_enc_int(affected_rows, buffer);
@@ -236,28 +238,8 @@ pub fn write_ok_packet(eof: bool, affected_rows: u64, capabilities: u32, buffer:
 
     if (capabilities & CAPABILITY_CLIENT_SESSION_TRACK) != 0 {
         write_null_string(info, buffer);
-    //self.session_state_info.write_null_string(buffer);
     } else {
         write_eof_string(info, buffer);
-    }
-    write_eof_string(info, buffer);
-}
-
-/// https://dev.mysql.com/doc/dev/mysql-server/8.0.12/page_protocol_basic_ok_packet.html
-#[derive(Debug)]
-pub struct EofPacket {
-    header: u8,
-    warnings: u16,
-    status_flags: u16,
-}
-
-impl EofPacket {
-    pub fn new() -> Self {
-        EofPacket {
-            header: 0xFE,
-            warnings: 0,
-            status_flags: 2, // Autocommit
-        }
     }
 }
 
@@ -468,34 +450,31 @@ mod tests {
     }
 
     #[test]
-    fn test_com_field_list_packet() -> Result<(), Box<dyn Error>> {
-        // Test packet from https://dev.mysql.com/doc/dev/mysql-server/8.0.12/page_protocol_com_field_list.html
-        let raw_packet = [
-            0x03, 0x64, 0x65, 0x66, 0x04, 0x74, 0x65, 0x73, 0x74, 0x09, 0x66, 0x69, 0x65, 0x6c,
-            0x64, 0x6c, 0x69, 0x73, 0x74, 0x09, 0x66, 0x69, 0x65, 0x6c, 0x64, 0x6c, 0x69, 0x73,
-            0x74, 0x02, 0x69, 0x64, 0x02, 0x69, 0x64, 0x0c, 0x3f, 0x00, 0x0b, 0x00, 0x00, 0x00,
-            0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0xfb, 0x05, 0x00, 0x00, 0x02, 0xfe, 0x00, 0x00,
-            0x02, 0x00,
-        ]
-        .as_ref();
-        let packet = ComFieldListPacket::read(raw_packet)?;
-        assert_eq!(
-            packet.table,
-            "\u{3}def\u{4}test\tfieldlist\tfieldlist\u{2}id\u{2}id\u{c}?"
-        );
-        assert_eq!(
-            packet.field_wildcard,
-            [11, 0, 0, 0, 3, 0, 0, 0, 0, 0, 251, 5, 0, 0, 2, 254, 0, 0, 2, 0].as_ref()
-        );
-        Ok(())
-    }
-
-    #[test]
     fn test_err_packet() {
         let mut buf = vec![];
         write_err_packet(
             1096,
             "No tables used",
+            "HY000",
+            SERVER_SUPPORTED_CAPABILITIES,
+            &mut buf,
+        );
+        // Expected response from https://dev.mysql.com/doc/dev/mysql-server/8.0.12/page_protocol_basic_err_packet.html
+        assert_eq!(
+            buf.as_slice(),
+            [
+                0xff, 0x48, 0x04, 0x23, 0x48, 0x59, 0x30, 0x30, 0x30, 0x4e, 0x6f, 0x20, 0x74, 0x61,
+                0x62, 0x6c, 0x65, 0x73, 0x20, 0x75, 0x73, 0x65, 0x64
+            ]
+            .as_ref()
+        );
+    }
+
+    #[test]
+    fn test_err_packet_from_err() {
+        let mut buf = vec![];
+        write_err_packet_from_err(
+            &MYSQL_ER_NO_TABLES_USED,
             SERVER_SUPPORTED_CAPABILITIES,
             &mut buf,
         );

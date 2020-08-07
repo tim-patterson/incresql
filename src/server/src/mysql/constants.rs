@@ -70,7 +70,7 @@ pub const CAPABILITY_CLIENT_CAN_HANDLE_EXPIRED_PASSWORDS: u32 = 0x00400000;
 pub const CAPABILITY_CLIENT_SESSION_TRACK: u32 = 0x00800000;
 
 /// Can send OK after a Text Resultset.
-pub const CLIENT_DEPRECATE_EOF: u32 = 0x01000000;
+pub const CAPABILITY_CLIENT_DEPRECATE_EOF: u32 = 0x01000000;
 
 pub const CHARSET_UTF8_GENERAL_CI: u8 = 33;
 
@@ -103,3 +103,46 @@ pub const MYSQL_TYPE_BLOB: u8 = 0xfc;
 pub const MYSQL_TYPE_VAR_STRING: u8 = 0xfd;
 pub const MYSQL_TYPE_STRING: u8 = 0xfe;
 pub const MYSQL_TYPE_GEOMETRY: u8 = 0xff;
+
+pub struct MyError<'a> {
+    pub code: u16,
+    pub msg: &'a str,
+    pub sql_state: &'a str,
+}
+
+//https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html
+pub const MYSQL_ER_UNKNOWN_COM_ERROR: MyError<'static> = MyError {
+    code: 1047,
+    msg: "Unknown command",
+    sql_state: "08S01",
+};
+
+pub const MYSQL_ER_BAD_DB_ERROR: MyError<'static> = MyError {
+    code: 1049,
+    msg: "Unknown database",
+    sql_state: "42000",
+};
+
+pub const MYSQL_ER_BAD_FIELD_ERROR: MyError<'static> = MyError {
+    code: 1054,
+    msg: "Unknown column",
+    sql_state: "42S22",
+};
+
+pub const MYSQL_ER_PARSE_ERROR: MyError<'static> = MyError {
+    code: 1064,
+    msg: "Parse Error",
+    sql_state: "42000",
+};
+
+pub const MYSQL_ER_NO_TABLES_USED: MyError<'static> = MyError {
+    code: 1096,
+    msg: "No tables used",
+    sql_state: "HY000",
+};
+
+pub const MYSQL_ER_QUERY_INTERRUPTED: MyError<'static> = MyError {
+    code: 1317,
+    msg: "Query execution was interrupted",
+    sql_state: "70100",
+};
