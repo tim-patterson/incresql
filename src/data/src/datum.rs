@@ -62,7 +62,7 @@ impl Display for Datum<'_> {
         match self {
             Datum::Null => f.write_str("NULL"),
             Datum::TextRef(_) | Datum::TextOwned(_) | Datum::TextInline(..) => {
-                f.write_str(Into::<Option<&str>>::into(self).unwrap())
+                f.write_str(self.as_str().unwrap())
             }
             Datum::Boolean(b) => f.write_str(if *b { "TRUE" } else { "FALSE" }),
             Datum::Integer(i) => i.fmt(f),
@@ -74,8 +74,8 @@ impl Display for Datum<'_> {
 
 // Into's to get back rust types from datums, these are just "dumb" and simply map 1-1 without any
 // attempts to do any casting
-impl<'a> Into<Option<&'a str>> for &'a Datum<'a> {
-    fn into(self) -> Option<&'a str> {
+impl<'a> Datum<'a> {
+    pub fn as_str(&'a self) -> Option<&'a str> {
         match self {
             Datum::TextRef(s) => Some(s),
             Datum::TextInline(len, b) => {
@@ -85,22 +85,26 @@ impl<'a> Into<Option<&'a str>> for &'a Datum<'a> {
             _ => None,
         }
     }
-}
 
-impl Into<Option<i32>> for &Datum<'_> {
-    fn into(self) -> Option<i32> {
+    pub fn as_integer(&self) -> Option<i32> {
         if let Datum::Integer(i) = self {
             Some(*i)
         } else {
             None
         }
     }
-}
 
-impl Into<Option<i64>> for &Datum<'_> {
-    fn into(self) -> Option<i64> {
+    pub fn as_bigint(&self) -> Option<i64> {
         if let Datum::BigInt(i) = self {
             Some(*i)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_decimal(&self) -> Option<Decimal> {
+        if let Datum::Decimal(d) = self {
+            Some(*d)
         } else {
             None
         }
@@ -211,44 +215,42 @@ mod tests {
     }
 
     #[test]
-    fn test_datum_to_string() {
+    fn test_datum_as_str() {
         assert_eq!(
-            Into::<Option<&str>>::into(&Datum::TextOwned(Box::from("Hello world"))),
+            Datum::TextOwned(Box::from("Hello world")).as_str(),
             Some("Hello world")
         );
 
         let mut bytes = [0_u8; 22];
         bytes.as_mut().write_all("Hello world".as_bytes()).unwrap();
 
-        assert_eq!(
-            Into::<Option<&str>>::into(&Datum::TextInline(11, bytes)),
-            Some("Hello world")
-        );
+        assert_eq!(Datum::TextInline(11, bytes).as_str(), Some("Hello world"));
 
         let backing_slice = "Hello world";
-        assert_eq!(
-            Into::<Option<&str>>::into(&Datum::TextRef(backing_slice)),
-            Some("Hello world")
-        );
+        assert_eq!(Datum::TextRef(backing_slice).as_str(), Some("Hello world"));
 
-        assert_eq!(Into::<Option<&str>>::into(&Datum::Null), None);
+        assert_eq!(Datum::Null.as_str(), None);
     }
 
     #[test]
-    fn test_datum_to_ints() {
+    fn test_datum_as_ints() {
+        assert_eq!(Datum::Integer(123).as_integer(), Some(123_i32));
+
+        assert_eq!(Datum::Null.as_integer(), None);
+
+        assert_eq!(Datum::BigInt(123).as_bigint(), Some(123_i64));
+
+        assert_eq!(Datum::Null.as_bigint(), None);
+    }
+
+    #[test]
+    fn test_datum_as_decimal() {
         assert_eq!(
-            Into::<Option<i32>>::into(&Datum::Integer(123)),
-            Some(123_i32)
+            Datum::Decimal(Decimal::new(3232, 1)).as_decimal(),
+            Some(Decimal::new(3232, 1))
         );
 
-        assert_eq!(Into::<Option<i32>>::into(&Datum::Null), None);
-
-        assert_eq!(
-            Into::<Option<i64>>::into(&Datum::BigInt(123)),
-            Some(123_i64)
-        );
-
-        assert_eq!(Into::<Option<i64>>::into(&Datum::Null), None);
+        assert_eq!(Datum::Null.as_decimal(), None);
     }
 
     #[test]
