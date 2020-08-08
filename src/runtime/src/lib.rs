@@ -5,6 +5,8 @@ pub use error::QueryError;
 
 use crate::connection::Connection;
 use data::Session;
+use functions::registry::Registry;
+use planner::Planner;
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, RwLock, Weak};
@@ -14,6 +16,7 @@ use std::sync::{Arc, RwLock, Weak};
 #[derive(Debug)]
 pub struct Runtime {
     connections_state: RwLock<ConnectionsState>,
+    planner: Planner,
 }
 
 #[derive(Debug)]
@@ -30,7 +33,12 @@ impl Runtime {
             connections: HashMap::new(),
         });
 
-        Runtime { connections_state }
+        let function_registry = Registry::new(true);
+        let planner = Planner::new(function_registry);
+        Runtime {
+            connections_state,
+            planner,
+        }
     }
 }
 

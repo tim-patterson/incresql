@@ -1,11 +1,16 @@
-use crate::PlannerError;
+use crate::{Planner, PlannerError};
 use ast::rel::logical::LogicalOperator;
 
 /// Normalize the query, adding in missing aliases etc so the rest of the planning doesn't need
 /// to work around all of that
-pub fn normalize(mut query: LogicalOperator) -> Result<LogicalOperator, PlannerError> {
-    normalize_impl(&mut query);
-    Ok(query)
+impl Planner {
+    pub(crate) fn normalize(
+        &self,
+        mut query: LogicalOperator,
+    ) -> Result<LogicalOperator, PlannerError> {
+        normalize_impl(&mut query);
+        Ok(query)
+    }
 }
 
 fn normalize_impl(query: &mut LogicalOperator) {
@@ -27,9 +32,11 @@ mod tests {
     use ast::expr::{Expression, NamedExpression};
     use ast::rel::logical::Project;
     use data::Datum;
+    use functions::registry::Registry;
 
     #[test]
     fn test_normalize_column_aliases() -> Result<(), PlannerError> {
+        let planner = Planner::new(Registry::new(false));
         let operator = LogicalOperator::Project(Project {
             distinct: false,
             expressions: vec![
@@ -58,7 +65,7 @@ mod tests {
             })),
         });
 
-        let mut normalized = normalize(operator)?;
+        let mut normalized = planner.normalize(operator)?;
         let top_aliases: Vec<_> = normalized
             .named_expressions_mut()
             .map(|ne| ne.alias.as_ref().unwrap())

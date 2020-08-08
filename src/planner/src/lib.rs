@@ -1,18 +1,22 @@
-use ast::rel::logical::LogicalOperator;
 use data::DataType;
 
 mod common;
 mod normalize;
 mod point_in_time;
 mod validate;
+use functions::registry::Registry;
 pub use point_in_time::PointInTimePlan;
 use std::fmt::{Display, Formatter};
 
-/// Plan a point in time query, this optimizes the logical operator tree and then transforms into
-/// a physical plan for point in time
-pub fn plan_for_point_in_time(query: LogicalOperator) -> Result<PointInTimePlan, PlannerError> {
-    let (fields, operator) = common::plan_common(query)?;
-    Ok(point_in_time::plan_for_point_in_time(fields, operator))
+#[derive(Debug, Default)]
+pub struct Planner {
+    function_registry: Registry,
+}
+
+impl Planner {
+    pub fn new(function_registry: Registry) -> Self {
+        Planner { function_registry }
+    }
 }
 
 #[derive(Debug)]

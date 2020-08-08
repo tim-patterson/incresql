@@ -1,4 +1,4 @@
-use crate::DataType;
+use crate::{DataType, DECIMAL_MAX_PRECISION, DECIMAL_MAX_SCALE};
 use rust_decimal::Decimal;
 use std::fmt::{Display, Formatter};
 
@@ -46,7 +46,10 @@ impl From<i64> for Datum<'static> {
 }
 
 impl From<Decimal> for Datum<'static> {
-    fn from(d: Decimal) -> Self {
+    fn from(mut d: Decimal) -> Self {
+        if d.scale() > DECIMAL_MAX_SCALE as u32 {
+            d.rescale(DECIMAL_MAX_SCALE as u32);
+        }
         Datum::Decimal(d)
     }
 }
@@ -118,7 +121,7 @@ impl Datum<'_> {
             Datum::Boolean(_) => DataType::Boolean,
             Datum::Integer(_) => DataType::Integer,
             Datum::BigInt(_) => DataType::BigInt,
-            Datum::Decimal(d) => DataType::Decimal(28, d.scale() as u8),
+            Datum::Decimal(d) => DataType::Decimal(DECIMAL_MAX_PRECISION, d.scale() as u8),
             Datum::TextOwned(_) | Datum::TextInline(..) | Datum::TextRef(_) => DataType::Text,
         }
     }

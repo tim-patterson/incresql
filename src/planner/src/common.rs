@@ -1,17 +1,18 @@
-use crate::normalize::normalize;
-use crate::validate::validate;
-use crate::{Field, PlannerError};
+use crate::{Field, Planner, PlannerError};
 use ast::expr::Expression;
 use ast::rel::logical::LogicalOperator;
 use data::DataType;
 
-pub(crate) fn plan_common(
-    query: LogicalOperator,
-) -> Result<(Vec<Field>, LogicalOperator), PlannerError> {
-    let query = validate(query)?;
-    let query = normalize(query)?;
-    let fields = fields_for_operator(&query).collect();
-    Ok((fields, query))
+impl Planner {
+    pub(crate) fn plan_common(
+        &self,
+        query: LogicalOperator,
+    ) -> Result<(Vec<Field>, LogicalOperator), PlannerError> {
+        let query = self.validate(query)?;
+        let query = self.normalize(query)?;
+        let fields = fields_for_operator(&query).collect();
+        Ok((fields, query))
+    }
 }
 
 /// Returns the fields for an operator, will panic if called before query is normalized
@@ -37,10 +38,12 @@ mod tests {
     use ast::expr::NamedExpression;
     use ast::rel::logical::Project;
     use data::{Datum, Decimal};
+    use functions::registry::Registry;
     use std::str::FromStr;
 
     #[test]
     fn test_plan_common_fields() -> Result<(), PlannerError> {
+        let planner = Planner::new(Registry::new(false));
         let raw_query = LogicalOperator::Project(Project {
             distinct: false,
             expressions: vec![NamedExpression {
@@ -50,7 +53,7 @@ mod tests {
             source: Box::new(LogicalOperator::Single),
         });
 
-        let (fields, _operator) = plan_common(raw_query)?;
+        let (fields, _operator) = planner.plan_common(raw_query)?;
 
         assert_eq!(
             fields,

@@ -9,3 +9,6 @@ pub enum DataType {
     // Precision and scale
     Decimal(u8, u8),
 }
+
+pub const DECIMAL_MAX_PRECISION: u8 = 28;
+pub const DECIMAL_MAX_SCALE: u8 = 14;

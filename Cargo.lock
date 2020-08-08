@@ -119,6 +119,7 @@ dependencies = [
  "ast 0.1.0",
  "data 0.1.0",
  "executor 0.1.0",
+ "functions 0.1.0",
  "parser 0.1.0",
  "planner 0.1.0",
 ]

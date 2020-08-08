@@ -1,4 +1,4 @@
-use crate::Field;
+use crate::{Field, Planner, PlannerError};
 use ast::rel::logical::{LogicalOperator, Project};
 use ast::rel::point_in_time::{self, PointInTimeOperator};
 
@@ -7,12 +7,18 @@ pub struct PointInTimePlan {
     pub operator: PointInTimeOperator,
 }
 
-/// Takes a planned logical operator and performs point in time optimizations and transforms
-/// to a physical operator tree
-pub fn plan_for_point_in_time(fields: Vec<Field>, query: LogicalOperator) -> PointInTimePlan {
-    let operator = build_operator(query);
+impl Planner {
+    /// Plan a point in time query, this optimizes the logical operator tree and then transforms into
+    /// a physical plan for point in time
+    pub fn plan_for_point_in_time(
+        &self,
+        query: LogicalOperator,
+    ) -> Result<PointInTimePlan, PlannerError> {
+        let (fields, operator) = self.plan_common(query)?;
+        let operator = build_operator(operator);
 
-    PointInTimePlan { fields, operator }
+        Ok(PointInTimePlan { fields, operator })
+    }
 }
 
 fn build_operator(query: LogicalOperator) -> PointInTimeOperator {
@@ -35,12 +41,14 @@ fn build_operator(query: LogicalOperator) -> PointInTimeOperator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::PlannerError;
+    use crate::{Planner, PlannerError};
     use ast::expr::{Expression, NamedExpression};
     use data::Datum;
+    use functions::registry::Registry;
 
     #[test]
     fn test_plan_for_point_in_time() -> Result<(), PlannerError> {
+        let planner = Planner::new(Registry::new(false));
         let raw_query = LogicalOperator::Project(Project {
             distinct: false,
             expressions: vec![NamedExpression {
@@ -55,7 +63,10 @@ mod tests {
             source: Box::new(PointInTimeOperator::Single),
         });
 
-        assert_eq!(crate::plan_for_point_in_time(raw_query)?.operator, expected);
+        assert_eq!(
+            planner.plan_for_point_in_time(raw_query)?.operator,
+            expected
+        );
         Ok(())
     }
 }

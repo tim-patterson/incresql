@@ -3,8 +3,15 @@ use data::DataType;
 use std::collections::HashMap;
 
 /// A repository for functions. Used by the planner to resolve the correct functions
+#[derive(Debug)]
 pub struct Registry {
     functions: HashMap<&'static str, Vec<FunctionDefinition>>,
+}
+
+impl Default for Registry {
+    fn default() -> Self {
+        Registry::new(true)
+    }
 }
 
 #[derive(Debug, Eq, PartialEq)]

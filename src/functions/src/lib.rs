@@ -2,7 +2,7 @@ pub mod registry;
 mod scalar;
 use crate::registry::Registry;
 use data::{DataType, Datum, Session};
-use std::fmt::Debug;
+use std::fmt::{Debug, Formatter};
 
 /// The signature for a function. Signatures are scanned to find a match during planning.
 /// The planner may up-cast values to make them fit if needed.
@@ -20,6 +20,14 @@ pub struct FunctionDefinition {
     pub signature: FunctionSignature<'static>,
     pub custom_return_type_resolver: Option<fn(&[DataType]) -> DataType>,
     pub function: &'static dyn Function,
+}
+
+impl Debug for FunctionDefinition {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str("FunctionDefinition[")?;
+        self.signature.fmt(f)?;
+        f.write_str("]")
+    }
 }
 
 impl FunctionDefinition {
@@ -52,7 +60,7 @@ impl FunctionDefinition {
 }
 
 /// A function implementation
-pub trait Function: Debug {
+pub trait Function: Debug + Sync + 'static {
     fn execute<'a>(&self, session: &Session, args: &'a [Datum<'a>]) -> Datum<'a>;
 }
 

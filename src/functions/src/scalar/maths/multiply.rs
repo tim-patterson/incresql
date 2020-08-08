@@ -1,15 +1,15 @@
 use crate::registry::Registry;
 use crate::{Function, FunctionDefinition};
-use data::{DataType, Datum, Session, DECIMAL_MAX_PRECISION};
-use std::cmp::{max, min};
+use data::{DataType, Datum, Session, DECIMAL_MAX_PRECISION, DECIMAL_MAX_SCALE};
+use std::cmp::min;
 
 #[derive(Debug)]
-struct AddInteger {}
+struct MultiplyInteger {}
 
-impl Function for AddInteger {
+impl Function for MultiplyInteger {
     fn execute<'a>(&self, _session: &Session, args: &'a [Datum<'a>]) -> Datum<'a> {
         if let (Some(a), Some(b)) = (args[0].as_integer(), args[1].as_integer()) {
-            Datum::from(a + b)
+            Datum::from(a * b)
         } else {
             Datum::Null
         }
@@ -17,12 +17,12 @@ impl Function for AddInteger {
 }
 
 #[derive(Debug)]
-struct AddBigint {}
+struct MultiplyBigint {}
 
-impl Function for AddBigint {
+impl Function for MultiplyBigint {
     fn execute<'a>(&self, _session: &Session, args: &'a [Datum<'a>]) -> Datum<'a> {
         if let (Some(a), Some(b)) = (args[0].as_bigint(), args[1].as_bigint()) {
-            Datum::from(a + b)
+            Datum::from(a * b)
         } else {
             Datum::Null
         }
@@ -30,12 +30,17 @@ impl Function for AddBigint {
 }
 
 #[derive(Debug)]
-struct AddDecimal {}
+struct MultiplyDecimal {}
 
-impl Function for AddDecimal {
+impl Function for MultiplyDecimal {
     fn execute<'a>(&self, _session: &Session, args: &'a [Datum<'a>]) -> Datum<'a> {
         if let (Some(a), Some(b)) = (args[0].as_decimal(), args[1].as_decimal()) {
-            Datum::from(a + b)
+            let mut d = a * b;
+            // Rescale to ensure we stay matching what the sql types say
+            if d.scale() > DECIMAL_MAX_SCALE as u32 {
+                d.rescale(DECIMAL_MAX_SCALE as u32);
+            }
+            Datum::from(d)
         } else {
             Datum::Null
         }
@@ -44,30 +49,33 @@ impl Function for AddDecimal {
 
 pub fn register_builtins(registry: &mut Registry) {
     registry.register_function(FunctionDefinition::new(
-        "+",
+        "*",
         vec![DataType::Integer, DataType::Integer],
         DataType::Integer,
-        &AddInteger {},
+        &MultiplyInteger {},
     ));
 
     registry.register_function(FunctionDefinition::new(
-        "+",
+        "*",
         vec![DataType::BigInt, DataType::BigInt],
         DataType::BigInt,
-        &AddBigint {},
+        &MultiplyBigint {},
     ));
 
     registry.register_function(FunctionDefinition::new_with_type_resolver(
-        "+",
+        "*",
         vec![DataType::Decimal(0, 0), DataType::Decimal(0, 0)],
         |args| {
             if let (DataType::Decimal(p1, s1), DataType::Decimal(p2, s2)) = (args[0], args[1]) {
-                DataType::Decimal(min(max(p1, p2) + 1, DECIMAL_MAX_PRECISION), max(s1, s2))
+                DataType::Decimal(
+                    min(p1 + p2, DECIMAL_MAX_PRECISION),
+                    min(s1 + s2, DECIMAL_MAX_SCALE),
+                )
             } else {
                 panic!()
             }
         },
-        &AddDecimal {},
+        &MultiplyDecimal {},
     ));
 }
 
@@ -79,7 +87,7 @@ mod tests {
     #[test]
     fn test_null() {
         assert_eq!(
-            AddInteger {}.execute(&Session::new(1), &[Datum::Null, Datum::Null]),
+            MultiplyInteger {}.execute(&Session::new(1), &[Datum::Null, Datum::Null]),
             Datum::Null
         )
     }
@@ -87,30 +95,30 @@ mod tests {
     #[test]
     fn test_add_int() {
         assert_eq!(
-            AddInteger {}.execute(&Session::new(1), &[Datum::from(1), Datum::from(2)]),
-            Datum::from(3)
+            MultiplyInteger {}.execute(&Session::new(1), &[Datum::from(3), Datum::from(2)]),
+            Datum::from(6)
         )
     }
 
     #[test]
     fn test_add_bigint() {
         assert_eq!(
-            AddBigint {}.execute(&Session::new(1), &[Datum::from(1_i64), Datum::from(2_i64)]),
-            Datum::from(3_i64)
+            MultiplyBigint {}.execute(&Session::new(1), &[Datum::from(3_i64), Datum::from(2_i64)]),
+            Datum::from(6_i64)
         )
     }
 
     #[test]
     fn test_add_decimal() {
         assert_eq!(
-            AddDecimal {}.execute(
+            MultiplyDecimal {}.execute(
                 &Session::new(1),
                 &[
-                    Datum::from(Decimal::new(123, 1)),
-                    Datum::from(Decimal::new(1234, 2))
+                    Datum::from(Decimal::new(30, 1)),
+                    Datum::from(Decimal::new(200, 2))
                 ]
             ),
-            Datum::from(Decimal::new(2464, 2))
+            Datum::from(Decimal::new(6000, 3))
         )
     }
 }
