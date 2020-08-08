@@ -1,6 +1,7 @@
 use crate::{register_builtins, Function, FunctionDefinition, FunctionSignature};
 use data::DataType;
 use std::collections::HashMap;
+use std::fmt::{Display, Formatter};
 
 /// A repository for functions. Used by the planner to resolve the correct functions
 #[derive(Debug)]
@@ -16,8 +17,24 @@ impl Default for Registry {
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum FunctionResolutionError {
-    FunctionNotFound,
-    MatchingSignatureNotFound,
+    FunctionNotFound(String),
+    MatchingSignatureNotFound(String, Vec<DataType>),
+}
+
+impl Display for FunctionResolutionError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FunctionResolutionError::FunctionNotFound(function_name) => {
+                f.write_fmt(format_args!("Function \"{}\" not found", function_name))
+            }
+            FunctionResolutionError::MatchingSignatureNotFound(function_name, args) => {
+                f.write_fmt(format_args!(
+                    "Cannot find variant for function \"{}\" that accepts types {:?}",
+                    function_name, args
+                ))
+            }
+        }
+    }
 }
 
 impl Registry {
@@ -41,9 +58,9 @@ impl Registry {
     }
 
     pub fn resolve_scalar_function(
-        &mut self,
-        function_signature: &mut FunctionSignature,
-    ) -> Result<&'static dyn Function, FunctionResolutionError> {
+        &self,
+        function_signature: &FunctionSignature,
+    ) -> Result<(FunctionSignature<'static>, &'static dyn Function), FunctionResolutionError> {
         if let Some(candidates) = self.functions.get(function_signature.name) {
             // Filter candidates
             let mut candidate_list: Vec<_> = candidates
@@ -58,6 +75,9 @@ impl Registry {
                             .all(|(d1, d2)| {
                                 if let (DataType::Decimal(..), DataType::Decimal(..)) = (d1, d2) {
                                     true
+                                } else if *d1 == DataType::Null || *d2 == DataType::Null {
+                                    // Null types are really more like wildcards
+                                    true
                                 } else {
                                     d1 == d2
                                 }
@@ -69,20 +89,29 @@ impl Registry {
                 .collect();
 
             if let Some(candidate) = candidate_list.pop() {
-                // Populate return type
-                function_signature.ret =
-                    if let Some(type_resolver) = candidate.custom_return_type_resolver {
-                        type_resolver(&function_signature.args)
-                    } else {
-                        candidate.signature.ret
-                    };
+                // Calculate return type
+                let ret = if let Some(type_resolver) = candidate.custom_return_type_resolver {
+                    type_resolver(&function_signature.args)
+                } else {
+                    candidate.signature.ret
+                };
+                let return_signature = FunctionSignature {
+                    name: candidate.signature.name,
+                    args: function_signature.args.clone(),
+                    ret,
+                };
 
-                Ok(candidate.function)
+                Ok((return_signature, candidate.function))
             } else {
-                Err(FunctionResolutionError::MatchingSignatureNotFound)
+                Err(FunctionResolutionError::MatchingSignatureNotFound(
+                    function_signature.name.to_string(),
+                    function_signature.args.clone(),
+                ))
             }
         } else {
-            Err(FunctionResolutionError::FunctionNotFound)
+            Err(FunctionResolutionError::FunctionNotFound(
+                function_signature.name.to_string(),
+            ))
         }
     }
 }
@@ -94,7 +123,7 @@ mod tests {
 
     #[test]
     fn test_registry_resolve() {
-        let mut registry = Registry::new(true);
+        let registry = Registry::new(true);
 
         let mut sig = FunctionSignature {
             name: "+",
@@ -102,16 +131,47 @@ mod tests {
             ret: DataType::Null,
         };
 
-        let function = registry.resolve_scalar_function(&mut sig);
+        let (function_sig, _function) = registry.resolve_scalar_function(&mut sig).unwrap();
 
-        assert_eq!(sig.ret, DataType::BigInt);
+        assert_eq!(function_sig.ret, DataType::BigInt);
+    }
 
-        function.unwrap();
+    #[test]
+    fn test_registry_unknown_function() {
+        let registry = Registry::new(true);
+
+        let mut sig = FunctionSignature {
+            name: "unknown",
+            args: vec![DataType::BigInt, DataType::BigInt],
+            ret: DataType::Null,
+        };
+
+        let err = registry.resolve_scalar_function(&mut sig).unwrap_err();
+
+        assert_eq!(
+            err,
+            FunctionResolutionError::FunctionNotFound("unknown".to_string())
+        );
+    }
+
+    #[test]
+    fn test_registry_resolve_null_param() {
+        let registry = Registry::new(true);
+
+        let mut sig = FunctionSignature {
+            name: "+",
+            args: vec![DataType::BigInt, DataType::Null],
+            ret: DataType::Null,
+        };
+
+        let (function_sig, _function) = registry.resolve_scalar_function(&mut sig).unwrap();
+
+        assert_eq!(function_sig.ret, DataType::BigInt);
     }
 
     #[test]
     fn test_registry_resolve_decimal() {
-        let mut registry = Registry::new(true);
+        let registry = Registry::new(true);
 
         let mut sig = FunctionSignature {
             name: "+",
@@ -119,10 +179,8 @@ mod tests {
             ret: DataType::Null,
         };
 
-        let function = registry.resolve_scalar_function(&mut sig);
+        let (computed_signature, _function) = registry.resolve_scalar_function(&mut sig).unwrap();
 
-        assert_eq!(sig.ret, DataType::Decimal(28, 7));
-
-        function.unwrap();
+        assert_eq!(computed_signature.ret, DataType::Decimal(28, 7));
     }
 }

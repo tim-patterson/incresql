@@ -4,7 +4,7 @@ mod common;
 mod normalize;
 mod point_in_time;
 mod validate;
-use functions::registry::Registry;
+use functions::registry::{FunctionResolutionError, Registry};
 pub use point_in_time::PointInTimePlan;
 use std::fmt::{Display, Formatter};
 
@@ -20,11 +20,21 @@ impl Planner {
 }
 
 #[derive(Debug)]
-pub struct PlannerError {}
+pub enum PlannerError {
+    FunctionResolutionError(FunctionResolutionError),
+}
+
+impl From<FunctionResolutionError> for PlannerError {
+    fn from(err: FunctionResolutionError) -> Self {
+        PlannerError::FunctionResolutionError(err)
+    }
+}
 
 impl Display for PlannerError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str("Planner Error")
+        match self {
+            PlannerError::FunctionResolutionError(err) => Display::fmt(err, f),
+        }
     }
 }
 

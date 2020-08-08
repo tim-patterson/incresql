@@ -70,13 +70,13 @@ mod tests {
             args: vec![DataType::Integer, DataType::Integer],
             ret: DataType::Null,
         };
-        let function = Registry::new(true)
+        let (computed_signature, function) = Registry::new(true)
             .resolve_scalar_function(&mut signature)
             .unwrap();
 
         let expression = Expression::CompiledFunctionCall(CompiledFunctionCall {
             function,
-            signature: Box::from(signature),
+            signature: Box::from(computed_signature),
             expr_buffer: vec![],
             args: vec![
                 Expression::Literal(Datum::from(3)),
