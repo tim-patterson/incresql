@@ -7,24 +7,12 @@ use nom::branch::{alt, Alt};
 use nom::bytes::complete::tag;
 use nom::combinator::{map, opt};
 use nom::error::VerboseError;
-use nom::multi::many0;
+use nom::multi::{many0, separated_list};
 use nom::sequence::{pair, preceded, tuple};
 
 /// Parses a bog standard expression, ie 1 + 2
 pub fn expression(input: &str) -> ParserResult<Expression> {
     expression_0(input)
-}
-
-pub fn expression_0(input: &str) -> ParserResult<Expression> {
-    infix_many((tag("+"), tag("-")), expression_1)(input)
-}
-
-pub fn expression_1(input: &str) -> ParserResult<Expression> {
-    infix_many((tag("*"), tag("/")), expression_2)(input)
-}
-
-pub fn expression_2(input: &str) -> ParserResult<Expression> {
-    literal_expression(input)
 }
 
 /// Parses a named expression, ie 1 as one
@@ -39,6 +27,23 @@ pub fn named_expression(input: &str) -> ParserResult<NamedExpression> {
         ),
         |(expression, alias)| NamedExpression { expression, alias },
     )(input)
+}
+
+/// Parse a comma separated list of expressions ie 1,2+2
+pub fn comma_sep_expressions(input: &str) -> ParserResult<Vec<Expression>> {
+    separated_list(tuple((ws_0, tag(","), ws_0)), expression)(input)
+}
+
+fn expression_0(input: &str) -> ParserResult<Expression> {
+    infix_many((tag("+"), tag("-")), expression_1)(input)
+}
+
+fn expression_1(input: &str) -> ParserResult<Expression> {
+    infix_many((tag("*"), tag("/")), expression_2)(input)
+}
+
+fn expression_2(input: &str) -> ParserResult<Expression> {
+    alt((function_call, literal_expression))(input)
 }
 
 fn literal_expression(input: &str) -> ParserResult<Expression> {
@@ -71,6 +76,24 @@ fn infix_many<'a, List: Alt<&'a str, &'a str, VerboseError<&'a str>>>(
     )
 }
 
+fn function_call(input: &str) -> ParserResult<Expression> {
+    map(
+        tuple((
+            identifier_str,
+            tuple((ws_0, tag("("), ws_0)),
+            comma_sep_expressions,
+            ws_0,
+            tag(")"),
+        )),
+        |(function_name, _, params, _, _)| {
+            Expression::FunctionCall(FunctionCall {
+                function_name,
+                args: params,
+            })
+        },
+    )(input)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -81,6 +104,28 @@ mod tests {
         assert_eq!(
             expression("NuLl").unwrap().1,
             Expression::Literal(Datum::Null)
+        );
+    }
+
+    #[test]
+    fn test_function_expression() {
+        assert_eq!(
+            expression("foo()").unwrap().1,
+            Expression::FunctionCall(FunctionCall {
+                function_name: "foo".to_string(),
+                args: vec![]
+            })
+        );
+
+        assert_eq!(
+            expression("foo(1,2)").unwrap().1,
+            Expression::FunctionCall(FunctionCall {
+                function_name: "foo".to_string(),
+                args: vec![
+                    Expression::Literal(Datum::from(1)),
+                    Expression::Literal(Datum::from(2)),
+                ]
+            })
         );
     }
 
