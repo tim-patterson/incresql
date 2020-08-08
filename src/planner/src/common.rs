@@ -26,6 +26,8 @@ fn fields_for_operator(operator: &LogicalOperator) -> impl Iterator<Item = Field
 fn type_for_expression(expr: &Expression) -> DataType {
     match expr {
         Expression::Literal(constant) => constant.datatype(),
+        Expression::FunctionCall(_) => panic!(),
+        Expression::CompiledFunctionCall(function_call) => function_call.signature.ret,
     }
 }
 

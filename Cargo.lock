@@ -10,6 +10,7 @@ name = "ast"
 version = "0.1.0"
 dependencies = [
  "data 0.1.0",
+ "functions 0.1.0",
 ]
 
 [[package]]
@@ -40,6 +41,7 @@ version = "0.1.0"
 dependencies = [
  "ast 0.1.0",
  "data 0.1.0",
+ "functions 0.1.0",
 ]
 
 [[package]]
@@ -107,6 +109,7 @@ version = "0.1.0"
 dependencies = [
  "ast 0.1.0",
  "data 0.1.0",
+ "functions 0.1.0",
 ]
 
 [[package]]

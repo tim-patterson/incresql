@@ -7,6 +7,12 @@ pub struct Registry {
     functions: HashMap<&'static str, Vec<FunctionDefinition>>,
 }
 
+#[derive(Debug, Eq, PartialEq)]
+pub enum FunctionResolutionError {
+    FunctionNotFound,
+    MatchingSignatureNotFound,
+}
+
 impl Registry {
     pub fn new(with_builtins: bool) -> Self {
         let mut registry = Registry {
@@ -30,7 +36,7 @@ impl Registry {
     pub fn resolve_scalar_function(
         &mut self,
         function_signature: &mut FunctionSignature,
-    ) -> Option<&'static dyn Function> {
+    ) -> Result<&'static dyn Function, FunctionResolutionError> {
         if let Some(candidates) = self.functions.get(function_signature.name) {
             // Filter candidates
             let mut candidate_list: Vec<_> = candidates
@@ -64,12 +70,12 @@ impl Registry {
                         candidate.signature.ret
                     };
 
-                Some(candidate.function)
+                Ok(candidate.function)
             } else {
-                None
+                Err(FunctionResolutionError::MatchingSignatureNotFound)
             }
         } else {
-            None
+            Err(FunctionResolutionError::FunctionNotFound)
         }
     }
 }

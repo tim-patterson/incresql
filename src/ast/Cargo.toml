@@ -6,3 +6,4 @@ edition = "2018"
 
 [dependencies]
 data = { path = "../data" }
+functions = { path = "../functions" }

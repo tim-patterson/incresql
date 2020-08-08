@@ -2,7 +2,8 @@ use crate::point_in_time::project::ProjectExecutor;
 use crate::point_in_time::single::SingleExecutor;
 use crate::ExecutionError;
 use ast::rel::point_in_time::PointInTimeOperator;
-use data::Datum;
+use data::{Datum, Session};
+use std::sync::Arc;
 
 mod project;
 mod single;
@@ -25,11 +26,12 @@ pub trait Executor {
     fn column_count(&self) -> usize;
 }
 
-pub fn build_executor(plan: &PointInTimeOperator) -> Box<dyn Executor> {
+pub fn build_executor(session: &Arc<Session>, plan: &PointInTimeOperator) -> Box<dyn Executor> {
     match plan {
         PointInTimeOperator::Single => Box::from(SingleExecutor::new()),
         PointInTimeOperator::Project(project) => Box::from(ProjectExecutor::new(
-            build_executor(&project.source),
+            Arc::clone(session),
+            build_executor(session, &project.source),
             project.expressions.clone(),
         )),
     }
@@ -43,12 +45,13 @@ mod tests {
 
     #[test]
     fn test_build_executor() -> Result<(), ExecutionError> {
+        let session = Arc::new(Session::new(1));
         let plan = PointInTimeOperator::Project(point_in_time::Project {
             expressions: vec![Expression::Literal(Datum::from(1))],
             source: Box::new(PointInTimeOperator::Single),
         });
 
-        let mut executor = build_executor(&plan);
+        let mut executor = build_executor(&session, &plan);
         // Due to the trait objects we can't really match against the built executor, but we can
         // run it!
         assert_eq!(executor.next()?, Some(([Datum::from(1)].as_ref(), 1)));
