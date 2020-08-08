@@ -1,4 +1,9 @@
-on: [push, pull_request]
+# Only run the push checks on master so we don't use all our minutes!
+on:
+  push:
+    branches:
+      - master
+  pull_request:
 
 name: Test
 
