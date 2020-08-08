@@ -208,12 +208,10 @@ pub fn write_tuple_packet(tuple: &[Datum], buffer: &mut Vec<u8>) {
     for value in tuple {
         match value {
             Datum::Null => buffer.push(0xFB),
-            Datum::TextRef(s) => write_enc_string(s, buffer),
-            Datum::TextOwned(s) => write_enc_string(s.as_ref(), buffer),
-            Datum::TextInline(len, s) => write_enc_string(&s.as_ref()[..(*len as usize)], buffer),
             Datum::Boolean(b) => write_enc_string(if *b { "1" } else { "0" }, buffer),
-            Datum::Integer(i) => write_enc_string(format!("{}", i), buffer),
-            Datum::Decimal(d) => write_enc_string(format!("{}", d), buffer),
+            // TODO We could keep a buffer and write into that, then calc the length and copy across
+            // to avoid format allocating strings...
+            _ => write_enc_string(format!("{}", value), buffer),
         }
     }
 }
@@ -289,7 +287,8 @@ pub fn write_column_packet(
             decimals = 0x1f;
             MYSQL_TYPE_VAR_STRING
         }
-        DataType::Integer => MYSQL_TYPE_LONGLONG,
+        DataType::Integer => MYSQL_TYPE_LONG,
+        DataType::BigInt => MYSQL_TYPE_LONGLONG,
         DataType::Boolean => MYSQL_TYPE_TINY,
         DataType::Decimal(precision, scale) => {
             column_length = precision as u32;
@@ -522,7 +521,7 @@ mod tests {
             buf.as_slice(),
             [
                 3, 100, 101, 102, 0, 3, 102, 111, 111, 0, 3, 98, 97, 114, 0, 12, 33, 0, 0, 4, 0, 0,
-                8, 0, 0, 0, 0, 0
+                3, 0, 0, 0, 0, 0
             ]
             .as_ref()
         );

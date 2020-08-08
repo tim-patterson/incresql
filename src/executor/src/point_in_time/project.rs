@@ -3,20 +3,27 @@ use crate::point_in_time::Executor;
 use crate::utils::right_size_new;
 use crate::ExecutionError;
 use ast::expr::Expression;
-use data::Datum;
+use data::{Datum, Session};
+use std::sync::Arc;
 
 pub struct ProjectExecutor {
     source: Box<dyn Executor>,
+    session: Arc<Session>,
     expressions: Vec<Expression>,
 
     tuple_buffer: Vec<Datum<'static>>,
 }
 
 impl ProjectExecutor {
-    pub fn new(source: Box<dyn Executor>, expressions: Vec<Expression>) -> Self {
+    pub fn new(
+        session: Arc<Session>,
+        source: Box<dyn Executor>,
+        expressions: Vec<Expression>,
+    ) -> Self {
         let tuple_buffer = right_size_new(&expressions);
         ProjectExecutor {
             source,
+            session,
             expressions,
             tuple_buffer,
         }
@@ -34,7 +41,7 @@ impl Executor for ProjectExecutor {
     #[allow(clippy::transmute_ptr_to_ptr)]
     fn advance(&mut self) -> Result<(), ExecutionError> {
         if let Some((tuple, _freq)) = self.source.next()? {
-            self.expressions.eval_scalar(tuple, unsafe {
+            self.expressions.eval_scalar(&self.session, tuple, unsafe {
                 std::mem::transmute::<&mut [Datum<'_>], &mut [Datum<'_>]>(&mut self.tuple_buffer)
             });
         }
@@ -64,7 +71,9 @@ mod tests {
 
     #[test]
     fn test_project_executor() -> Result<(), ExecutionError> {
+        let session = Arc::new(Session::new(1));
         let mut executor = ProjectExecutor::new(
+            session,
             Box::from(SingleExecutor::new()),
             vec![
                 Expression::Literal(Datum::from(1)),

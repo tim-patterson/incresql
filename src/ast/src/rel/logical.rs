@@ -1,4 +1,4 @@
-use crate::expr::NamedExpression;
+use crate::expr::{Expression, NamedExpression};
 use std::iter::{empty, once};
 
 /// Represents a query in the generic sense, generated from the parser, and validated and
@@ -39,6 +39,16 @@ impl LogicalOperator {
         match self {
             LogicalOperator::Single => Box::from(empty()),
             LogicalOperator::Project(project) => Box::from(project.expressions.iter_mut()),
+        }
+    }
+
+    /// Iterates over all expressions contained within the operator
+    pub fn expressions_mut(&mut self) -> Box<dyn Iterator<Item = &mut Expression> + '_> {
+        match self {
+            LogicalOperator::Single => Box::from(empty()),
+            LogicalOperator::Project(project) => {
+                Box::from(project.expressions.iter_mut().map(|ne| &mut ne.expression))
+            }
         }
     }
 
@@ -114,5 +124,26 @@ mod tests {
         });
 
         assert_eq!(children, vec![&mut expected]);
+    }
+
+    #[test]
+    fn test_expressions_mut() {
+        let mut operator = LogicalOperator::Single;
+        let children: Vec<_> = operator.expressions_mut().collect();
+
+        assert_eq!(children, Vec::<&mut Expression>::new());
+
+        let mut operator = LogicalOperator::Project(Project {
+            distinct: false,
+            expressions: vec![NamedExpression {
+                alias: None,
+                expression: Expression::Literal(Datum::from(1)),
+            }],
+            source: Box::new(LogicalOperator::Single),
+        });
+
+        let children: Vec<_> = operator.expressions_mut().collect();
+
+        assert_eq!(children, vec![&mut Expression::Literal(Datum::from(1))]);
     }
 }

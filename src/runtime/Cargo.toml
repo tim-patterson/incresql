@@ -8,5 +8,6 @@ edition = "2018"
 ast = { path = "../ast" }
 data = { path = "../data" }
 executor = { path = "../executor" }
+functions = { path = "../functions" }
 parser = { path = "../parser" }
 planner = { path = "../planner" }

@@ -7,3 +7,4 @@ edition = "2018"
 [dependencies]
 ast = { path = "../ast" }
 data = { path = "../data" }
+functions = { path = "../functions" }

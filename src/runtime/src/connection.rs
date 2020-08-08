@@ -3,14 +3,15 @@ use ast::rel::statement::Statement;
 use data::Session;
 use executor::point_in_time::{build_executor, Executor};
 use parser::parse;
-use planner::{plan_for_point_in_time, Field};
+use planner::Field;
+use std::sync::Arc;
 
 /// Represents a connection to the database.  Note this is the logical connection, not the physical
 /// tcp connection.
 #[derive(Debug)]
 pub struct Connection<'a> {
     pub connection_id: u32,
-    pub session: Session,
+    pub session: Arc<Session>,
     pub runtime: &'a Runtime,
 }
 
@@ -28,8 +29,11 @@ impl Connection<'_> {
         let parse_tree = parse(query)?;
         match parse_tree {
             Statement::Query(logical_operator) => {
-                let plan = plan_for_point_in_time(logical_operator)?;
-                let executor = build_executor(&plan.operator);
+                let plan = self
+                    .runtime
+                    .planner
+                    .plan_for_point_in_time(logical_operator)?;
+                let executor = build_executor(&self.session, &plan.operator);
                 Ok((plan.fields, executor))
             }
         }
