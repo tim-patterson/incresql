@@ -78,7 +78,8 @@ impl ClientPacket for HandshakeResponsePacket {
         if (lower_capibilities as u32 & CAPABILITY_CLIENT_PROTOCOL_41) != 0 {
             let mut upper_capibilities = 0;
             buffer = read_int_2(&mut upper_capibilities, buffer);
-            packet.client_flags = lower_capibilities as u32 + ((upper_capibilities as u32) << 16);
+            packet.client_flags = (lower_capibilities as u32 + ((upper_capibilities as u32) << 16))
+                & SERVER_SUPPORTED_CAPABILITIES;
             buffer = read_int_4(&mut packet.max_packet_size, buffer);
             buffer = read_int_1(&mut packet.character_set, buffer);
             buffer = &buffer[23..]; // filler
@@ -113,7 +114,7 @@ impl ClientPacket for HandshakeResponsePacket {
                 }
             }
         } else {
-            packet.client_flags = lower_capibilities as u32;
+            packet.client_flags = lower_capibilities as u32 & SERVER_SUPPORTED_CAPABILITIES;
             buffer = read_int_3(&mut packet.max_packet_size, buffer);
             buffer = read_null_string(&mut packet.username, buffer);
 
