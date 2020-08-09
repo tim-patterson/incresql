@@ -1,4 +1,3 @@
-use data::rust_decimal::prelude::ToPrimitive;
 use data::rust_decimal::Decimal;
 use data::{DataType, Datum};
 use functions::{Function, FunctionSignature};
@@ -78,10 +77,11 @@ impl From<Decimal> for Expression {
         let s = d.scale() as u8;
         // A bit yuk, there's no integer log10 yet
         let mut p = 0;
-        let mut temp = d.to_i128().unwrap().abs();
-        while temp != 0 {
+        let mut temp = d.abs().trunc();
+        while temp != Decimal::new(0, 0) {
             p += 1;
-            temp /= 10;
+            temp /= Decimal::new(10, 0);
+            temp = temp.trunc();
         }
         p = max(p + s, 1);
         Expression::Constant(Datum::from(d), DataType::Decimal(p, s))

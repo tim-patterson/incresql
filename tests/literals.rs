@@ -35,6 +35,12 @@ fn select_literal_bigint() {
 #[test]
 fn select_literal_decimal() {
     query(
+        r#"SELECT 200000000000000000000, type_of(200000000000000000000)"#,
+        "
+        200000000000000000000|DECIMAL(21,0)
+        ",
+    );
+    query(
         r#"SELECT 12.34, type_of(12.34)"#,
         "
         12.34|DECIMAL(4,2)
