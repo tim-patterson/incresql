@@ -5,7 +5,7 @@ use data::Datum;
 pub enum PointInTimeOperator {
     Single, // No from clause, ie select 1 + 1
     Project(Project),
-    Values(Values)
+    Values(Values),
 }
 
 impl Default for PointInTimeOperator {
@@ -18,7 +18,7 @@ impl Default for PointInTimeOperator {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Values {
     pub data: Vec<Vec<Datum<'static>>>,
-    pub column_count: usize
+    pub column_count: usize,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]

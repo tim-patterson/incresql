@@ -1,7 +1,7 @@
 use crate::{Field, Planner, PlannerError};
+use ast::expr::Expression;
 use ast::rel::logical::{LogicalOperator, Project};
 use ast::rel::point_in_time::{self, PointInTimeOperator};
-use ast::expr::Expression;
 
 pub struct PointInTimePlan {
     pub fields: Vec<Field>,
@@ -49,7 +49,7 @@ fn build_operator(query: LogicalOperator) -> PointInTimeOperator {
 
             PointInTimeOperator::Values(point_in_time::Values {
                 data,
-                column_count: values.fields.len()
+                column_count: values.fields.len(),
             })
         }
     }

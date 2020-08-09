@@ -1,10 +1,10 @@
 use crate::point_in_time::project::ProjectExecutor;
 use crate::point_in_time::single::SingleExecutor;
+use crate::point_in_time::values::ValuesExecutor;
 use crate::ExecutionError;
 use ast::rel::point_in_time::PointInTimeOperator;
 use data::{Datum, Session};
 use std::sync::Arc;
-use crate::point_in_time::values::ValuesExecutor;
 
 mod project;
 mod single;
@@ -36,9 +36,10 @@ pub fn build_executor(session: &Arc<Session>, plan: &PointInTimeOperator) -> Box
             build_executor(session, &project.source),
             project.expressions.clone(),
         )),
-        PointInTimeOperator::Values(values) => Box::from(
-            ValuesExecutor::new(Box::from(values.data.clone().into_iter()), values.column_count)
-        )
+        PointInTimeOperator::Values(values) => Box::from(ValuesExecutor::new(
+            Box::from(values.data.clone().into_iter()),
+            values.column_count,
+        )),
     }
 }
 

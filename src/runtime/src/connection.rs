@@ -1,6 +1,8 @@
 use crate::{QueryError, Runtime};
+use ast::expr::Expression;
+use ast::rel::logical::{LogicalOperator, Values};
 use ast::rel::statement::Statement;
-use data::Session;
+use data::{DataType, Session};
 use executor::point_in_time::{build_executor, Executor};
 use parser::parse;
 use planner::Field;
@@ -26,7 +28,28 @@ impl Connection<'_> {
         &self,
         query: &str,
     ) -> Result<(Vec<Field>, Box<dyn Executor>), QueryError> {
-        let parse_tree = parse(query)?;
+        let mut parse_tree = parse(query)?;
+
+        // For some statements we'll rewrite them into a query and run them through the planner.
+        // This is that rewrite...
+        match &mut parse_tree {
+            Statement::ShowFunctions => {
+                let data = self
+                    .runtime
+                    .planner
+                    .function_registry
+                    .list_functions()
+                    .map(|name| vec![Expression::from(name)])
+                    .collect();
+
+                parse_tree = Statement::Query(LogicalOperator::Values(Values {
+                    fields: vec![(DataType::Text, String::from("function_name"))],
+                    data,
+                }));
+            }
+            Statement::Query(_) => {}
+        }
+
         match parse_tree {
             Statement::Query(logical_operator) => {
                 let plan = self
@@ -36,6 +59,7 @@ impl Connection<'_> {
                 let executor = build_executor(&self.session, &plan.operator);
                 Ok((plan.fields, executor))
             }
+            Statement::ShowFunctions => panic!(),
         }
     }
 
@@ -63,6 +87,21 @@ mod tests {
             }]
         );
         assert_eq!(executor.next()?, Some(([Datum::from(1)].as_ref(), 1)));
+        Ok(())
+    }
+
+    #[test]
+    fn test_execute_statement_rewrite() -> Result<(), QueryError> {
+        let runtime = Runtime::new();
+        let connection = runtime.new_connection();
+        let (fields, _executor) = connection.execute_statement("show functions")?;
+        assert_eq!(
+            fields,
+            vec![Field {
+                alias: "function_name".to_string(),
+                data_type: DataType::Text
+            }]
+        );
         Ok(())
     }
 

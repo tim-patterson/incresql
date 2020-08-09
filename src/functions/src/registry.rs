@@ -1,12 +1,12 @@
 use crate::{register_builtins, Function, FunctionDefinition, FunctionSignature};
 use data::DataType;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 
 /// A repository for functions. Used by the planner to resolve the correct functions
 #[derive(Debug)]
 pub struct Registry {
-    functions: HashMap<&'static str, Vec<FunctionDefinition>>,
+    functions: BTreeMap<&'static str, Vec<FunctionDefinition>>,
 }
 
 impl Default for Registry {
@@ -40,7 +40,7 @@ impl Display for FunctionResolutionError {
 impl Registry {
     pub fn new(with_builtins: bool) -> Self {
         let mut registry = Registry {
-            functions: HashMap::new(),
+            functions: BTreeMap::new(),
         };
 
         if with_builtins {
@@ -119,6 +119,12 @@ impl Registry {
                 function_signature.name.to_string(),
             ))
         }
+    }
+
+    pub fn list_functions(&self) -> impl Iterator<Item = &'static str> + '_ {
+        self.functions
+            .iter()
+            .map(|(function_name, _defs)| *function_name)
     }
 }
 

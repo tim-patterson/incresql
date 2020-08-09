@@ -1,6 +1,6 @@
 use crate::expr::{Expression, NamedExpression};
-use std::iter::{empty, once};
 use data::DataType;
+use std::iter::{empty, once};
 
 /// Represents a query in the generic sense, generated from the parser, and validated and
 /// modified by the planner.
@@ -9,7 +9,7 @@ pub enum LogicalOperator {
     // These may appear anywhere in a logical operator at anytime
     Single, // No from clause, ie select 1 + 1
     Project(Project),
-    Values(Values)
+    Values(Values),
 }
 
 impl Default for LogicalOperator {
@@ -39,8 +39,7 @@ impl LogicalOperator {
     pub fn named_expressions(&self) -> Box<dyn Iterator<Item = &NamedExpression> + '_> {
         match self {
             LogicalOperator::Project(project) => Box::from(project.expressions.iter()),
-            LogicalOperator::Single |
-            LogicalOperator::Values(_) => Box::from(empty()),
+            LogicalOperator::Single | LogicalOperator::Values(_) => Box::from(empty()),
         }
     }
 
@@ -49,8 +48,7 @@ impl LogicalOperator {
     pub fn named_expressions_mut(&mut self) -> Box<dyn Iterator<Item = &mut NamedExpression> + '_> {
         match self {
             LogicalOperator::Project(project) => Box::from(project.expressions.iter_mut()),
-            LogicalOperator::Single |
-            LogicalOperator::Values(_) => Box::from(empty()),
+            LogicalOperator::Single | LogicalOperator::Values(_) => Box::from(empty()),
         }
     }
 
@@ -59,9 +57,11 @@ impl LogicalOperator {
         match self {
             LogicalOperator::Project(project) => {
                 Box::from(project.expressions.iter_mut().map(|ne| &mut ne.expression))
-            },
-            LogicalOperator::Values(values) => Box::from(values.data.iter_mut().flat_map(|row| row.iter_mut())),
-            LogicalOperator::Single => Box::from(empty())
+            }
+            LogicalOperator::Values(values) => {
+                Box::from(values.data.iter_mut().flat_map(|row| row.iter_mut()))
+            }
+            LogicalOperator::Single => Box::from(empty()),
         }
     }
 
@@ -69,8 +69,7 @@ impl LogicalOperator {
     pub fn children_mut(&mut self) -> Box<dyn Iterator<Item = &mut LogicalOperator> + '_> {
         match self {
             LogicalOperator::Project(project) => Box::from(once(project.source.as_mut())),
-            LogicalOperator::Single |
-            LogicalOperator::Values(_) => Box::from(empty()),
+            LogicalOperator::Single | LogicalOperator::Values(_) => Box::from(empty()),
         }
     }
 }

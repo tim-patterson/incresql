@@ -1,22 +1,19 @@
-use data::Datum;
 use crate::point_in_time::Executor;
 use crate::ExecutionError;
+use data::Datum;
 
 pub struct ValuesExecutor {
-    iter: Box<dyn Iterator<Item=Vec<Datum<'static>>>>,
+    iter: Box<dyn Iterator<Item = Vec<Datum<'static>>>>,
     curr_row: Option<Vec<Datum<'static>>>,
-    column_count: usize
+    column_count: usize,
 }
 
 impl ValuesExecutor {
-    pub fn new(
-        iter: Box<dyn Iterator<Item=Vec<Datum<'static>>>>,
-        column_count: usize
-    ) -> Self {
+    pub fn new(iter: Box<dyn Iterator<Item = Vec<Datum<'static>>>>, column_count: usize) -> Self {
         ValuesExecutor {
             iter,
             curr_row: None,
-            column_count
+            column_count,
         }
     }
 }
@@ -48,10 +45,7 @@ mod tests {
             vec![Datum::from(2), Datum::from("2")],
         ];
 
-        let mut executor = ValuesExecutor::new(
-            Box::from(values.into_iter()),
-            2
-        );
+        let mut executor = ValuesExecutor::new(Box::from(values.into_iter()), 2);
 
         assert_eq!(executor.column_count(), 2);
 
