@@ -1,5 +1,5 @@
 use crate::registry::Registry;
-use crate::{Function, FunctionDefinition};
+use crate::{Function, FunctionDefinition, FunctionSignature};
 use data::rust_decimal::prelude::ToPrimitive;
 use data::{DataType, Datum, Session};
 
@@ -7,7 +7,12 @@ use data::{DataType, Datum, Session};
 struct ToIntFromBoolean {}
 
 impl Function for ToIntFromBoolean {
-    fn execute<'a>(&self, _session: &Session, args: &'a [Datum<'a>]) -> Datum<'a> {
+    fn execute<'a>(
+        &self,
+        _session: &Session,
+        _signature: &FunctionSignature,
+        args: &'a [Datum<'a>],
+    ) -> Datum<'a> {
         if let Some(a) = args[0].as_boolean() {
             Datum::Integer(if a { 1 } else { 0 })
         } else {
@@ -20,7 +25,12 @@ impl Function for ToIntFromBoolean {
 struct ToIntFromInt {}
 
 impl Function for ToIntFromInt {
-    fn execute<'a>(&self, _session: &Session, args: &'a [Datum<'a>]) -> Datum<'a> {
+    fn execute<'a>(
+        &self,
+        _session: &Session,
+        _signature: &FunctionSignature,
+        args: &'a [Datum<'a>],
+    ) -> Datum<'a> {
         args[0].clone()
     }
 }
@@ -29,7 +39,12 @@ impl Function for ToIntFromInt {
 struct ToIntFromBigInt {}
 
 impl Function for ToIntFromBigInt {
-    fn execute<'a>(&self, _session: &Session, args: &'a [Datum<'a>]) -> Datum<'a> {
+    fn execute<'a>(
+        &self,
+        _session: &Session,
+        _signature: &FunctionSignature,
+        args: &'a [Datum<'a>],
+    ) -> Datum<'a> {
         if let Some(a) = args[0].as_bigint() {
             Datum::from(a as i32)
         } else {
@@ -42,7 +57,12 @@ impl Function for ToIntFromBigInt {
 struct ToIntFromDecimal {}
 
 impl Function for ToIntFromDecimal {
-    fn execute<'a>(&self, _session: &Session, args: &'a [Datum<'a>]) -> Datum<'a> {
+    fn execute<'a>(
+        &self,
+        _session: &Session,
+        _signature: &FunctionSignature,
+        args: &'a [Datum<'a>],
+    ) -> Datum<'a> {
         if let Some(a) = args[0].as_decimal() {
             a.to_i32().map(Datum::from).unwrap_or(Datum::Null)
         } else {
@@ -55,7 +75,12 @@ impl Function for ToIntFromDecimal {
 struct ToIntFromText {}
 
 impl Function for ToIntFromText {
-    fn execute<'a>(&self, _session: &Session, args: &'a [Datum<'a>]) -> Datum<'a> {
+    fn execute<'a>(
+        &self,
+        _session: &Session,
+        _signature: &FunctionSignature,
+        args: &'a [Datum<'a>],
+    ) -> Datum<'a> {
         if let Some(a) = args[0].as_str() {
             a.parse::<i32>()
                 .ok()
@@ -109,10 +134,16 @@ mod tests {
     use super::*;
     use data::rust_decimal::Decimal;
 
+    const DUMMY_SIG: FunctionSignature = FunctionSignature {
+        name: "to_int",
+        args: vec![],
+        ret: DataType::Integer,
+    };
+
     #[test]
     fn test_null() {
         assert_eq!(
-            ToIntFromBoolean {}.execute(&Session::new(1), &[Datum::Null]),
+            ToIntFromBoolean {}.execute(&Session::new(1), &DUMMY_SIG, &[Datum::Null]),
             Datum::Null
         )
     }
@@ -120,7 +151,7 @@ mod tests {
     #[test]
     fn test_from_bool() {
         assert_eq!(
-            ToIntFromBoolean {}.execute(&Session::new(1), &[Datum::from(true)]),
+            ToIntFromBoolean {}.execute(&Session::new(1), &DUMMY_SIG, &[Datum::from(true)]),
             Datum::from(1)
         )
     }
@@ -128,7 +159,7 @@ mod tests {
     #[test]
     fn test_from_int() {
         assert_eq!(
-            ToIntFromInt {}.execute(&Session::new(1), &[Datum::from(1)]),
+            ToIntFromInt {}.execute(&Session::new(1), &DUMMY_SIG, &[Datum::from(1)]),
             Datum::from(1)
         )
     }
@@ -136,7 +167,7 @@ mod tests {
     #[test]
     fn test_from_bigint() {
         assert_eq!(
-            ToIntFromBigInt {}.execute(&Session::new(1), &[Datum::from(1_i64)]),
+            ToIntFromBigInt {}.execute(&Session::new(1), &DUMMY_SIG, &[Datum::from(1_i64)]),
             Datum::from(1)
         )
     }
@@ -144,7 +175,11 @@ mod tests {
     #[test]
     fn test_from_decimal() {
         assert_eq!(
-            ToIntFromDecimal {}.execute(&Session::new(1), &[Datum::from(Decimal::new(10, 1))]),
+            ToIntFromDecimal {}.execute(
+                &Session::new(1),
+                &DUMMY_SIG,
+                &[Datum::from(Decimal::new(10, 1))]
+            ),
             Datum::from(1)
         )
     }
@@ -152,7 +187,7 @@ mod tests {
     #[test]
     fn test_from_text() {
         assert_eq!(
-            ToIntFromText {}.execute(&Session::new(1), &[Datum::from("1")]),
+            ToIntFromText {}.execute(&Session::new(1), &DUMMY_SIG, &[Datum::from("1")]),
             Datum::from(1)
         )
     }

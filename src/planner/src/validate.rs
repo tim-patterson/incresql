@@ -79,7 +79,12 @@ mod tests {
     struct DummyFunct {}
 
     impl Function for DummyFunct {
-        fn execute<'a>(&self, _session: &Session, _args: &'a [Datum<'a>]) -> Datum<'a> {
+        fn execute<'a>(
+            &self,
+            _session: &Session,
+            _sig: &FunctionSignature,
+            _args: &'a [Datum<'a>],
+        ) -> Datum<'a> {
             unimplemented!()
         }
     }

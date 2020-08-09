@@ -1,5 +1,5 @@
 use crate::registry::Registry;
-use crate::{Function, FunctionDefinition};
+use crate::{Function, FunctionDefinition, FunctionSignature};
 use data::{DataType, Datum, Session, DECIMAL_MAX_PRECISION};
 use std::cmp::{max, min};
 
@@ -7,7 +7,12 @@ use std::cmp::{max, min};
 struct AddInteger {}
 
 impl Function for AddInteger {
-    fn execute<'a>(&self, _session: &Session, args: &'a [Datum<'a>]) -> Datum<'a> {
+    fn execute<'a>(
+        &self,
+        _session: &Session,
+        _signature: &FunctionSignature,
+        args: &'a [Datum<'a>],
+    ) -> Datum<'a> {
         if let (Some(a), Some(b)) = (args[0].as_integer(), args[1].as_integer()) {
             Datum::from(a + b)
         } else {
@@ -20,7 +25,12 @@ impl Function for AddInteger {
 struct AddBigint {}
 
 impl Function for AddBigint {
-    fn execute<'a>(&self, _session: &Session, args: &'a [Datum<'a>]) -> Datum<'a> {
+    fn execute<'a>(
+        &self,
+        _session: &Session,
+        _signature: &FunctionSignature,
+        args: &'a [Datum<'a>],
+    ) -> Datum<'a> {
         if let (Some(a), Some(b)) = (args[0].as_bigint(), args[1].as_bigint()) {
             Datum::from(a + b)
         } else {
@@ -33,7 +43,12 @@ impl Function for AddBigint {
 struct AddDecimal {}
 
 impl Function for AddDecimal {
-    fn execute<'a>(&self, _session: &Session, args: &'a [Datum<'a>]) -> Datum<'a> {
+    fn execute<'a>(
+        &self,
+        _session: &Session,
+        _signature: &FunctionSignature,
+        args: &'a [Datum<'a>],
+    ) -> Datum<'a> {
         if let (Some(a), Some(b)) = (args[0].as_decimal(), args[1].as_decimal()) {
             Datum::from(a + b)
         } else {
@@ -76,10 +91,16 @@ mod tests {
     use super::*;
     use data::rust_decimal::Decimal;
 
+    const DUMMY_SIG: FunctionSignature = FunctionSignature {
+        name: "+",
+        args: vec![],
+        ret: DataType::Integer,
+    };
+
     #[test]
     fn test_null() {
         assert_eq!(
-            AddInteger {}.execute(&Session::new(1), &[Datum::Null, Datum::Null]),
+            AddInteger {}.execute(&Session::new(1), &DUMMY_SIG, &[Datum::Null, Datum::Null]),
             Datum::Null
         )
     }
@@ -87,7 +108,11 @@ mod tests {
     #[test]
     fn test_add_int() {
         assert_eq!(
-            AddInteger {}.execute(&Session::new(1), &[Datum::from(1), Datum::from(2)]),
+            AddInteger {}.execute(
+                &Session::new(1),
+                &DUMMY_SIG,
+                &[Datum::from(1), Datum::from(2)]
+            ),
             Datum::from(3)
         )
     }
@@ -95,7 +120,11 @@ mod tests {
     #[test]
     fn test_add_bigint() {
         assert_eq!(
-            AddBigint {}.execute(&Session::new(1), &[Datum::from(1_i64), Datum::from(2_i64)]),
+            AddBigint {}.execute(
+                &Session::new(1),
+                &DUMMY_SIG,
+                &[Datum::from(1_i64), Datum::from(2_i64)]
+            ),
             Datum::from(3_i64)
         )
     }
@@ -105,6 +134,7 @@ mod tests {
         assert_eq!(
             AddDecimal {}.execute(
                 &Session::new(1),
+                &DUMMY_SIG,
                 &[
                     Datum::from(Decimal::new(123, 1)),
                     Datum::from(Decimal::new(1234, 2))

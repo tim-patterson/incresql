@@ -29,7 +29,9 @@ impl EvalScalar for Expression {
                 right_size(buf, &function_call.args);
                 function_call.args.eval_scalar(session, row, buf);
 
-                function_call.function.execute(session, buf)
+                function_call
+                    .function
+                    .execute(session, &function_call.signature, buf)
             }
             // This should be compiled away by this point
             Expression::FunctionCall(_) => panic!(),

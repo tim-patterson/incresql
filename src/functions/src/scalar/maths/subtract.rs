@@ -1,5 +1,5 @@
 use crate::registry::Registry;
-use crate::{Function, FunctionDefinition};
+use crate::{Function, FunctionDefinition, FunctionSignature};
 use data::{DataType, Datum, Session, DECIMAL_MAX_PRECISION};
 use std::cmp::{max, min};
 
@@ -7,7 +7,12 @@ use std::cmp::{max, min};
 struct SubtractInteger {}
 
 impl Function for SubtractInteger {
-    fn execute<'a>(&self, _session: &Session, args: &'a [Datum<'a>]) -> Datum<'a> {
+    fn execute<'a>(
+        &self,
+        _session: &Session,
+        _signature: &FunctionSignature,
+        args: &'a [Datum<'a>],
+    ) -> Datum<'a> {
         if let (Some(a), Some(b)) = (args[0].as_integer(), args[1].as_integer()) {
             Datum::from(a - b)
         } else {
@@ -20,7 +25,12 @@ impl Function for SubtractInteger {
 struct SubtractBigint {}
 
 impl Function for SubtractBigint {
-    fn execute<'a>(&self, _session: &Session, args: &'a [Datum<'a>]) -> Datum<'a> {
+    fn execute<'a>(
+        &self,
+        _session: &Session,
+        _signature: &FunctionSignature,
+        args: &'a [Datum<'a>],
+    ) -> Datum<'a> {
         if let (Some(a), Some(b)) = (args[0].as_bigint(), args[1].as_bigint()) {
             Datum::from(a - b)
         } else {
@@ -33,7 +43,12 @@ impl Function for SubtractBigint {
 struct SubtractDecimal {}
 
 impl Function for SubtractDecimal {
-    fn execute<'a>(&self, _session: &Session, args: &'a [Datum<'a>]) -> Datum<'a> {
+    fn execute<'a>(
+        &self,
+        _session: &Session,
+        _signature: &FunctionSignature,
+        args: &'a [Datum<'a>],
+    ) -> Datum<'a> {
         if let (Some(a), Some(b)) = (args[0].as_decimal(), args[1].as_decimal()) {
             Datum::from(a - b)
         } else {
@@ -76,10 +91,16 @@ mod tests {
     use super::*;
     use data::rust_decimal::Decimal;
 
+    const DUMMY_SIG: FunctionSignature = FunctionSignature {
+        name: "-",
+        args: vec![],
+        ret: DataType::Integer,
+    };
+
     #[test]
     fn test_null() {
         assert_eq!(
-            SubtractInteger {}.execute(&Session::new(1), &[Datum::Null, Datum::Null]),
+            SubtractInteger {}.execute(&Session::new(1), &DUMMY_SIG, &[Datum::Null, Datum::Null]),
             Datum::Null
         )
     }
@@ -87,7 +108,11 @@ mod tests {
     #[test]
     fn test_sub_int() {
         assert_eq!(
-            SubtractInteger {}.execute(&Session::new(1), &[Datum::from(10), Datum::from(2)]),
+            SubtractInteger {}.execute(
+                &Session::new(1),
+                &DUMMY_SIG,
+                &[Datum::from(10), Datum::from(2)]
+            ),
             Datum::from(8)
         )
     }
@@ -95,7 +120,11 @@ mod tests {
     #[test]
     fn test_sub_bigint() {
         assert_eq!(
-            SubtractBigint {}.execute(&Session::new(1), &[Datum::from(10_i64), Datum::from(2_i64)]),
+            SubtractBigint {}.execute(
+                &Session::new(1),
+                &DUMMY_SIG,
+                &[Datum::from(10_i64), Datum::from(2_i64)]
+            ),
             Datum::from(8_i64)
         )
     }
@@ -105,6 +134,7 @@ mod tests {
         assert_eq!(
             SubtractDecimal {}.execute(
                 &Session::new(1),
+                &DUMMY_SIG,
                 &[
                     Datum::from(Decimal::new(2464, 2)),
                     Datum::from(Decimal::new(1234, 2))

@@ -61,7 +61,12 @@ impl FunctionDefinition {
 
 /// A function implementation
 pub trait Function: Debug + Sync + 'static {
-    fn execute<'a>(&self, session: &Session, args: &'a [Datum<'a>]) -> Datum<'a>;
+    fn execute<'a>(
+        &self,
+        session: &Session,
+        signature: &FunctionSignature,
+        args: &'a [Datum<'a>],
+    ) -> Datum<'a>;
 }
 
 fn register_builtins(registry: &mut Registry) {
