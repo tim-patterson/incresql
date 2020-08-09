@@ -2,7 +2,7 @@ use crate::common::type_for_expression;
 use crate::{Planner, PlannerError};
 use ast::expr::{CompiledFunctionCall, Expression};
 use ast::rel::logical::LogicalOperator;
-use data::DataType;
+use data::{DataType, Datum};
 use functions::registry::{FunctionResolutionError, Registry};
 use functions::FunctionSignature;
 
@@ -55,6 +55,39 @@ fn compile_functions_in_expr(
             *expression = Expression::CompiledFunctionCall(CompiledFunctionCall {
                 function,
                 args,
+                expr_buffer: vec![],
+                signature: Box::new(signature),
+            })
+        }
+        Expression::Cast(cast) => {
+            compile_functions_in_expr(&mut cast.expr, function_registry)?;
+
+            let expr_type = type_for_expression(&cast.expr);
+
+            let function_name = match cast.datatype {
+                DataType::Null => panic!("Attempted cast to null"),
+                DataType::Boolean => "to_bool",
+                DataType::Integer => "to_int",
+                DataType::BigInt => "to_bigint",
+                DataType::Decimal(..) => "to_decimal",
+                DataType::Text => "to_text",
+            };
+
+            let lookup_sig = FunctionSignature {
+                name: function_name,
+                args: vec![expr_type],
+                ret: cast.datatype,
+            };
+
+            let (signature, function) = function_registry.resolve_scalar_function(&lookup_sig)?;
+
+            let mut expr = Expression::Literal(Datum::Null);
+
+            std::mem::swap(&mut expr, &mut cast.expr);
+
+            *expression = Expression::CompiledFunctionCall(CompiledFunctionCall {
+                function,
+                args: vec![expr],
                 expr_buffer: vec![],
                 signature: Box::new(signature),
             })

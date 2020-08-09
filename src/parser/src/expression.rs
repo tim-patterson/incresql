@@ -1,11 +1,11 @@
 use crate::atoms::{identifier_str, kw};
-use crate::literals::literal;
+use crate::literals::{datatype, literal};
 use crate::whitespace::{ws_0, ws_1};
 use crate::ParserResult;
-use ast::expr::{Expression, FunctionCall, NamedExpression};
+use ast::expr::{Cast, Expression, FunctionCall, NamedExpression};
 use nom::branch::{alt, Alt};
 use nom::bytes::complete::tag;
-use nom::combinator::{map, opt};
+use nom::combinator::{cut, map, opt};
 use nom::error::VerboseError;
 use nom::multi::{many0, separated_list};
 use nom::sequence::{pair, preceded, tuple};
@@ -43,7 +43,7 @@ fn expression_1(input: &str) -> ParserResult<Expression> {
 }
 
 fn expression_2(input: &str) -> ParserResult<Expression> {
-    alt((function_call, literal_expression))(input)
+    alt((function_call, cast, literal_expression))(input)
 }
 
 fn literal_expression(input: &str) -> ParserResult<Expression> {
@@ -94,10 +94,31 @@ fn function_call(input: &str) -> ParserResult<Expression> {
     )(input)
 }
 
+fn cast(input: &str) -> ParserResult<Expression> {
+    preceded(
+        kw("CAST"),
+        cut(map(
+            tuple((
+                tuple((ws_0, tag("("), ws_0)),
+                expression,
+                tuple((ws_0, kw("AS"), ws_0)),
+                datatype,
+                pair(ws_0, tag(")")),
+            )),
+            |(_, expr, _, datatype, _)| {
+                Expression::Cast(Cast {
+                    expr: Box::new(expr),
+                    datatype,
+                })
+            },
+        )),
+    )(input)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use data::Datum;
+    use data::{DataType, Datum};
 
     #[test]
     fn test_literal_expression() {
@@ -189,6 +210,18 @@ mod tests {
                 expression,
                 alias: Some(String::from("foobar"))
             }
+        );
+    }
+
+    #[test]
+    fn test_cast() {
+        let expr = Expression::Literal(Datum::Null);
+        assert_eq!(
+            expression("cast( null as decimal(1,2))").unwrap().1,
+            Expression::Cast(Cast {
+                expr: Box::new(expr),
+                datatype: DataType::Decimal(1, 2)
+            })
         );
     }
 }

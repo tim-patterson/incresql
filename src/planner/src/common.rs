@@ -28,6 +28,7 @@ pub(crate) fn type_for_expression(expr: &Expression) -> DataType {
     match expr {
         Expression::Literal(constant) => constant.datatype(),
         Expression::FunctionCall(_) => panic!(),
+        Expression::Cast(cast) => cast.datatype,
         Expression::CompiledFunctionCall(function_call) => function_call.signature.ret,
     }
 }

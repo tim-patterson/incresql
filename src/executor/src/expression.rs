@@ -34,7 +34,7 @@ impl EvalScalar for Expression {
                     .execute(session, &function_call.signature, buf)
             }
             // This should be compiled away by this point
-            Expression::FunctionCall(_) => panic!(),
+            Expression::FunctionCall(_) | Expression::Cast(_) => panic!(),
         }
     }
 }

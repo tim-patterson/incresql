@@ -205,11 +205,19 @@ pub fn write_err_packet_from_err(err: &MyError, capabilities: u32, buffer: &mut 
     write_err_packet(err.code, err.msg, err.sql_state, capabilities, buffer)
 }
 
-pub fn write_tuple_packet(tuple: &[Datum], buffer: &mut Vec<u8>) {
-    for value in tuple {
+pub fn write_tuple_packet(tuple: &[Datum], types: &[DataType], buffer: &mut Vec<u8>) {
+    for (idx, value) in tuple.iter().enumerate() {
         match value {
             Datum::Null => buffer.push(0xFB),
             Datum::Boolean(b) => write_enc_string(if *b { "1" } else { "0" }, buffer),
+            Datum::Decimal(d) => {
+                // Format decimals to match the data type!
+                if let DataType::Decimal(_p, scale) = types[idx] {
+                    write_enc_string(format!("{:.*}", scale as usize, d), buffer)
+                } else {
+                    panic!()
+                }
+            }
             // TODO We could keep a buffer and write into that, then calc the length and copy across
             // to avoid format allocating strings...
             _ => write_enc_string(format!("{}", value), buffer),
