@@ -1,5 +1,5 @@
 // Re-exported as almost every crate using data will also need decimal
-pub use rust_decimal::Decimal;
+pub use rust_decimal;
 mod datatype;
 mod datum;
 mod session;

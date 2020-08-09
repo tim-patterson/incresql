@@ -1,7 +1,8 @@
 use crate::registry::Registry;
-
+mod casts;
 mod maths;
 
 pub fn register_builtins(registry: &mut Registry) {
-    maths::register_builtins(registry)
+    casts::register_builtins(registry);
+    maths::register_builtins(registry);
 }

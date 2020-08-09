@@ -55,8 +55,14 @@ impl From<Decimal> for Datum<'static> {
 }
 
 impl From<String> for Datum<'static> {
-    fn from(d: String) -> Self {
-        Datum::TextOwned(d.into_boxed_str())
+    fn from(s: String) -> Self {
+        Datum::TextOwned(s.into_boxed_str())
+    }
+}
+
+impl<'a> From<&'a str> for Datum<'a> {
+    fn from(s: &'a str) -> Self {
+        Datum::TextRef(s)
     }
 }
 
@@ -108,6 +114,14 @@ impl<'a> Datum<'a> {
     pub fn as_decimal(&self) -> Option<Decimal> {
         if let Datum::Decimal(d) = self {
             Some(*d)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_boolean(&self) -> Option<bool> {
+        if let Datum::Boolean(b) = self {
+            Some(*b)
         } else {
             None
         }
@@ -173,6 +187,8 @@ mod tests {
             Datum::from(String::from("Hello world")),
             Datum::TextOwned(Box::from("Hello world"))
         );
+
+        assert_eq!(Datum::from("Hello world"), Datum::TextRef("Hello world"));
     }
 
     #[test]
@@ -252,6 +268,13 @@ mod tests {
             Datum::Decimal(Decimal::new(3232, 1)).as_decimal(),
             Some(Decimal::new(3232, 1))
         );
+
+        assert_eq!(Datum::Null.as_decimal(), None);
+    }
+
+    #[test]
+    fn test_datum_as_boolean() {
+        assert_eq!(Datum::Boolean(true).as_boolean(), Some(true));
 
         assert_eq!(Datum::Null.as_decimal(), None);
     }

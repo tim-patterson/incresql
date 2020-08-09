@@ -1,5 +1,5 @@
 use crate::ParserResult;
-use data::Decimal;
+use data::rust_decimal::Decimal;
 use nom::branch::alt;
 use nom::bytes::complete::{
     escaped_transform, is_not, tag, tag_no_case, take, take_until, take_while, take_while1,

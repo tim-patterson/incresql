@@ -82,7 +82,7 @@ pub fn register_builtins(registry: &mut Registry) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use data::Decimal;
+    use data::rust_decimal::Decimal;
 
     #[test]
     fn test_null() {
