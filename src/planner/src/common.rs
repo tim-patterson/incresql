@@ -37,7 +37,7 @@ mod tests {
     use super::*;
     use ast::expr::NamedExpression;
     use ast::rel::logical::Project;
-    use data::{Datum, Decimal};
+    use data::{rust_decimal::Decimal, Datum};
     use functions::registry::Registry;
     use std::str::FromStr;
 

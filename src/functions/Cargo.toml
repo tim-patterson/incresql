@@ -6,3 +6,5 @@ edition = "2018"
 
 [dependencies]
 data = { path = "../data" }
+
+num-traits = "0.2.12"

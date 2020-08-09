@@ -1,5 +1,5 @@
 use crate::registry::Registry;
-use crate::{Function, FunctionDefinition};
+use crate::{Function, FunctionDefinition, FunctionSignature};
 use data::{DataType, Datum, Session, DECIMAL_MAX_PRECISION, DECIMAL_MAX_SCALE};
 use std::cmp::min;
 
@@ -7,7 +7,12 @@ use std::cmp::min;
 struct MultiplyInteger {}
 
 impl Function for MultiplyInteger {
-    fn execute<'a>(&self, _session: &Session, args: &'a [Datum<'a>]) -> Datum<'a> {
+    fn execute<'a>(
+        &self,
+        _session: &Session,
+        _signature: &FunctionSignature,
+        args: &'a [Datum<'a>],
+    ) -> Datum<'a> {
         if let (Some(a), Some(b)) = (args[0].as_integer(), args[1].as_integer()) {
             Datum::from(a * b)
         } else {
@@ -20,7 +25,12 @@ impl Function for MultiplyInteger {
 struct MultiplyBigint {}
 
 impl Function for MultiplyBigint {
-    fn execute<'a>(&self, _session: &Session, args: &'a [Datum<'a>]) -> Datum<'a> {
+    fn execute<'a>(
+        &self,
+        _session: &Session,
+        _signature: &FunctionSignature,
+        args: &'a [Datum<'a>],
+    ) -> Datum<'a> {
         if let (Some(a), Some(b)) = (args[0].as_bigint(), args[1].as_bigint()) {
             Datum::from(a * b)
         } else {
@@ -33,14 +43,14 @@ impl Function for MultiplyBigint {
 struct MultiplyDecimal {}
 
 impl Function for MultiplyDecimal {
-    fn execute<'a>(&self, _session: &Session, args: &'a [Datum<'a>]) -> Datum<'a> {
+    fn execute<'a>(
+        &self,
+        _session: &Session,
+        _signature: &FunctionSignature,
+        args: &'a [Datum<'a>],
+    ) -> Datum<'a> {
         if let (Some(a), Some(b)) = (args[0].as_decimal(), args[1].as_decimal()) {
-            let mut d = a * b;
-            // Rescale to ensure we stay matching what the sql types say
-            if d.scale() > DECIMAL_MAX_SCALE as u32 {
-                d.rescale(DECIMAL_MAX_SCALE as u32);
-            }
-            Datum::from(d)
+            Datum::from(a * b)
         } else {
             Datum::Null
         }
@@ -82,12 +92,18 @@ pub fn register_builtins(registry: &mut Registry) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use data::Decimal;
+    use data::rust_decimal::Decimal;
+
+    const DUMMY_SIG: FunctionSignature = FunctionSignature {
+        name: "*",
+        args: vec![],
+        ret: DataType::Integer,
+    };
 
     #[test]
     fn test_null() {
         assert_eq!(
-            MultiplyInteger {}.execute(&Session::new(1), &[Datum::Null, Datum::Null]),
+            MultiplyInteger {}.execute(&Session::new(1), &DUMMY_SIG, &[Datum::Null, Datum::Null]),
             Datum::Null
         )
     }
@@ -95,7 +111,11 @@ mod tests {
     #[test]
     fn test_add_int() {
         assert_eq!(
-            MultiplyInteger {}.execute(&Session::new(1), &[Datum::from(3), Datum::from(2)]),
+            MultiplyInteger {}.execute(
+                &Session::new(1),
+                &DUMMY_SIG,
+                &[Datum::from(3), Datum::from(2)]
+            ),
             Datum::from(6)
         )
     }
@@ -103,7 +123,11 @@ mod tests {
     #[test]
     fn test_add_bigint() {
         assert_eq!(
-            MultiplyBigint {}.execute(&Session::new(1), &[Datum::from(3_i64), Datum::from(2_i64)]),
+            MultiplyBigint {}.execute(
+                &Session::new(1),
+                &DUMMY_SIG,
+                &[Datum::from(3_i64), Datum::from(2_i64)]
+            ),
             Datum::from(6_i64)
         )
     }
@@ -113,6 +137,7 @@ mod tests {
         assert_eq!(
             MultiplyDecimal {}.execute(
                 &Session::new(1),
+                &DUMMY_SIG,
                 &[
                     Datum::from(Decimal::new(30, 1)),
                     Datum::from(Decimal::new(200, 2))

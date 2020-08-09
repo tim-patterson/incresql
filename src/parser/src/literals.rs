@@ -41,7 +41,7 @@ fn text_literal(input: &str) -> ParserResult<Datum<'static>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use data::Decimal;
+    use data::rust_decimal::Decimal;
     use std::str::FromStr;
 
     #[test]
