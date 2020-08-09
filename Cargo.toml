@@ -17,6 +17,7 @@ members = [
 ]
 
 [dependencies]
+data = { path = "src/data" }
 runtime = { path = "src/runtime" }
 server = { path = "src/server" }
 
