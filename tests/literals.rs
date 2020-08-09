@@ -37,7 +37,21 @@ fn select_literal_decimal() {
     query(
         r#"SELECT 12.34, type_of(12.34)"#,
         "
-        12.34|DECIMAL(28,2)
+        12.34|DECIMAL(4,2)
+        ",
+    );
+
+    query(
+        r#"SELECT 1.00, type_of(1.00)"#,
+        "
+        1.00|DECIMAL(3,2)
+        ",
+    );
+
+    query(
+        r#"SELECT .12, type_of(.12)"#,
+        "
+        0.12|DECIMAL(2,2)
         ",
     );
 }

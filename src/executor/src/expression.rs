@@ -14,7 +14,7 @@ impl EvalScalar for Expression {
     fn eval_scalar(&mut self, session: &Session, row: &[Datum]) -> Datum {
         match self {
             // literal.clone() seemed to confuse IntelliJ here...
-            Expression::Literal(literal) => Datum::clone(literal),
+            Expression::Constant(literal, _) => Datum::ref_clone(literal),
             Expression::CompiledFunctionCall(function_call) => {
                 // Due to datum's being able to reference data from source datums, we need to hold
                 // onto all the intermediate datums just in case. Rust lifetimes don't really allow
@@ -66,7 +66,7 @@ mod tests {
 
     #[test]
     fn test_eval_scalar_literal() {
-        let mut expression = Expression::Literal(Datum::from(1234));
+        let mut expression = Expression::from(1234);
         let session = Session::new(1);
         assert_eq!(expression.eval_scalar(&session, &[]), Datum::from(1234));
     }
@@ -86,10 +86,7 @@ mod tests {
             function,
             signature: Box::from(computed_signature),
             expr_buffer: vec![],
-            args: vec![
-                Expression::Literal(Datum::from(3)),
-                Expression::Literal(Datum::from(4)),
-            ],
+            args: vec![Expression::from(3), Expression::from(4)],
         });
 
         let session = Session::new(1);
@@ -98,10 +95,7 @@ mod tests {
 
     #[test]
     fn test_eval_scalar_row() {
-        let mut expressions = vec![
-            Expression::Literal(Datum::from(1234)),
-            Expression::Literal(Datum::from(5678)),
-        ];
+        let mut expressions = vec![Expression::from(1234), Expression::from(5678)];
         let session = Session::new(1);
         let mut target = vec![Datum::Null, Datum::Null];
         expressions.eval_scalar(&session, &[], &mut target);

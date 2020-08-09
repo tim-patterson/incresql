@@ -26,7 +26,7 @@ fn fields_for_operator(operator: &LogicalOperator) -> impl Iterator<Item = Field
 /// Returns the datatype for an expression, will panic if called before query is normalized
 pub(crate) fn type_for_expression(expr: &Expression) -> DataType {
     match expr {
-        Expression::Literal(constant) => constant.datatype(),
+        Expression::Constant(_constant, datatype) => *datatype,
         Expression::FunctionCall(_) => panic!(),
         Expression::Cast(cast) => cast.datatype,
         Expression::CompiledFunctionCall(function_call) => function_call.signature.ret,
@@ -38,7 +38,7 @@ mod tests {
     use super::*;
     use ast::expr::NamedExpression;
     use ast::rel::logical::Project;
-    use data::{rust_decimal::Decimal, Datum};
+    use data::rust_decimal::Decimal;
     use functions::registry::Registry;
     use std::str::FromStr;
 
@@ -49,7 +49,7 @@ mod tests {
             distinct: false,
             expressions: vec![NamedExpression {
                 alias: None,
-                expression: Expression::Literal(Datum::from(Decimal::from_str("1.23").unwrap())),
+                expression: Expression::from(Decimal::from_str("1.23").unwrap()),
             }],
             source: Box::new(LogicalOperator::Single),
         });
@@ -60,7 +60,7 @@ mod tests {
             fields,
             vec![Field {
                 alias: String::from("_col1"),
-                data_type: DataType::Decimal(28, 2)
+                data_type: DataType::Decimal(3, 2)
             }]
         );
         Ok(())

@@ -43,7 +43,7 @@ mod tests {
     use super::*;
     use crate::{Planner, PlannerError};
     use ast::expr::{Expression, NamedExpression};
-    use data::Datum;
+    use data::{DataType, Datum};
     use functions::registry::Registry;
 
     #[test]
@@ -53,13 +53,13 @@ mod tests {
             distinct: false,
             expressions: vec![NamedExpression {
                 alias: None,
-                expression: Expression::Literal(Datum::Null),
+                expression: Expression::Constant(Datum::Null, DataType::Null),
             }],
             source: Box::new(LogicalOperator::Single),
         });
 
         let expected = PointInTimeOperator::Project(point_in_time::Project {
-            expressions: vec![Expression::Literal(Datum::Null)],
+            expressions: vec![Expression::Constant(Datum::Null, DataType::Null)],
             source: Box::new(PointInTimeOperator::Single),
         });
 

@@ -1,6 +1,7 @@
 use crate::atoms::{decimal, integer, kw, quoted_string};
 use crate::whitespace::ws_0;
 use crate::ParserResult;
+use ast::expr::Expression;
 use data::DataType::Decimal;
 use data::{DataType, Datum, DECIMAL_MAX_PRECISION};
 use nom::branch::alt;
@@ -8,7 +9,7 @@ use nom::bytes::complete::tag;
 use nom::combinator::{map, value};
 use nom::sequence::tuple;
 
-pub fn literal(input: &str) -> ParserResult<Datum<'static>> {
+pub fn literal(input: &str) -> ParserResult<Expression> {
     alt((null_literal, boolean_literal, number_literal, text_literal))(input)
 }
 
@@ -43,34 +44,37 @@ pub fn datatype(input: &str) -> ParserResult<DataType> {
     ))(input)
 }
 
-fn null_literal(input: &str) -> ParserResult<Datum<'static>> {
-    value(Datum::Null, kw("NULL"))(input)
+fn null_literal(input: &str) -> ParserResult<Expression> {
+    value(
+        Expression::Constant(Datum::Null, DataType::Null),
+        kw("NULL"),
+    )(input)
 }
 
-fn boolean_literal(input: &str) -> ParserResult<Datum<'static>> {
+fn boolean_literal(input: &str) -> ParserResult<Expression> {
     alt((
-        value(Datum::from(true), kw("TRUE")),
-        value(Datum::from(false), kw("FALSE")),
+        value(Expression::from(true), kw("TRUE")),
+        value(Expression::from(false), kw("FALSE")),
     ))(input)
 }
 
-fn number_literal(input: &str) -> ParserResult<Datum<'static>> {
+fn number_literal(input: &str) -> ParserResult<Expression> {
     // Our casts will promote ints -> bigints -> decimals -> floats so that should be the preference
     // for parsing numbers, we may not actually need to parse floats unless we support NaN/Inf etc
     alt((
         map(integer, |i| {
             if std::i32::MIN as i64 <= i && i <= std::i32::MAX as i64 {
-                Datum::from(i as i32)
+                Expression::from(i as i32)
             } else {
-                Datum::from(i)
+                Expression::from(i)
             }
         }),
-        map(decimal, Datum::from),
+        map(decimal, Expression::from),
     ))(input)
 }
 
-fn text_literal(input: &str) -> ParserResult<Datum<'static>> {
-    map(quoted_string, Datum::from)(input)
+fn text_literal(input: &str) -> ParserResult<Expression> {
+    map(quoted_string, Expression::from)(input)
 }
 
 #[cfg(test)]
@@ -81,26 +85,29 @@ mod tests {
 
     #[test]
     fn test_null_literal() {
-        assert_eq!(literal("NuLl").unwrap().1, Datum::Null);
+        assert_eq!(
+            literal("NuLl").unwrap().1,
+            Expression::Constant(Datum::Null, DataType::Null)
+        );
     }
 
     #[test]
     fn test_boolean_literal() {
-        assert_eq!(literal("true").unwrap().1, Datum::from(true));
+        assert_eq!(literal("true").unwrap().1, Expression::from(true));
 
-        assert_eq!(literal("false").unwrap().1, Datum::from(false));
+        assert_eq!(literal("false").unwrap().1, Expression::from(false));
     }
 
     #[test]
     fn test_number_literal() {
-        assert_eq!(literal("123").unwrap().1, Datum::from(123));
+        assert_eq!(literal("123").unwrap().1, Expression::from(123));
         assert_eq!(
             literal("3000000000").unwrap().1,
-            Datum::from(3000000000_i64)
+            Expression::from(3000000000_i64)
         );
         assert_eq!(
             literal("123.456").unwrap().1,
-            Datum::from(Decimal::from_str("123.456").unwrap())
+            Expression::from(Decimal::from_str("123.456").unwrap())
         );
     }
 
@@ -108,7 +115,7 @@ mod tests {
     fn test_text_literal() {
         assert_eq!(
             literal("'Hello world'").unwrap().1,
-            Datum::from("Hello world".to_string())
+            Expression::from("Hello world".to_string())
         );
     }
 

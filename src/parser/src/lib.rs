@@ -54,7 +54,6 @@ mod tests {
     use super::*;
     use ast::expr::{Expression, NamedExpression};
     use ast::rel::logical::{LogicalOperator, Project};
-    use data::Datum;
 
     #[test]
     fn test_statement_select() {
@@ -63,7 +62,7 @@ mod tests {
             Statement::Query(LogicalOperator::Project(Project {
                 distinct: false,
                 expressions: vec![NamedExpression {
-                    expression: Expression::Literal(Datum::from(1)),
+                    expression: Expression::from(1),
                     alias: None
                 },],
                 source: Box::from(LogicalOperator::Single)
