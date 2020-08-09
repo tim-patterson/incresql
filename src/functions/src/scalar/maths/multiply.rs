@@ -50,12 +50,7 @@ impl Function for MultiplyDecimal {
         args: &'a [Datum<'a>],
     ) -> Datum<'a> {
         if let (Some(a), Some(b)) = (args[0].as_decimal(), args[1].as_decimal()) {
-            let mut d = a * b;
-            // Rescale to ensure we stay matching what the sql types say
-            if d.scale() > DECIMAL_MAX_SCALE as u32 {
-                d.rescale(DECIMAL_MAX_SCALE as u32);
-            }
-            Datum::from(d)
+            Datum::from(a * b)
         } else {
             Datum::Null
         }

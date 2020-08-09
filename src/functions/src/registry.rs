@@ -89,8 +89,14 @@ impl Registry {
                 .collect();
 
             if let Some(candidate) = candidate_list.pop() {
-                // Calculate return type
-                let ret = if let Some(type_resolver) = candidate.custom_return_type_resolver {
+                // Calculate return type,
+                // There's 3 paths here.
+                // 1. A return type is specified in the function signature, used for cast(foo as decimal(2,3)),
+                // 2. A custom_return_type_resolver from the function def is used to calculate the return type based on the input args
+                // 3. A hardcoded return type from the function is used.
+                let ret = if function_signature.ret != DataType::Null {
+                    function_signature.ret
+                } else if let Some(type_resolver) = candidate.custom_return_type_resolver {
                     type_resolver(&function_signature.args)
                 } else {
                     candidate.signature.ret
