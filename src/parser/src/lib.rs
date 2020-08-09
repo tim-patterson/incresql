@@ -9,6 +9,7 @@ mod atoms;
 mod expression;
 mod literals;
 mod select;
+mod show;
 mod statement;
 mod whitespace;
 

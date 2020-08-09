@@ -1,6 +1,4 @@
-use runner::query;
-
-mod runner;
+use crate::runner::query;
 
 #[test]
 fn select_literal_null() {

@@ -16,11 +16,21 @@ impl Planner {
 }
 
 /// Returns the fields for an operator, will panic if called before query is normalized
-fn fields_for_operator(operator: &LogicalOperator) -> impl Iterator<Item = Field> + '_ {
-    operator.named_expressions().map(|ne| Field {
-        alias: ne.alias.as_ref().unwrap().clone(),
-        data_type: type_for_expression(&ne.expression),
-    })
+fn fields_for_operator(operator: &LogicalOperator) -> Box<dyn Iterator<Item = Field> + '_> {
+    match operator {
+        LogicalOperator::Single | LogicalOperator::Project(_) => {
+            Box::from(operator.named_expressions().map(|ne| Field {
+                alias: ne.alias.as_ref().unwrap().clone(),
+                data_type: type_for_expression(&ne.expression),
+            }))
+        }
+        LogicalOperator::Values(values) => {
+            Box::from(values.fields.iter().map(|(data_type, alias)| Field {
+                alias: alias.clone(),
+                data_type: *data_type,
+            }))
+        }
+    }
 }
 
 /// Returns the datatype for an expression, will panic if called before query is normalized

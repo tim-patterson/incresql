@@ -1,4 +1,5 @@
 use crate::{Field, Planner, PlannerError};
+use ast::expr::Expression;
 use ast::rel::logical::{LogicalOperator, Project};
 use ast::rel::point_in_time::{self, PointInTimeOperator};
 
@@ -33,6 +34,22 @@ fn build_operator(query: LogicalOperator) -> PointInTimeOperator {
             PointInTimeOperator::Project(point_in_time::Project {
                 expressions: expressions.into_iter().map(|ne| ne.expression).collect(),
                 source: Box::new(build_operator(*source)),
+            })
+        }
+        LogicalOperator::Values(values) => {
+            let data = values.data.into_iter().map(|row| {
+                row.into_iter().map(|expr| {
+                    if let Expression::Constant(datum, _datatype) = expr {
+                        datum
+                    } else {
+                        panic!("Planner should have already have validated that all values exprs are constants - {:?}", expr)
+                    }
+                }).collect()
+            }).collect();
+
+            PointInTimeOperator::Values(point_in_time::Values {
+                data,
+                column_count: values.fields.len(),
             })
         }
     }

@@ -10,7 +10,7 @@ use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Default)]
 pub struct Planner {
-    function_registry: Registry,
+    pub function_registry: Registry,
 }
 
 impl Planner {
