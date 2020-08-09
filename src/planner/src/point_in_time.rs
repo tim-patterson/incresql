@@ -53,13 +53,13 @@ mod tests {
             distinct: false,
             expressions: vec![NamedExpression {
                 alias: None,
-                expression: Expression::Literal(Datum::Null, DataType::Null),
+                expression: Expression::Constant(Datum::Null, DataType::Null),
             }],
             source: Box::new(LogicalOperator::Single),
         });
 
         let expected = PointInTimeOperator::Project(point_in_time::Project {
-            expressions: vec![Expression::Literal(Datum::Null, DataType::Null)],
+            expressions: vec![Expression::Constant(Datum::Null, DataType::Null)],
             source: Box::new(PointInTimeOperator::Single),
         });
 

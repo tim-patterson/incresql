@@ -26,7 +26,7 @@ fn fields_for_operator(operator: &LogicalOperator) -> impl Iterator<Item = Field
 /// Returns the datatype for an expression, will panic if called before query is normalized
 pub(crate) fn type_for_expression(expr: &Expression) -> DataType {
     match expr {
-        Expression::Literal(_constant, datatype) => *datatype,
+        Expression::Constant(_constant, datatype) => *datatype,
         Expression::FunctionCall(_) => panic!(),
         Expression::Cast(cast) => cast.datatype,
         Expression::CompiledFunctionCall(function_call) => function_call.signature.ret,

@@ -14,7 +14,7 @@ impl EvalScalar for Expression {
     fn eval_scalar(&mut self, session: &Session, row: &[Datum]) -> Datum {
         match self {
             // literal.clone() seemed to confuse IntelliJ here...
-            Expression::Literal(literal, _) => Datum::ref_clone(literal),
+            Expression::Constant(literal, _) => Datum::ref_clone(literal),
             Expression::CompiledFunctionCall(function_call) => {
                 // Due to datum's being able to reference data from source datums, we need to hold
                 // onto all the intermediate datums just in case. Rust lifetimes don't really allow

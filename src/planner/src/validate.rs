@@ -82,7 +82,7 @@ fn compile_functions_in_expr(
             let (signature, function) = function_registry.resolve_scalar_function(&lookup_sig)?;
 
             // Just an "empty" value to swap
-            let mut expr = Expression::Literal(Datum::Null, DataType::Null);
+            let mut expr = Expression::Constant(Datum::Null, DataType::Null);
 
             std::mem::swap(&mut expr, &mut cast.expr);
 
@@ -93,7 +93,7 @@ fn compile_functions_in_expr(
                 signature: Box::new(signature),
             })
         }
-        Expression::Literal(..) => {}
+        Expression::Constant(..) => {}
         Expression::CompiledFunctionCall(_) => {}
     }
     Ok(())

@@ -42,11 +42,11 @@ mod tests {
             expressions: vec![
                 NamedExpression {
                     alias: Some(String::from("1")),
-                    expression: Expression::Literal(Datum::Null, DataType::Null),
+                    expression: Expression::Constant(Datum::Null, DataType::Null),
                 },
                 NamedExpression {
                     alias: None,
-                    expression: Expression::Literal(Datum::Null, DataType::Null),
+                    expression: Expression::Constant(Datum::Null, DataType::Null),
                 },
             ],
             source: Box::new(LogicalOperator::Project(Project {
@@ -54,11 +54,11 @@ mod tests {
                 expressions: vec![
                     NamedExpression {
                         alias: None,
-                        expression: Expression::Literal(Datum::Null, DataType::Null),
+                        expression: Expression::Constant(Datum::Null, DataType::Null),
                     },
                     NamedExpression {
                         alias: None,
-                        expression: Expression::Literal(Datum::Null, DataType::Null),
+                        expression: Expression::Constant(Datum::Null, DataType::Null),
                     },
                 ],
                 source: Box::new(LogicalOperator::Single),

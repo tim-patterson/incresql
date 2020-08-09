@@ -45,7 +45,10 @@ pub fn datatype(input: &str) -> ParserResult<DataType> {
 }
 
 fn null_literal(input: &str) -> ParserResult<Expression> {
-    value(Expression::Literal(Datum::Null, DataType::Null), kw("NULL"))(input)
+    value(
+        Expression::Constant(Datum::Null, DataType::Null),
+        kw("NULL"),
+    )(input)
 }
 
 fn boolean_literal(input: &str) -> ParserResult<Expression> {
@@ -84,7 +87,7 @@ mod tests {
     fn test_null_literal() {
         assert_eq!(
             literal("NuLl").unwrap().1,
-            Expression::Literal(Datum::Null, DataType::Null)
+            Expression::Constant(Datum::Null, DataType::Null)
         );
     }
 

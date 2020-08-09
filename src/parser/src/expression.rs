@@ -120,7 +120,7 @@ mod tests {
     fn test_literal_expression() {
         assert_eq!(
             expression("NuLl").unwrap().1,
-            Expression::Literal(Datum::Null, DataType::Null)
+            Expression::Constant(Datum::Null, DataType::Null)
         );
     }
 
@@ -175,7 +175,7 @@ mod tests {
 
     #[test]
     fn test_named_expression() {
-        let expression = Expression::Literal(Datum::Null, DataType::Null);
+        let expression = Expression::Constant(Datum::Null, DataType::Null);
         assert_eq!(
             named_expression("NuLl").unwrap().1,
             NamedExpression {
@@ -184,7 +184,7 @@ mod tests {
             }
         );
 
-        let expression = Expression::Literal(Datum::Null, DataType::Null);
+        let expression = Expression::Constant(Datum::Null, DataType::Null);
         assert_eq!(
             named_expression("NuLl foobar").unwrap().1,
             NamedExpression {
@@ -193,7 +193,7 @@ mod tests {
             }
         );
 
-        let expression = Expression::Literal(Datum::Null, DataType::Null);
+        let expression = Expression::Constant(Datum::Null, DataType::Null);
         assert_eq!(
             named_expression("NuLl as foobar").unwrap().1,
             NamedExpression {
@@ -205,7 +205,7 @@ mod tests {
 
     #[test]
     fn test_cast() {
-        let expr = Expression::Literal(Datum::Null, DataType::Null);
+        let expr = Expression::Constant(Datum::Null, DataType::Null);
         assert_eq!(
             expression("cast( null as decimal(1,2))").unwrap().1,
             Expression::Cast(Cast {
