@@ -1,4 +1,4 @@
-use crate::{DataType, DECIMAL_MAX_PRECISION, DECIMAL_MAX_SCALE};
+use crate::DECIMAL_MAX_SCALE;
 use rust_decimal::Decimal;
 use std::fmt::{Display, Formatter};
 
@@ -139,19 +139,6 @@ impl<'a> Datum<'a> {
     }
 }
 
-impl Datum<'_> {
-    pub fn datatype(&self) -> DataType {
-        match self {
-            Datum::Null => DataType::Null,
-            Datum::Boolean(_) => DataType::Boolean,
-            Datum::Integer(_) => DataType::Integer,
-            Datum::BigInt(_) => DataType::BigInt,
-            Datum::Decimal(d) => DataType::Decimal(DECIMAL_MAX_PRECISION, d.scale() as u8),
-            Datum::TextOwned(_) | Datum::TextInline(..) | Datum::TextRef(_) => DataType::Text,
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -210,48 +197,6 @@ mod tests {
         );
 
         assert_eq!(Datum::from("Hello world"), Datum::TextRef("Hello world"));
-    }
-
-    #[test]
-    fn test_datum_datatype() {
-        assert_eq!(Datum::Null.datatype(), DataType::Null);
-
-        assert_eq!(
-            Datum::from(String::from("Hello world")).datatype(),
-            DataType::Text
-        );
-
-        assert_eq!(Datum::from(1).datatype(), DataType::Integer);
-
-        assert_eq!(Datum::from(false).datatype(), DataType::Boolean);
-    }
-
-    #[test]
-    fn test_datum_datatype_decimal() {
-        assert_eq!(
-            Datum::from(Decimal::from_str("123").unwrap()).datatype(),
-            DataType::Decimal(28, 0)
-        );
-
-        assert_eq!(
-            Datum::from(Decimal::from_str("-123").unwrap()).datatype(),
-            DataType::Decimal(28, 0)
-        );
-
-        assert_eq!(
-            Datum::from(Decimal::from_str("123.12").unwrap()).datatype(),
-            DataType::Decimal(28, 2)
-        );
-
-        assert_eq!(
-            Datum::from(Decimal::from_str("-123.12").unwrap()).datatype(),
-            DataType::Decimal(28, 2)
-        );
-
-        assert_eq!(
-            Datum::from(Decimal::from_str("123.00").unwrap()).datatype(),
-            DataType::Decimal(28, 2)
-        );
     }
 
     #[test]

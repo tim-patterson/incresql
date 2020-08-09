@@ -43,11 +43,7 @@ fn expression_1(input: &str) -> ParserResult<Expression> {
 }
 
 fn expression_2(input: &str) -> ParserResult<Expression> {
-    alt((function_call, cast, literal_expression))(input)
-}
-
-fn literal_expression(input: &str) -> ParserResult<Expression> {
-    map(literal, Expression::Literal)(input)
+    alt((function_call, cast, literal))(input)
 }
 
 /// Used to reduce boilerplate at each precedence level for infix operators
@@ -124,7 +120,7 @@ mod tests {
     fn test_literal_expression() {
         assert_eq!(
             expression("NuLl").unwrap().1,
-            Expression::Literal(Datum::Null)
+            Expression::Literal(Datum::Null, DataType::Null)
         );
     }
 
@@ -142,10 +138,7 @@ mod tests {
             expression("foo(1,2)").unwrap().1,
             Expression::FunctionCall(FunctionCall {
                 function_name: "foo".to_string(),
-                args: vec![
-                    Expression::Literal(Datum::from(1)),
-                    Expression::Literal(Datum::from(2)),
-                ]
+                args: vec![Expression::from(1), Expression::from(2),]
             })
         );
     }
@@ -164,20 +157,17 @@ mod tests {
                             Expression::FunctionCall(FunctionCall {
                                 function_name: "+".to_string(),
                                 args: vec![
-                                    Expression::Literal(Datum::from(1)),
+                                    Expression::from(1),
                                     Expression::FunctionCall(FunctionCall {
                                         function_name: "*".to_string(),
-                                        args: vec![
-                                            Expression::Literal(Datum::from(2)),
-                                            Expression::Literal(Datum::from(3)),
-                                        ]
+                                        args: vec![Expression::from(2), Expression::from(3),]
                                     })
                                 ]
                             }),
-                            Expression::Literal(Datum::from(4)),
+                            Expression::from(4),
                         ]
                     }),
-                    Expression::Literal(Datum::from(5)),
+                    Expression::from(5),
                 ]
             })
         );
@@ -185,7 +175,7 @@ mod tests {
 
     #[test]
     fn test_named_expression() {
-        let expression = Expression::Literal(Datum::Null);
+        let expression = Expression::Literal(Datum::Null, DataType::Null);
         assert_eq!(
             named_expression("NuLl").unwrap().1,
             NamedExpression {
@@ -194,7 +184,7 @@ mod tests {
             }
         );
 
-        let expression = Expression::Literal(Datum::Null);
+        let expression = Expression::Literal(Datum::Null, DataType::Null);
         assert_eq!(
             named_expression("NuLl foobar").unwrap().1,
             NamedExpression {
@@ -203,7 +193,7 @@ mod tests {
             }
         );
 
-        let expression = Expression::Literal(Datum::Null);
+        let expression = Expression::Literal(Datum::Null, DataType::Null);
         assert_eq!(
             named_expression("NuLl as foobar").unwrap().1,
             NamedExpression {
@@ -215,7 +205,7 @@ mod tests {
 
     #[test]
     fn test_cast() {
-        let expr = Expression::Literal(Datum::Null);
+        let expr = Expression::Literal(Datum::Null, DataType::Null);
         assert_eq!(
             expression("cast( null as decimal(1,2))").unwrap().1,
             Expression::Cast(Cast {

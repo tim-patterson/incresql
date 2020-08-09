@@ -34,7 +34,6 @@ fn comma_sep_named_expressions(input: &str) -> ParserResult<Vec<NamedExpression>
 mod tests {
     use super::*;
     use ast::expr::Expression;
-    use data::Datum;
 
     #[test]
     fn test_select() {
@@ -44,15 +43,15 @@ mod tests {
                 distinct: false,
                 expressions: vec![
                     NamedExpression {
-                        expression: Expression::Literal(Datum::from(1)),
+                        expression: Expression::from(1),
                         alias: None
                     },
                     NamedExpression {
-                        expression: Expression::Literal(Datum::from(2)),
+                        expression: Expression::from(2),
                         alias: Some(String::from("foo"))
                     },
                     NamedExpression {
-                        expression: Expression::Literal(Datum::from(3)),
+                        expression: Expression::from(3),
                         alias: Some(String::from("bar"))
                     },
                 ],

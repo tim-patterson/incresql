@@ -75,10 +75,7 @@ mod tests {
         let mut executor = ProjectExecutor::new(
             session,
             Box::from(SingleExecutor::new()),
-            vec![
-                Expression::Literal(Datum::from(1)),
-                Expression::Literal(Datum::from(2)),
-            ],
+            vec![Expression::from(1), Expression::from(2)],
         );
 
         assert_eq!(executor.column_count(), 2);

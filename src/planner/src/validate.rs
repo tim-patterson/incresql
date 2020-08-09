@@ -81,7 +81,8 @@ fn compile_functions_in_expr(
 
             let (signature, function) = function_registry.resolve_scalar_function(&lookup_sig)?;
 
-            let mut expr = Expression::Literal(Datum::Null);
+            // Just an "empty" value to swap
+            let mut expr = Expression::Literal(Datum::Null, DataType::Null);
 
             std::mem::swap(&mut expr, &mut cast.expr);
 
@@ -92,7 +93,7 @@ fn compile_functions_in_expr(
                 signature: Box::new(signature),
             })
         }
-        Expression::Literal(_) => {}
+        Expression::Literal(..) => {}
         Expression::CompiledFunctionCall(_) => {}
     }
     Ok(())
@@ -132,13 +133,10 @@ mod tests {
                 expression: Expression::FunctionCall(FunctionCall {
                     function_name: "+".to_string(),
                     args: vec![
-                        Expression::Literal(Datum::from(1)),
+                        Expression::from(1),
                         Expression::FunctionCall(FunctionCall {
                             function_name: "+".to_string(),
-                            args: vec![
-                                Expression::Literal(Datum::from(2)),
-                                Expression::Literal(Datum::from(3)),
-                            ],
+                            args: vec![Expression::from(2), Expression::from(3)],
                         }),
                     ],
                 }),
@@ -153,13 +151,10 @@ mod tests {
                 expression: Expression::CompiledFunctionCall(CompiledFunctionCall {
                     function: &DummyFunct {},
                     args: vec![
-                        Expression::Literal(Datum::from(1)),
+                        Expression::from(1),
                         Expression::CompiledFunctionCall(CompiledFunctionCall {
                             function: &DummyFunct {},
-                            args: vec![
-                                Expression::Literal(Datum::from(2)),
-                                Expression::Literal(Datum::from(3)),
-                            ],
+                            args: vec![Expression::from(2), Expression::from(3)],
                             expr_buffer: vec![],
                             signature: Box::new(FunctionSignature {
                                 name: "+",

@@ -47,7 +47,7 @@ mod tests {
     fn test_build_executor() -> Result<(), ExecutionError> {
         let session = Arc::new(Session::new(1));
         let plan = PointInTimeOperator::Project(point_in_time::Project {
-            expressions: vec![Expression::Literal(Datum::from(1))],
+            expressions: vec![Expression::from(1)],
             source: Box::new(PointInTimeOperator::Single),
         });
 

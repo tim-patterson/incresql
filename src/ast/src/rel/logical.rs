@@ -65,7 +65,7 @@ impl LogicalOperator {
 mod tests {
     use super::*;
     use crate::expr::Expression;
-    use data::Datum;
+    use data::{DataType, Datum};
 
     #[test]
     fn test_named_expressions_mut() {
@@ -79,11 +79,11 @@ mod tests {
             expressions: vec![
                 NamedExpression {
                     alias: Some(String::from("1")),
-                    expression: Expression::Literal(Datum::Null),
+                    expression: Expression::Literal(Datum::Null, DataType::Null),
                 },
                 NamedExpression {
                     alias: Some(String::from("2")),
-                    expression: Expression::Literal(Datum::Null),
+                    expression: Expression::Literal(Datum::Null, DataType::Null),
                 },
             ],
             source: Box::new(LogicalOperator::Single),
@@ -137,13 +137,13 @@ mod tests {
             distinct: false,
             expressions: vec![NamedExpression {
                 alias: None,
-                expression: Expression::Literal(Datum::from(1)),
+                expression: Expression::from(1),
             }],
             source: Box::new(LogicalOperator::Single),
         });
 
         let children: Vec<_> = operator.expressions_mut().collect();
 
-        assert_eq!(children, vec![&mut Expression::Literal(Datum::from(1))]);
+        assert_eq!(children, vec![&mut Expression::from(1)]);
     }
 }
