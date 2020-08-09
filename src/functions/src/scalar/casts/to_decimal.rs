@@ -1,7 +1,7 @@
 use crate::registry::Registry;
 use crate::{Function, FunctionDefinition, FunctionSignature};
 use data::rust_decimal::Decimal;
-use data::{DataType, Datum, Session, DECIMAL_MAX_SCALE, DECIMAL_MAX_PRECISION};
+use data::{DataType, Datum, Session, DECIMAL_MAX_PRECISION, DECIMAL_MAX_SCALE};
 use std::str::FromStr;
 
 #[derive(Debug)]
