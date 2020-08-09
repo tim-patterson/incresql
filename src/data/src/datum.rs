@@ -20,6 +20,17 @@ pub enum Datum<'a> {
     Decimal(Decimal),
 }
 
+impl<'a> Datum<'a> {
+    /// Like clone but instead of cloning Datum::TextOwned etc it will just take a reference
+    pub fn ref_clone(&'a self) -> Datum<'a> {
+        if let Datum::TextOwned(s) = self {
+            Datum::TextRef(&s)
+        } else {
+            self.clone()
+        }
+    }
+}
+
 // From builders to build datums from the native rust types
 impl Default for Datum<'_> {
     fn default() -> Self {
@@ -155,6 +166,16 @@ mod tests {
         // word sized alignment for the &str pointers we actually end up at 24 bytes in size,
         // this means we've got enough room for 23 byte of data for short strings etc.
         assert_eq!(24, size_of::<Datum>());
+    }
+
+    #[test]
+    fn test_datum_ref_clone() {
+        assert_eq!(Datum::from(1).ref_clone(), Datum::Integer(1));
+
+        assert_eq!(
+            Datum::TextOwned("hello".to_string().into_boxed_str()).ref_clone(),
+            Datum::TextRef("hello")
+        );
     }
 
     #[test]
