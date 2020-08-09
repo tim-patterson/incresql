@@ -87,7 +87,7 @@ impl<'a> MysqlConnection<'a> {
                     self.send_packet(|buf| {
                         write_resultset_packet(fields.len(), capabilities, buf)
                     })?;
-                    for field in fields {
+                    for field in &fields {
                         self.send_packet(|buf| {
                             write_column_packet(
                                 "",
@@ -99,6 +99,8 @@ impl<'a> MysqlConnection<'a> {
                         })?;
                     }
 
+                    let datatypes: Vec<_> = fields.iter().map(|f| f.data_type).collect();
+
                     if (capabilities & CAPABILITY_CLIENT_DEPRECATE_EOF) == 0 {
                         self.send_packet(|buf| write_eof_packet(capabilities, buf))?;
                     }
@@ -107,7 +109,9 @@ impl<'a> MysqlConnection<'a> {
                         match executor.next() {
                             Ok(Some((tuple, freq))) => {
                                 for _ in 0..freq {
-                                    self.send_packet(|buf| write_tuple_packet(tuple, buf))?;
+                                    self.send_packet(|buf| {
+                                        write_tuple_packet(tuple, &datatypes, buf)
+                                    })?;
                                 }
                             }
                             Ok(None) => break,

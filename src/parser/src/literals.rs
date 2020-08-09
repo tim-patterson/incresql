@@ -1,11 +1,46 @@
 use crate::atoms::{decimal, integer, kw, quoted_string};
+use crate::whitespace::ws_0;
 use crate::ParserResult;
-use data::Datum;
+use data::DataType::Decimal;
+use data::{DataType, Datum, DECIMAL_MAX_PRECISION};
 use nom::branch::alt;
+use nom::bytes::complete::tag;
 use nom::combinator::{map, value};
+use nom::sequence::tuple;
 
 pub fn literal(input: &str) -> ParserResult<Datum<'static>> {
     alt((null_literal, boolean_literal, number_literal, text_literal))(input)
+}
+
+pub fn datatype(input: &str) -> ParserResult<DataType> {
+    alt((
+        value(DataType::Boolean, kw("BOOLEAN")),
+        value(DataType::Integer, kw("INTEGER")),
+        value(DataType::Integer, kw("INT")),
+        value(DataType::BigInt, kw("BIGINT")),
+        map(
+            tuple((
+                tuple((kw("DECIMAL"), ws_0, tag("("), ws_0)),
+                integer,
+                tuple((ws_0, tag(","), ws_0)),
+                integer,
+                ws_0,
+                tag(")"),
+            )),
+            |(_, p, _, s, _, _)| Decimal(p as u8, s as u8),
+        ),
+        map(
+            tuple((
+                tuple((kw("DECIMAL"), ws_0, tag("("), ws_0)),
+                integer,
+                ws_0,
+                tag(")"),
+            )),
+            |(_, p, _, _)| Decimal(p as u8, 0),
+        ),
+        value(DataType::Decimal(DECIMAL_MAX_PRECISION, 0), kw("DECIMAL")),
+        value(DataType::Text, kw("TEXT")),
+    ))(input)
 }
 
 fn null_literal(input: &str) -> ParserResult<Datum<'static>> {
@@ -74,6 +109,34 @@ mod tests {
         assert_eq!(
             literal("'Hello world'").unwrap().1,
             Datum::from("Hello world".to_string())
+        );
+    }
+
+    #[test]
+    fn test_simple_datatype_literals() {
+        assert_eq!(datatype("boolean").unwrap().1, DataType::Boolean);
+
+        assert_eq!(datatype("int").unwrap().1, DataType::Integer);
+
+        assert_eq!(datatype("integer").unwrap().1, DataType::Integer);
+
+        assert_eq!(datatype("bigint").unwrap().1, DataType::BigInt);
+
+        assert_eq!(datatype("text").unwrap().1, DataType::Text);
+    }
+
+    #[test]
+    fn test_decimal_datatype_literals() {
+        assert_eq!(
+            datatype("decimal").unwrap().1,
+            DataType::Decimal(DECIMAL_MAX_PRECISION, 0)
+        );
+
+        assert_eq!(datatype("decimal(10)").unwrap().1, DataType::Decimal(10, 0));
+
+        assert_eq!(
+            datatype("decimal ( 10 , 2 )").unwrap().1,
+            DataType::Decimal(10, 2)
         );
     }
 }

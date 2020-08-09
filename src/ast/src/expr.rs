@@ -1,10 +1,11 @@
-use data::Datum;
+use data::{DataType, Datum};
 use functions::{Function, FunctionSignature};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Expression {
     Literal(Datum<'static>),
     FunctionCall(FunctionCall),
+    Cast(Cast),
     CompiledFunctionCall(CompiledFunctionCall),
 }
 
@@ -14,6 +15,13 @@ pub enum Expression {
 pub struct FunctionCall {
     pub function_name: String,
     pub args: Vec<Expression>,
+}
+
+/// Represents a sql cast, gets compiled to a function
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Cast {
+    pub expr: Box<Expression>,
+    pub datatype: DataType,
 }
 
 /// Represents a function call once its been resolved and type
