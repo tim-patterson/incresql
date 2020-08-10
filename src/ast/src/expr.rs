@@ -159,21 +159,7 @@ impl Display for Expression {
                     f.write_fmt(format_args!("`{}`({})", function_call.signature.name, args))
                 }
             }
-            Expression::ColumnReference(column_reference) => {
-                if let Some(qualifier) = &column_reference.qualifier {
-                    if IDENTIFIER_OK.is_match(qualifier) {
-                        f.write_fmt(format_args!("{}.", qualifier))?;
-                    } else {
-                        f.write_fmt(format_args!("`{}`.", qualifier))?;
-                    }
-                }
-
-                if IDENTIFIER_OK.is_match(&column_reference.alias) {
-                    f.write_fmt(format_args!("{}", &column_reference.alias))
-                } else {
-                    f.write_fmt(format_args!("`{}`", &column_reference.alias))
-                }
-            }
+            Expression::ColumnReference(column_reference) => Display::fmt(column_reference, f),
             Expression::CompiledColumnReference(column_reference) => {
                 // To turn this back into real sql we would need to be able to have a peek at
                 // our sources
@@ -193,6 +179,24 @@ impl Display for NamedExpression {
             }
         } else {
             Display::fmt(&self.expression, f)
+        }
+    }
+}
+
+impl Display for ColumnReference {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if let Some(qualifier) = &self.qualifier {
+            if IDENTIFIER_OK.is_match(qualifier) {
+                f.write_fmt(format_args!("{}.", qualifier))?;
+            } else {
+                f.write_fmt(format_args!("`{}`.", qualifier))?;
+            }
+        }
+
+        if IDENTIFIER_OK.is_match(&self.alias) {
+            f.write_fmt(format_args!("{}", &self.alias))
+        } else {
+            f.write_fmt(format_args!("`{}`", &self.alias))
         }
     }
 }

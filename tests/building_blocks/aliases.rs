@@ -3,22 +3,22 @@ use crate::runner::query;
 #[test]
 fn select_subquery_no_alias() {
     query(
-        r#"SELECT 1 FROM (SELECT 1)"#,
+        r#"SELECT foo FROM (SELECT 1 as foo)"#,
         "
         |1|
         ",
     );
 
     query(
-        r#"EXPLAIN SELECT 1 FROM (SELECT 1)"#,
+        r#"EXPLAIN SELECT foo FROM (SELECT 1 as foo)"#,
         "
         |PROJECT||
         | |exprs:||
-        | |  _col1 <INTEGER>|1|
+        | |  _col1 <INTEGER>|<OFFSET 0>|
         | |source:||
         | |  PROJECT||
         | |   |exprs:||
-        | |   |  _col1 <INTEGER>|1|
+        | |   |  foo <INTEGER>|1|
         | |   |source:||
         | |   |  SINGLE||
         ",
@@ -28,29 +28,43 @@ fn select_subquery_no_alias() {
 #[test]
 fn select_subquery_with_alias() {
     query(
-        r#"SELECT 1 FROM (SELECT 1) as foo"#,
+        r#"SELECT foo FROM (SELECT 1 as foo) as bar"#,
         "
         |1|
         ",
     );
 
     query(
-        r#"SELECT 1 FROM (SELECT 1) foo"#,
+        r#"SELECT foo FROM (SELECT 1 as foo) bar"#,
         "
         |1|
         ",
     );
 
     query(
-        r#"EXPLAIN SELECT 1 FROM (SELECT 1) as foo"#,
+        r#"SELECT bar.foo FROM (SELECT 1 as foo) bar"#,
+        "
+        |1|
+        ",
+    );
+
+    query(
+        r#"SELECT `bar`.`foo` FROM (SELECT 1 as foo) bar"#,
+        "
+        |1|
+        ",
+    );
+
+    query(
+        r#"EXPLAIN SELECT foo FROM (SELECT 1 as foo) as bar"#,
         "
         |PROJECT||
         | |exprs:||
-        | |  _col1 <INTEGER>|1|
+        | |  _col1 <INTEGER>|<OFFSET 0>|
         | |source:||
-        | |  PROJECT(foo)||
+        | |  PROJECT(bar)||
         | |   |exprs:||
-        | |   |  _col1 <INTEGER>|1|
+        | |   |  foo <INTEGER>|1|
         | |   |source:||
         | |   |  SINGLE||
         ",

@@ -1,9 +1,9 @@
-use crate::common::type_for_expression;
-use crate::{Planner, PlannerError};
-use ast::expr::{CompiledFunctionCall, Expression};
+use crate::common::{source_fields_for_operator, type_for_expression};
+use crate::{Field, FieldResolutionError, Planner, PlannerError};
+use ast::expr::{ColumnReference, CompiledColumnReference, CompiledFunctionCall, Expression};
 use ast::rel::logical::LogicalOperator;
 use data::{DataType, Datum};
-use functions::registry::{FunctionResolutionError, Registry};
+use functions::registry::Registry;
 use functions::FunctionSignature;
 
 /// Validate the query, as part of the process of validating the query we will actually end up
@@ -18,25 +18,27 @@ impl Planner {
 fn compile_functions(
     operator: &mut LogicalOperator,
     function_registry: &Registry,
-) -> Result<(), FunctionResolutionError> {
+) -> Result<(), PlannerError> {
     for child in operator.children_mut() {
         compile_functions(child, function_registry)?;
     }
 
+    let source_fields: Vec<_> = source_fields_for_operator(operator).collect();
     for expr in operator.expressions_mut() {
-        compile_functions_in_expr(expr, function_registry)?;
+        compile_functions_in_expr(expr, &source_fields, function_registry)?;
     }
     Ok(())
 }
 
 fn compile_functions_in_expr(
     expression: &mut Expression,
+    source_fields: &[Field],
     function_registry: &Registry,
-) -> Result<(), FunctionResolutionError> {
+) -> Result<(), PlannerError> {
     match expression {
         Expression::FunctionCall(function_call) => {
             for arg in function_call.args.iter_mut() {
-                compile_functions_in_expr(arg, function_registry)?;
+                compile_functions_in_expr(arg, source_fields, function_registry)?;
             }
 
             let arg_types = function_call.args.iter().map(type_for_expression).collect();
@@ -60,7 +62,7 @@ fn compile_functions_in_expr(
             })
         }
         Expression::Cast(cast) => {
-            compile_functions_in_expr(&mut cast.expr, function_registry)?;
+            compile_functions_in_expr(&mut cast.expr, source_fields, function_registry)?;
 
             let expr_type = type_for_expression(&cast.expr);
 
@@ -93,8 +95,43 @@ fn compile_functions_in_expr(
                 signature: Box::new(signature),
             })
         }
-        Expression::ColumnReference(_column_reference) => {
-            unimplemented!("Todo this is where we need to do our column resolving!")
+        Expression::ColumnReference(column_reference) => {
+            let indexed_source_fields = source_fields.iter().enumerate();
+            let mut matching_fields: Vec<_> = if let Some(qualifier) = &column_reference.qualifier {
+                indexed_source_fields
+                    .filter(|(_idx, field)| {
+                        field.qualifier.as_ref() == Some(qualifier)
+                            && field.alias == column_reference.alias
+                    })
+                    .collect()
+            } else {
+                indexed_source_fields
+                    .filter(|(_idx, field)| field.alias == column_reference.alias)
+                    .collect()
+            };
+
+            if matching_fields.is_empty() {
+                return Err(FieldResolutionError::NotFound(
+                    ColumnReference::clone(column_reference),
+                    source_fields.to_vec(),
+                )
+                .into());
+            } else if matching_fields.len() > 1 {
+                return Err(FieldResolutionError::Ambiguous(
+                    ColumnReference::clone(column_reference),
+                    matching_fields
+                        .into_iter()
+                        .map(|(_idx, field)| field.clone())
+                        .collect(),
+                )
+                .into());
+            } else {
+                let (idx, field) = matching_fields.pop().unwrap();
+                *expression = Expression::CompiledColumnReference(CompiledColumnReference {
+                    offset: idx,
+                    datatype: field.data_type,
+                })
+            }
         }
 
         // These are already good and for the ref/function call probably shouldn't exist yet.
