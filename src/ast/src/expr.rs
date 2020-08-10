@@ -1,7 +1,9 @@
 use data::rust_decimal::Decimal;
 use data::{DataType, Datum};
 use functions::{Function, FunctionSignature};
+use regex::Regex;
 use std::cmp::max;
+use std::fmt::{Display, Formatter};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Expression {
@@ -100,6 +102,62 @@ impl From<String> for Expression {
     }
 }
 
+lazy_static! {
+    /// If we an identifier matches this then we don't need to quote it
+    static ref IDENTIFIER_OK: Regex = Regex::new(r"^([a-z]|_)*$").unwrap();
+}
+
+impl Display for Expression {
+    /// Formats the expression back to sql
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Expression::Constant(d, _) => f.write_fmt(format_args!("{:#}", d)),
+            Expression::Cast(c) => f.write_fmt(format_args!("CAST({} AS {})", c.expr, c.datatype)),
+            // For any function name containing anything other that letters and underscores we'll quote.
+            Expression::FunctionCall(function_call) => {
+                let args = function_call
+                    .args
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                if IDENTIFIER_OK.is_match(&function_call.function_name) {
+                    f.write_fmt(format_args!("{}({})", function_call.function_name, args))
+                } else {
+                    f.write_fmt(format_args!("`{}`({})", function_call.function_name, args))
+                }
+            }
+            Expression::CompiledFunctionCall(function_call) => {
+                let args = function_call
+                    .args
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                if IDENTIFIER_OK.is_match(&function_call.signature.name) {
+                    f.write_fmt(format_args!("{}({})", function_call.signature.name, args))
+                } else {
+                    f.write_fmt(format_args!("`{}`({})", function_call.signature.name, args))
+                }
+            }
+        }
+    }
+}
+
+impl Display for NamedExpression {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if let Some(alias) = &self.alias {
+            if IDENTIFIER_OK.is_match(alias) {
+                f.write_fmt(format_args!("{} AS {}", self.expression, alias))
+            } else {
+                f.write_fmt(format_args!("{} AS `{}`", self.expression, alias))
+            }
+        } else {
+            Display::fmt(&self.expression, f)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -172,6 +230,61 @@ mod tests {
                 Datum::TextOwned(String::from("Hello world").into_boxed_str()),
                 DataType::Text
             )
+        );
+    }
+
+    #[test]
+    fn test_expr_to_string() {
+        let expr = Expression::FunctionCall(FunctionCall {
+            function_name: "+".to_string(),
+            args: vec![
+                Expression::Cast(Cast {
+                    expr: Box::new(Expression::from("5")),
+                    datatype: DataType::Integer,
+                }),
+                Expression::FunctionCall(FunctionCall {
+                    function_name: "pow".to_string(),
+                    args: vec![Expression::from(Decimal::new(23, 1)), Expression::from(2)],
+                }),
+            ],
+        });
+
+        assert_eq!(
+            expr.to_string(),
+            r#"`+`(CAST("5" AS INTEGER), pow(2.3, 2))"#
+        );
+    }
+
+    #[test]
+    fn test_named_expr_to_string() {
+        let expr = NamedExpression {
+            alias: None,
+            expression: Expression::from(1)
+        };
+
+        assert_eq!(
+            expr.to_string(),
+            "1"
+        );
+
+        let expr = NamedExpression {
+            alias: Some(String::from("foo")),
+            expression: Expression::from(1)
+        };
+
+        assert_eq!(
+            expr.to_string(),
+            "1 AS foo"
+        );
+
+        let expr = NamedExpression {
+            alias: Some(String::from("1b")),
+            expression: Expression::from(1)
+        };
+
+        assert_eq!(
+            expr.to_string(),
+            "1 AS `1b`"
         );
     }
 }
