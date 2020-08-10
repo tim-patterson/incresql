@@ -29,7 +29,7 @@ fn fold_constants(query: &mut LogicalOperator, session: &Session) {
 fn fold_constants_for_expr(expr: &mut Expression, session: &Session) {
     match expr {
         Expression::CompiledFunctionCall(function_call) => {
-            for arg in &mut function_call.args {
+            for arg in function_call.args.iter_mut() {
                 fold_constants_for_expr(arg, session);
             }
 
@@ -102,16 +102,16 @@ mod tests {
                 alias: None,
                 expression: Expression::CompiledFunctionCall(CompiledFunctionCall {
                     function: add_function,
-                    args: vec![
+                    args: Box::from(vec![
                         Expression::from(1),
                         Expression::CompiledFunctionCall(CompiledFunctionCall {
                             function: add_function,
-                            args: vec![Expression::from(2), Expression::from(3)],
-                            expr_buffer: vec![],
+                            args: Box::from(vec![Expression::from(2), Expression::from(3)]),
+                            expr_buffer: Box::from(vec![]),
                             signature: Box::new(add_signature.clone()),
                         }),
-                    ],
-                    expr_buffer: vec![],
+                    ]),
+                    expr_buffer: Box::from(vec![]),
                     signature: Box::new(add_signature.clone()),
                 }),
             }],

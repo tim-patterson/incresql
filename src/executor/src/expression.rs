@@ -1,4 +1,4 @@
-use crate::utils::right_size;
+use crate::utils::right_size_new;
 use ast::expr::Expression;
 use data::{Datum, Session};
 
@@ -21,12 +21,17 @@ impl EvalScalar for Expression {
                 // us to do this in an easy way without ref counting and allocating so hence we put
                 // the buffer in the expression datastructure itself and use a little unsafe to muck
                 // with the lifetimes
+
+                // right size
+                if function_call.expr_buffer.len() != function_call.args.len() {
+                    function_call.expr_buffer = Box::from(right_size_new(&function_call.args))
+                }
+
                 let buf = unsafe {
-                    std::mem::transmute::<&mut Vec<Datum<'_>>, &mut Vec<Datum<'_>>>(
+                    std::mem::transmute::<&mut Box<[Datum<'_>]>, &mut Box<[Datum<'_>]>>(
                         &mut function_call.expr_buffer,
                     )
                 };
-                right_size(buf, &function_call.args);
                 function_call.args.eval_scalar(session, row, buf);
 
                 function_call
@@ -43,7 +48,7 @@ pub trait EvalScalarRow {
     fn eval_scalar<'a>(&'a mut self, session: &Session, source: &[Datum], target: &mut [Datum<'a>]);
 }
 
-impl EvalScalarRow for Vec<Expression> {
+impl EvalScalarRow for [Expression] {
     fn eval_scalar<'a>(
         &'a mut self,
         session: &Session,
@@ -85,8 +90,8 @@ mod tests {
         let mut expression = Expression::CompiledFunctionCall(CompiledFunctionCall {
             function,
             signature: Box::from(computed_signature),
-            expr_buffer: vec![],
-            args: vec![Expression::from(3), Expression::from(4)],
+            expr_buffer: Box::from(vec![]),
+            args: Box::from(vec![Expression::from(3), Expression::from(4)]),
         });
 
         let session = Session::new(1);

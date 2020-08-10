@@ -54,8 +54,8 @@ fn compile_functions_in_expr(
 
             *expression = Expression::CompiledFunctionCall(CompiledFunctionCall {
                 function,
-                args,
-                expr_buffer: vec![],
+                args: Box::from(args),
+                expr_buffer: Box::from(vec![]),
                 signature: Box::new(signature),
             })
         }
@@ -88,8 +88,8 @@ fn compile_functions_in_expr(
 
             *expression = Expression::CompiledFunctionCall(CompiledFunctionCall {
                 function,
-                args: vec![expr],
-                expr_buffer: vec![],
+                args: Box::from(vec![expr]),
+                expr_buffer: Box::from(vec![]),
                 signature: Box::new(signature),
             })
         }
@@ -149,20 +149,20 @@ mod tests {
                 alias: None,
                 expression: Expression::CompiledFunctionCall(CompiledFunctionCall {
                     function: &DummyFunct {},
-                    args: vec![
+                    args: Box::from(vec![
                         Expression::from(1),
                         Expression::CompiledFunctionCall(CompiledFunctionCall {
                             function: &DummyFunct {},
-                            args: vec![Expression::from(2), Expression::from(3)],
-                            expr_buffer: vec![],
+                            args: Box::from(vec![Expression::from(2), Expression::from(3)]),
+                            expr_buffer: Box::from(vec![]),
                             signature: Box::new(FunctionSignature {
                                 name: "+",
                                 args: vec![DataType::Integer, DataType::Integer],
                                 ret: DataType::Integer,
                             }),
                         }),
-                    ],
-                    expr_buffer: vec![],
+                    ]),
+                    expr_buffer: Box::from(vec![]),
                     signature: Box::new(FunctionSignature {
                         name: "+",
                         args: vec![DataType::Integer, DataType::Integer],

@@ -32,11 +32,12 @@ pub struct Cast {
 /// checked
 #[derive(Debug, Clone)]
 pub struct CompiledFunctionCall {
+    // This is a bit overweight(7 words) and is blowing out the size of the Expression
+    // enum a bit hence the boxed slices instead of vec's
     pub function: &'static dyn Function,
-    pub args: Vec<Expression>,
+    pub args: Box<[Expression]>,
     // Used to store the evaluation results of the sub expressions
-    pub expr_buffer: Vec<Datum<'static>>,
-    // Boxed to keep size of expression down
+    pub expr_buffer: Box<[Datum<'static>]>,
     pub signature: Box<FunctionSignature<'static>>,
 }
 
@@ -161,6 +162,12 @@ impl Display for NamedExpression {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_expr_size() {
+        // This is already way larger than I would have liked...
+        assert_eq!(std::mem::size_of::<Expression>(), 64);
+    }
 
     #[test]
     fn test_expr_from_boolean() {
