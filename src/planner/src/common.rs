@@ -40,9 +40,14 @@ fn fields_for_operator(operator: &LogicalOperator) -> Box<dyn Iterator<Item = Fi
 pub(crate) fn type_for_expression(expr: &Expression) -> DataType {
     match expr {
         Expression::Constant(_constant, datatype) => *datatype,
-        Expression::FunctionCall(_) => panic!(),
         Expression::Cast(cast) => cast.datatype,
         Expression::CompiledFunctionCall(function_call) => function_call.signature.ret,
+        Expression::CompiledColumnReference(column_reference) => column_reference.datatype,
+
+        // These should be gone by now!
+        Expression::FunctionCall(_) | Expression::ColumnReference(_) => {
+            panic!("These should be gone by now!")
+        }
     }
 }
 

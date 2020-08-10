@@ -35,6 +35,13 @@ fn select_subquery_with_alias() {
     );
 
     query(
+        r#"SELECT 1 FROM (SELECT 1) foo"#,
+        "
+        |1|
+        ",
+    );
+
+    query(
         r#"EXPLAIN SELECT 1 FROM (SELECT 1) as foo"#,
         "
         |PROJECT||

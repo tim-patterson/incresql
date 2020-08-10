@@ -63,13 +63,19 @@ fn fold_constants_for_expr(expr: &mut Expression, session: &Session) {
                 *expr = Expression::Constant(constant, function_call.signature.ret);
             }
         }
+        Expression::CompiledColumnReference(_column_reference) => {
+            // TODO once we have the source expr's bit done we can come back here and optimize folding up constants from a subquery
+        }
+
         // Already a constant
         Expression::Constant(..) => {}
         // These should be gone by now.
-        Expression::Cast(_) | Expression::FunctionCall(_) => panic!(
-            "Hit {:?} in constant fold, this should be gone by now!",
-            expr
-        ),
+        Expression::Cast(_) | Expression::FunctionCall(_) | Expression::ColumnReference(_) => {
+            panic!(
+                "Hit {:?} in constant fold, this should be gone by now!",
+                expr
+            )
+        }
     }
 }
 

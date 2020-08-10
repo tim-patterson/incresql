@@ -11,6 +11,8 @@ pub enum Expression {
     FunctionCall(FunctionCall),
     Cast(Cast),
     CompiledFunctionCall(CompiledFunctionCall),
+    ColumnReference(ColumnReference),
+    CompiledColumnReference(CompiledColumnReference),
 }
 
 /// Represents a function call straight from the parser.
@@ -48,6 +50,22 @@ impl PartialEq for CompiledFunctionCall {
 }
 
 impl Eq for CompiledFunctionCall {}
+
+/// A reference to a column in a source.
+/// ie SELECT foo FROM...
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct ColumnReference {
+    pub qualifier: Option<String>,
+    pub alias: String,
+}
+
+/// Column reference but is indexed via offset instead of having to do
+/// name resolution...
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct CompiledColumnReference {
+    pub offset: usize,
+    pub datatype: DataType,
+}
 
 /// Named expression, ie select foo as bar
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -140,6 +158,26 @@ impl Display for Expression {
                 } else {
                     f.write_fmt(format_args!("`{}`({})", function_call.signature.name, args))
                 }
+            }
+            Expression::ColumnReference(column_reference) => {
+                if let Some(qualifier) = &column_reference.qualifier {
+                    if IDENTIFIER_OK.is_match(qualifier) {
+                        f.write_fmt(format_args!("{}.", qualifier))?;
+                    } else {
+                        f.write_fmt(format_args!("`{}`.", qualifier))?;
+                    }
+                }
+
+                if IDENTIFIER_OK.is_match(&column_reference.alias) {
+                    f.write_fmt(format_args!("{}", &column_reference.alias))
+                } else {
+                    f.write_fmt(format_args!("`{}`", &column_reference.alias))
+                }
+            }
+            Expression::CompiledColumnReference(column_reference) => {
+                // To turn this back into real sql we would need to be able to have a peek at
+                // our sources
+                f.write_fmt(format_args!("<OFFSET {}>", &column_reference.offset))
             }
         }
     }

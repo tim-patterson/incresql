@@ -93,8 +93,14 @@ fn compile_functions_in_expr(
                 signature: Box::new(signature),
             })
         }
-        Expression::Constant(..) => {}
-        Expression::CompiledFunctionCall(_) => {}
+        Expression::ColumnReference(_column_reference) => {
+            unimplemented!("Todo this is where we need to do our column resolving!")
+        }
+
+        // These are already good and for the ref/function call probably shouldn't exist yet.
+        Expression::Constant(..)
+        | Expression::CompiledFunctionCall(_)
+        | Expression::CompiledColumnReference(_) => {}
     }
     Ok(())
 }

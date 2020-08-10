@@ -5,13 +5,13 @@ use data::{Datum, Session};
 pub trait EvalScalar {
     /// Evaluates an expression as a scalar context, needs to be mutable due to the buffers we keep
     /// for intermediate results
-    fn eval_scalar(&mut self, session: &Session, row: &[Datum]) -> Datum;
+    fn eval_scalar<'a>(&'a mut self, session: &Session, row: &'a [Datum<'a>]) -> Datum<'a>;
 }
 
 impl EvalScalar for Expression {
     /// Evaluates a "row" of expressions as a scalar context
     #[allow(clippy::transmute_ptr_to_ptr)]
-    fn eval_scalar(&mut self, session: &Session, row: &[Datum]) -> Datum {
+    fn eval_scalar<'a>(&'a mut self, session: &Session, row: &'a [Datum<'a>]) -> Datum<'a> {
         match self {
             // literal.clone() seemed to confuse IntelliJ here...
             Expression::Constant(literal, _) => Datum::ref_clone(literal),
@@ -38,21 +38,31 @@ impl EvalScalar for Expression {
                     .function
                     .execute(session, &function_call.signature, buf)
             }
-            // This should be compiled away by this point
-            Expression::FunctionCall(_) | Expression::Cast(_) => panic!(),
+            Expression::CompiledColumnReference(column_reference) => {
+                row[column_reference.offset].ref_clone()
+            }
+            // These should be compiled away by this point
+            Expression::FunctionCall(_) | Expression::Cast(_) | Expression::ColumnReference(_) => {
+                panic!()
+            }
         }
     }
 }
 
 pub trait EvalScalarRow {
-    fn eval_scalar<'a>(&'a mut self, session: &Session, source: &[Datum], target: &mut [Datum<'a>]);
+    fn eval_scalar<'a>(
+        &'a mut self,
+        session: &Session,
+        source: &'a [Datum<'a>],
+        target: &mut [Datum<'a>],
+    );
 }
 
 impl EvalScalarRow for [Expression] {
     fn eval_scalar<'a>(
         &'a mut self,
         session: &Session,
-        source: &[Datum],
+        source: &'a [Datum<'a>],
         target: &mut [Datum<'a>],
     ) {
         for (idx, expr) in self.iter_mut().enumerate() {
