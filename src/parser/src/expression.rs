@@ -2,7 +2,7 @@ use crate::atoms::{as_clause, identifier_str, kw};
 use crate::literals::{datatype, literal};
 use crate::whitespace::ws_0;
 use crate::ParserResult;
-use ast::expr::{Cast, Expression, FunctionCall, NamedExpression};
+use ast::expr::{Cast, ColumnReference, Expression, FunctionCall, NamedExpression};
 use nom::branch::{alt, Alt};
 use nom::bytes::complete::tag;
 use nom::combinator::{cut, map};
@@ -36,7 +36,7 @@ fn expression_1(input: &str) -> ParserResult<Expression> {
 }
 
 fn expression_2(input: &str) -> ParserResult<Expression> {
-    alt((function_call, cast, literal))(input)
+    alt((function_call, cast, literal, column_reference))(input)
 }
 
 /// Used to reduce boilerplate at each precedence level for infix operators
@@ -102,6 +102,26 @@ fn cast(input: &str) -> ParserResult<Expression> {
             },
         )),
     )(input)
+}
+
+fn column_reference(input: &str) -> ParserResult<Expression> {
+    alt((
+        map(
+            tuple((identifier_str, tag("."), identifier_str)),
+            |(qualifier, _, alias)| {
+                Expression::ColumnReference(ColumnReference {
+                    qualifier: Some(qualifier),
+                    alias,
+                })
+            },
+        ),
+        map(identifier_str, |alias| {
+            Expression::ColumnReference(ColumnReference {
+                qualifier: None,
+                alias,
+            })
+        }),
+    ))(input)
 }
 
 #[cfg(test)]
@@ -204,6 +224,41 @@ mod tests {
             Expression::Cast(Cast {
                 expr: Box::new(expr),
                 datatype: DataType::Decimal(1, 2)
+            })
+        );
+    }
+
+    #[test]
+    fn test_column_reference() {
+        assert_eq!(
+            expression("foo").unwrap().1,
+            Expression::ColumnReference(ColumnReference {
+                qualifier: None,
+                alias: "foo".to_string()
+            })
+        );
+
+        assert_eq!(
+            expression("foo.bar").unwrap().1,
+            Expression::ColumnReference(ColumnReference {
+                qualifier: Some("foo".to_string()),
+                alias: "bar".to_string()
+            })
+        );
+
+        assert_eq!(
+            expression("`foo`").unwrap().1,
+            Expression::ColumnReference(ColumnReference {
+                qualifier: None,
+                alias: "foo".to_string()
+            })
+        );
+
+        assert_eq!(
+            expression("`foo`.`bar`").unwrap().1,
+            Expression::ColumnReference(ColumnReference {
+                qualifier: Some("foo".to_string()),
+                alias: "bar".to_string()
             })
         );
     }
