@@ -2,6 +2,7 @@ use crate::{Field, Planner, PlannerError};
 use ast::expr::Expression;
 use ast::rel::logical::LogicalOperator;
 use data::{DataType, Session};
+use std::iter::empty;
 
 impl Planner {
     pub(crate) fn plan_common(
@@ -20,18 +21,18 @@ impl Planner {
 /// Returns the fields for an operator, will panic if called before query is normalized
 fn fields_for_operator(operator: &LogicalOperator) -> Box<dyn Iterator<Item = Field> + '_> {
     match operator {
-        LogicalOperator::Single | LogicalOperator::Project(_) => {
-            Box::from(operator.named_expressions().map(|ne| Field {
-                alias: ne.alias.as_ref().unwrap().clone(),
-                data_type: type_for_expression(&ne.expression),
-            }))
-        }
+        LogicalOperator::Project(_) => Box::from(operator.named_expressions().map(|ne| Field {
+            alias: ne.alias.as_ref().unwrap().clone(),
+            data_type: type_for_expression(&ne.expression),
+        })),
         LogicalOperator::Values(values) => {
             Box::from(values.fields.iter().map(|(data_type, alias)| Field {
                 alias: alias.clone(),
                 data_type: *data_type,
             }))
         }
+        LogicalOperator::TableAlias(table_alias) => fields_for_operator(&table_alias.source),
+        LogicalOperator::Single => Box::from(empty()),
     }
 }
 

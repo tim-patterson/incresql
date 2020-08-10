@@ -1,11 +1,11 @@
-use crate::atoms::{identifier_str, kw};
+use crate::atoms::{as_clause, identifier_str, kw};
 use crate::literals::{datatype, literal};
-use crate::whitespace::{ws_0, ws_1};
+use crate::whitespace::ws_0;
 use crate::ParserResult;
 use ast::expr::{Cast, Expression, FunctionCall, NamedExpression};
 use nom::branch::{alt, Alt};
 use nom::bytes::complete::tag;
-use nom::combinator::{cut, map, opt};
+use nom::combinator::{cut, map};
 use nom::error::VerboseError;
 use nom::multi::{many0, separated_list};
 use nom::sequence::{pair, preceded, tuple};
@@ -17,16 +17,9 @@ pub fn expression(input: &str) -> ParserResult<Expression> {
 
 /// Parses a named expression, ie 1 as one
 pub fn named_expression(input: &str) -> ParserResult<NamedExpression> {
-    map(
-        pair(
-            expression,
-            opt(preceded(
-                pair(opt(pair(ws_0, kw("AS"))), ws_1),
-                identifier_str,
-            )),
-        ),
-        |(expression, alias)| NamedExpression { expression, alias },
-    )(input)
+    map(pair(expression, as_clause), |(expression, alias)| {
+        NamedExpression { expression, alias }
+    })(input)
 }
 
 /// Parse a comma separated list of expressions ie 1,2+2
