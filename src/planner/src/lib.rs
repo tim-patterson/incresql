@@ -2,6 +2,7 @@ use data::DataType;
 
 mod common;
 mod normalize;
+mod optimize;
 mod point_in_time;
 mod validate;
 use functions::registry::{FunctionResolutionError, Registry};

@@ -102,7 +102,6 @@ fn compile_functions_in_expr(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Field;
     use ast::expr::{FunctionCall, NamedExpression};
     use ast::rel::logical::Project;
     use data::{Datum, Session};
@@ -147,7 +146,7 @@ mod tests {
         let expected = LogicalOperator::Project(Project {
             distinct: false,
             expressions: vec![NamedExpression {
-                alias: Some("_col1".to_string()),
+                alias: None,
                 expression: Expression::CompiledFunctionCall(CompiledFunctionCall {
                     function: &DummyFunct {},
                     args: vec![
@@ -174,17 +173,9 @@ mod tests {
             source: Box::new(LogicalOperator::Single),
         });
 
-        let (fields, operator) = planner.plan_common(raw_query)?;
+        let operator = planner.validate(raw_query)?;
 
         assert_eq!(operator, expected);
-
-        assert_eq!(
-            fields,
-            vec![Field {
-                alias: String::from("_col1"),
-                data_type: DataType::Integer
-            }]
-        );
 
         Ok(())
     }
