@@ -24,7 +24,7 @@ pub fn query(query: &str, expected: &str) {
                 }
             ).collect::<Vec<_>>().join("|");
 
-            rows.push(row);
+            rows.push(format!("|{}|", row));
         }
     }
 
@@ -43,24 +43,30 @@ pub fn query(query: &str, expected: &str) {
     for ((idx, actual), expected) in rows.iter().enumerate().zip(expected_rows.iter()) {
         if actual != expected {
             panic!(
-                "actual != expected @ line {}\n  actual={}\nexpected={}\n",
+                "actual != expected @ line {}\n  actual={}\nexpected={}\n\nactual_rows:\n{}\n\nexpected_rows:\n{}\n",
                 idx + 1,
                 actual,
-                expected
+                expected,
+                rows.join("\n"),
+                expected_rows.join("\n")
             );
         }
     }
     if rows.len() > expected_rows.len() {
         panic!(
-            "actual has {} more rows than expected",
-            rows.len() - expected_rows.len()
+            "actual has {} more rows than expected\n\nactual_rows:\n{}\n\nexpected_rows:\n{}\n",
+            rows.len() - expected_rows.len(),
+            rows.join("\n"),
+            expected_rows.join("\n")
         );
     }
 
     if rows.len() < expected_rows.len() {
         panic!(
-            "actual has {} less rows than expected",
-            expected_rows.len() - rows.len()
+            "actual has {} less rows than expected\n\nactual_rows:\n{}\n\nexpected_rows:\n{}\n",
+            expected_rows.len() - rows.len(),
+            rows.join("\n"),
+            expected_rows.join("\n")
         );
     }
 }

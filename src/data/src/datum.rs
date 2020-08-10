@@ -1,6 +1,6 @@
 use crate::DECIMAL_MAX_SCALE;
 use rust_decimal::Decimal;
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 
 /// Datum - in memory representation of sql value.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -103,16 +103,23 @@ impl<'a> From<&'a str> for Datum<'a> {
 }
 
 impl Display for Datum<'_> {
+    /// When used with the alternate flag this will format as a sql string, ie strings will be quoted
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Datum::Null => f.write_str("NULL"),
             Datum::TextRef(_) | Datum::TextOwned(_) | Datum::TextInline(..) => {
-                f.write_str(self.as_str().unwrap())
+                let str = self.as_str().unwrap();
+                if f.alternate() {
+                    // The debug trait should quote and escape our strings for us
+                    Debug::fmt(str, f)
+                } else {
+                    f.write_str(str)
+                }
             }
             Datum::Boolean(b) => f.write_str(if *b { "TRUE" } else { "FALSE" }),
-            Datum::Integer(i) => i.fmt(f),
-            Datum::BigInt(i) => i.fmt(f),
-            Datum::Decimal(d) => d.fmt(f),
+            Datum::Integer(i) => Display::fmt(i, f),
+            Datum::BigInt(i) => Display::fmt(i, f),
+            Datum::Decimal(d) => Display::fmt(d, f),
         }
     }
 }
@@ -298,5 +305,9 @@ mod tests {
         );
 
         assert_eq!(format!("{}", Datum::from("hello".to_string())), "hello");
+        assert_eq!(
+            format!("{:#}", Datum::from("he\"llo".to_string())),
+            "\"he\\\"llo\""
+        );
     }
 }

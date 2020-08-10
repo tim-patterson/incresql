@@ -1,9 +1,9 @@
 use crate::{Planner, PlannerError};
 use ast::rel::logical::LogicalOperator;
 
-/// Normalize the query, adding in missing aliases etc so the rest of the planning doesn't need
-/// to work around all of that
 impl Planner {
+    /// Normalize the query, adding in missing aliases etc so the rest of the planning doesn't need
+    /// to work around all of that
     pub(crate) fn normalize(
         &self,
         mut query: LogicalOperator,
