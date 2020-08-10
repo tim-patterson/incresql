@@ -29,6 +29,31 @@ impl<'a> Datum<'a> {
             self.clone()
         }
     }
+
+    /// As datums can reference data external to themselves they're only guaranteed to be valid
+    /// for the current iteration of the iterator/loop etc. This method creates a new datum with
+    /// any borrowed data now owned so it can be held onto across iterations(ie to sort them).
+    pub fn as_static(&'a self) -> Datum<'static> {
+        match self {
+            Datum::Null => Datum::Null,
+            Datum::Boolean(b) => Datum::Boolean(*b),
+            Datum::Integer(i) => Datum::Integer(*i),
+            Datum::BigInt(i) => Datum::BigInt(*i),
+            Datum::Decimal(d) => Datum::Decimal(*d),
+            Datum::TextOwned(s) => Datum::TextOwned(s.clone()),
+            Datum::TextInline(l, bytes) => Datum::TextInline(*l, *bytes),
+            Datum::TextRef(s) => {
+                let len = s.len();
+                if len <= 22 {
+                    let mut bytes = [0_u8; 22];
+                    bytes.as_mut()[..len].copy_from_slice(s.as_bytes());
+                    Datum::TextInline(len as u8, bytes)
+                } else {
+                    Datum::TextOwned(Box::from(*s))
+                }
+            }
+        }
+    }
 }
 
 // From builders to build datums from the native rust types
@@ -162,6 +187,19 @@ mod tests {
         assert_eq!(
             Datum::TextOwned("hello".to_string().into_boxed_str()).ref_clone(),
             Datum::TextRef("hello")
+        );
+    }
+
+    #[test]
+    fn test_datum_as_static() {
+        assert_eq!(
+            Datum::TextRef("Hello world").as_static(),
+            Datum::TextInline(11, *b"Hello world\0\0\0\0\0\0\0\0\0\0\0")
+        );
+
+        assert_eq!(
+            Datum::TextRef("Hello world123456789123456789").as_static(),
+            Datum::TextOwned(Box::from("Hello world123456789123456789"))
         );
     }
 

@@ -55,7 +55,7 @@ impl Connection<'_> {
                 let plan = self
                     .runtime
                     .planner
-                    .plan_for_point_in_time(logical_operator)?;
+                    .plan_for_point_in_time(logical_operator, &self.session)?;
                 let executor = build_executor(&self.session, &plan.operator);
                 Ok((plan.fields, executor))
             }

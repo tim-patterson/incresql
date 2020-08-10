@@ -2,6 +2,7 @@ use crate::{Field, Planner, PlannerError};
 use ast::expr::Expression;
 use ast::rel::logical::{LogicalOperator, Project};
 use ast::rel::point_in_time::{self, PointInTimeOperator};
+use data::Session;
 
 pub struct PointInTimePlan {
     pub fields: Vec<Field>,
@@ -14,8 +15,9 @@ impl Planner {
     pub fn plan_for_point_in_time(
         &self,
         query: LogicalOperator,
+        session: &Session,
     ) -> Result<PointInTimePlan, PlannerError> {
-        let (fields, operator) = self.plan_common(query)?;
+        let (fields, operator) = self.plan_common(query, session)?;
         let operator = build_operator(operator);
 
         Ok(PointInTimePlan { fields, operator })
@@ -66,6 +68,7 @@ mod tests {
     #[test]
     fn test_plan_for_point_in_time() -> Result<(), PlannerError> {
         let planner = Planner::new(Registry::new(false));
+        let session = Session::new(1);
         let raw_query = LogicalOperator::Project(Project {
             distinct: false,
             expressions: vec![NamedExpression {
@@ -81,7 +84,9 @@ mod tests {
         });
 
         assert_eq!(
-            planner.plan_for_point_in_time(raw_query)?.operator,
+            planner
+                .plan_for_point_in_time(raw_query, &session)?
+                .operator,
             expected
         );
         Ok(())
