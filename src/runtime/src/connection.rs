@@ -28,11 +28,10 @@ impl Connection<'_> {
         &self,
         query: &str,
     ) -> Result<(Vec<Field>, Box<dyn Executor>), QueryError> {
-        let mut parse_tree = parse(query)?;
+        let parse_tree = parse(query)?;
 
-        // For some statements we'll rewrite them into a query and run them through the planner.
-        // This is that rewrite...
-        match &mut parse_tree {
+        // For almost everything we'll rewrite into some kinda logical operator
+        let logical_operator = match parse_tree {
             Statement::ShowFunctions => {
                 let data = self
                     .runtime
@@ -42,25 +41,24 @@ impl Connection<'_> {
                     .map(|name| vec![Expression::from(name)])
                     .collect();
 
-                parse_tree = Statement::Query(LogicalOperator::Values(Values {
+                LogicalOperator::Values(Values {
                     fields: vec![(DataType::Text, String::from("function_name"))],
                     data,
-                }));
+                })
             }
-            Statement::Query(_) => {}
-        }
+            Statement::Query(logical_operator) => logical_operator,
+            Statement::Explain(explain) => self
+                .runtime
+                .planner
+                .explain_logical(explain.operator, &self.session)?,
+        };
 
-        match parse_tree {
-            Statement::Query(logical_operator) => {
-                let plan = self
-                    .runtime
-                    .planner
-                    .plan_for_point_in_time(logical_operator, &self.session)?;
-                let executor = build_executor(&self.session, &plan.operator);
-                Ok((plan.fields, executor))
-            }
-            Statement::ShowFunctions => panic!(),
-        }
+        let plan = self
+            .runtime
+            .planner
+            .plan_for_point_in_time(logical_operator, &self.session)?;
+        let executor = build_executor(&self.session, &plan.operator);
+        Ok((plan.fields, executor))
     }
 
     pub fn change_database(&self, database: &str) -> Result<(), QueryError> {

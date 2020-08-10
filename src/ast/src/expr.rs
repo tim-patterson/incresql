@@ -104,7 +104,7 @@ impl From<String> for Expression {
 
 lazy_static! {
     /// If we an identifier matches this then we don't need to quote it
-    static ref IDENTIFIER_OK: Regex = Regex::new(r"^([a-z]|_)*$").unwrap();
+    static ref IDENTIFIER_OK: Regex = Regex::new(r"^([a-z]|_)([a-z,0-9]|_)*$").unwrap();
 }
 
 impl Display for Expression {
@@ -259,32 +259,23 @@ mod tests {
     fn test_named_expr_to_string() {
         let expr = NamedExpression {
             alias: None,
-            expression: Expression::from(1)
+            expression: Expression::from(1),
         };
 
-        assert_eq!(
-            expr.to_string(),
-            "1"
-        );
+        assert_eq!(expr.to_string(), "1");
 
         let expr = NamedExpression {
             alias: Some(String::from("foo")),
-            expression: Expression::from(1)
+            expression: Expression::from(1),
         };
 
-        assert_eq!(
-            expr.to_string(),
-            "1 AS foo"
-        );
+        assert_eq!(expr.to_string(), "1 AS foo");
 
         let expr = NamedExpression {
             alias: Some(String::from("1b")),
-            expression: Expression::from(1)
+            expression: Expression::from(1),
         };
 
-        assert_eq!(
-            expr.to_string(),
-            "1 AS `1b`"
-        );
+        assert_eq!(expr.to_string(), "1 AS `1b`");
     }
 }

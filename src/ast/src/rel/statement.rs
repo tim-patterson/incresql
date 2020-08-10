@@ -5,4 +5,10 @@ use crate::rel::logical::LogicalOperator;
 pub enum Statement {
     Query(LogicalOperator),
     ShowFunctions,
+    Explain(Explain),
+}
+
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct Explain {
+    pub operator: LogicalOperator,
 }

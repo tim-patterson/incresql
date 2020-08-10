@@ -1,6 +1,7 @@
 use data::DataType;
 
 mod common;
+mod explain;
 mod normalize;
 mod optimize;
 mod point_in_time;

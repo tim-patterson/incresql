@@ -1,12 +1,22 @@
+use crate::atoms::kw;
 use crate::select::select;
 use crate::show::show;
+use crate::whitespace::ws_0;
 use crate::ParserResult;
-use ast::rel::statement::Statement;
+use ast::rel::statement::{Explain, Statement};
 use nom::branch::alt;
-use nom::combinator::map;
+use nom::combinator::{cut, map};
+use nom::sequence::preceded;
 
 pub fn statement(input: &str) -> ParserResult<Statement> {
-    alt((map(select, Statement::Query), show))(input)
+    alt((map(select, Statement::Query), show, explain))(input)
+}
+
+fn explain(input: &str) -> ParserResult<Statement> {
+    map(
+        preceded(kw("EXPLAIN"), cut(preceded(ws_0, select))),
+        |query| Statement::Explain(Explain { operator: query }),
+    )(input)
 }
 
 #[cfg(test)]
@@ -35,6 +45,23 @@ mod tests {
         assert_eq!(
             statement("SHOW functions").unwrap().1,
             Statement::ShowFunctions
+        );
+    }
+
+    #[test]
+    fn test_explain_select() {
+        assert_eq!(
+            statement("EXPLAIN SELECT 1").unwrap().1,
+            Statement::Explain(Explain {
+                operator: LogicalOperator::Project(Project {
+                    distinct: false,
+                    expressions: vec![NamedExpression {
+                        expression: Expression::from(1),
+                        alias: None
+                    },],
+                    source: Box::from(LogicalOperator::Single)
+                }),
+            })
         );
     }
 }
