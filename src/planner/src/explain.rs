@@ -16,7 +16,7 @@ impl Planner {
 
         let mut lines = vec![];
         let mut padding = Padding::default();
-        render_plan(&operator, &mut lines, &mut padding);
+        render_plan(&operator, &mut lines, &mut padding, None);
 
         let data = lines
             .into_iter()
@@ -66,24 +66,33 @@ fn render_plan(
     operator: &LogicalOperator,
     lines: &mut Vec<(String, Option<String>)>,
     padding: &mut Padding,
+    alias: Option<&str>,
 ) {
     match operator {
         LogicalOperator::Single => {
             lines.push((format!("{}SINGLE", padding), None));
         }
         LogicalOperator::Project(project) => {
-            lines.push((format!("{}PROJECT", padding), None));
+            if let Some(name) = alias {
+                lines.push((format!("{}PROJECT({})", padding, name), None));
+            } else {
+                lines.push((format!("{}PROJECT", padding), None));
+            }
             padding.push(" |");
             lines.push((format!("{}exprs:", padding), None));
             render_named_expressions(&project.expressions, lines, padding);
             lines.push((format!("{}source:", padding), None));
             padding.push("  ");
-            render_plan(&project.source, lines, padding);
+            render_plan(&project.source, lines, padding, None);
             padding.pop();
             padding.pop();
         }
         LogicalOperator::Values(values) => {
-            lines.push((format!("{}VALUES", padding), None));
+            if let Some(name) = alias {
+                lines.push((format!("{}VALUES({})", padding, name), None));
+            } else {
+                lines.push((format!("{}VALUES", padding), None));
+            }
             padding.push(" |");
             lines.push((format!("{}values:", padding), None));
             for row in &values.data {
@@ -95,6 +104,16 @@ fn render_plan(
                 lines.push((format!("{}  {}", padding, formatted_row), None));
             }
             padding.pop();
+        }
+        LogicalOperator::TableAlias(table_alias) => {
+            // We don't render a table alias, we simply pass down the alias to annotate the operator
+            // below
+            render_plan(
+                &table_alias.source,
+                lines,
+                padding,
+                Some(&table_alias.alias),
+            );
         }
     }
 }

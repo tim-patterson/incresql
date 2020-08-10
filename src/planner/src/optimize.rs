@@ -29,7 +29,7 @@ fn fold_constants(query: &mut LogicalOperator, session: &Session) {
 fn fold_constants_for_expr(expr: &mut Expression, session: &Session) {
     match expr {
         Expression::CompiledFunctionCall(function_call) => {
-            for arg in &mut function_call.args {
+            for arg in function_call.args.iter_mut() {
                 fold_constants_for_expr(arg, session);
             }
 
@@ -63,13 +63,19 @@ fn fold_constants_for_expr(expr: &mut Expression, session: &Session) {
                 *expr = Expression::Constant(constant, function_call.signature.ret);
             }
         }
+        Expression::CompiledColumnReference(_column_reference) => {
+            // TODO once we have the source expr's bit done we can come back here and optimize folding up constants from a subquery
+        }
+
         // Already a constant
         Expression::Constant(..) => {}
         // These should be gone by now.
-        Expression::Cast(_) | Expression::FunctionCall(_) => panic!(
-            "Hit {:?} in constant fold, this should be gone by now!",
-            expr
-        ),
+        Expression::Cast(_) | Expression::FunctionCall(_) | Expression::ColumnReference(_) => {
+            panic!(
+                "Hit {:?} in constant fold, this should be gone by now!",
+                expr
+            )
+        }
     }
 }
 
@@ -102,16 +108,16 @@ mod tests {
                 alias: None,
                 expression: Expression::CompiledFunctionCall(CompiledFunctionCall {
                     function: add_function,
-                    args: vec![
+                    args: Box::from(vec![
                         Expression::from(1),
                         Expression::CompiledFunctionCall(CompiledFunctionCall {
                             function: add_function,
-                            args: vec![Expression::from(2), Expression::from(3)],
-                            expr_buffer: vec![],
+                            args: Box::from(vec![Expression::from(2), Expression::from(3)]),
+                            expr_buffer: Box::from(vec![]),
                             signature: Box::new(add_signature.clone()),
                         }),
-                    ],
-                    expr_buffer: vec![],
+                    ]),
+                    expr_buffer: Box::from(vec![]),
                     signature: Box::new(add_signature.clone()),
                 }),
             }],

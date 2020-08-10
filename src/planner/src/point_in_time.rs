@@ -54,6 +54,7 @@ fn build_operator(query: LogicalOperator) -> PointInTimeOperator {
                 column_count: values.fields.len(),
             })
         }
+        LogicalOperator::TableAlias(table_alias) => build_operator(*table_alias.source),
     }
 }
 

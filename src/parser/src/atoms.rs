@@ -1,3 +1,4 @@
+use crate::whitespace::ws_0;
 use crate::ParserResult;
 use data::rust_decimal::Decimal;
 use nom::branch::alt;
@@ -127,6 +128,15 @@ pub fn identifier_str(input: &str) -> ParserResult<String> {
     )(input)
 }
 
+/// The as clause for expressions, tables etc.
+/// Consumes leading white space if there's a successful match
+pub fn as_clause(input: &str) -> ParserResult<Option<String>> {
+    opt(preceded(
+        pair(opt(pair(ws_0, kw("AS"))), ws_0),
+        identifier_str,
+    ))(input)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -237,5 +247,16 @@ mod tests {
         assert!(identifier_str("1bcC123 fsd").is_err());
 
         assert_eq!(identifier_str("`1bcC123 fsd`").unwrap().1, "1bcc123 fsd");
+    }
+
+    #[test]
+    fn test_as_clause() {
+        assert_eq!(as_clause("").unwrap().1, None);
+
+        assert_eq!(as_clause("foo").unwrap().1, Some(String::from("foo")));
+
+        assert_eq!(as_clause("as foo").unwrap().1, Some(String::from("foo")));
+
+        assert_eq!(as_clause("as `foo`").unwrap().1, Some(String::from("foo")));
     }
 }

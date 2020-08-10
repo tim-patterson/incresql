@@ -3,7 +3,7 @@ use nom::branch::alt;
 use nom::bytes::complete::{tag, take_until};
 use nom::character::complete::{multispace1, not_line_ending};
 use nom::combinator::value;
-use nom::multi::{many0, many1};
+use nom::multi::many0;
 use nom::sequence::{pair, tuple};
 
 /// Like multispace 0 but also handles comments etc
@@ -11,14 +11,6 @@ pub fn ws_0(input: &str) -> ParserResult<()> {
     value(
         (),
         many0(alt((line_comment, block_comment, value((), multispace1)))),
-    )(input)
-}
-
-/// Like multispace 1 but also handles comments etc.
-pub fn ws_1(input: &str) -> ParserResult<()> {
-    value(
-        (),
-        many1(alt((line_comment, block_comment, value((), multispace1)))),
     )(input)
 }
 
@@ -61,16 +53,5 @@ mod tests {
         assert_eq!(ws_0(" \nabc").unwrap().0, "abc");
 
         assert_eq!(ws_0("-- some comment\nabc").unwrap().0, "abc");
-    }
-
-    #[test]
-    fn test_ws_1() {
-        ws_1("abc").expect_err("Should fail");
-
-        assert_eq!(ws_1(" abc").unwrap().0, "abc");
-
-        assert_eq!(ws_1(" \nabc").unwrap().0, "abc");
-
-        assert_eq!(ws_1("-- some comment\nabc").unwrap().0, "abc");
     }
 }

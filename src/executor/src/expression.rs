@@ -1,17 +1,17 @@
-use crate::utils::right_size;
+use crate::utils::right_size_new;
 use ast::expr::Expression;
 use data::{Datum, Session};
 
 pub trait EvalScalar {
     /// Evaluates an expression as a scalar context, needs to be mutable due to the buffers we keep
     /// for intermediate results
-    fn eval_scalar(&mut self, session: &Session, row: &[Datum]) -> Datum;
+    fn eval_scalar<'a>(&'a mut self, session: &Session, row: &'a [Datum<'a>]) -> Datum<'a>;
 }
 
 impl EvalScalar for Expression {
     /// Evaluates a "row" of expressions as a scalar context
     #[allow(clippy::transmute_ptr_to_ptr)]
-    fn eval_scalar(&mut self, session: &Session, row: &[Datum]) -> Datum {
+    fn eval_scalar<'a>(&'a mut self, session: &Session, row: &'a [Datum<'a>]) -> Datum<'a> {
         match self {
             // literal.clone() seemed to confuse IntelliJ here...
             Expression::Constant(literal, _) => Datum::ref_clone(literal),
@@ -21,33 +21,48 @@ impl EvalScalar for Expression {
                 // us to do this in an easy way without ref counting and allocating so hence we put
                 // the buffer in the expression datastructure itself and use a little unsafe to muck
                 // with the lifetimes
+
+                // right size
+                if function_call.expr_buffer.len() != function_call.args.len() {
+                    function_call.expr_buffer = Box::from(right_size_new(&function_call.args))
+                }
+
                 let buf = unsafe {
-                    std::mem::transmute::<&mut Vec<Datum<'_>>, &mut Vec<Datum<'_>>>(
+                    std::mem::transmute::<&mut Box<[Datum<'_>]>, &mut Box<[Datum<'_>]>>(
                         &mut function_call.expr_buffer,
                     )
                 };
-                right_size(buf, &function_call.args);
                 function_call.args.eval_scalar(session, row, buf);
 
                 function_call
                     .function
                     .execute(session, &function_call.signature, buf)
             }
-            // This should be compiled away by this point
-            Expression::FunctionCall(_) | Expression::Cast(_) => panic!(),
+            Expression::CompiledColumnReference(column_reference) => {
+                row[column_reference.offset].ref_clone()
+            }
+            // These should be compiled away by this point
+            Expression::FunctionCall(_) | Expression::Cast(_) | Expression::ColumnReference(_) => {
+                panic!()
+            }
         }
     }
 }
 
 pub trait EvalScalarRow {
-    fn eval_scalar<'a>(&'a mut self, session: &Session, source: &[Datum], target: &mut [Datum<'a>]);
-}
-
-impl EvalScalarRow for Vec<Expression> {
     fn eval_scalar<'a>(
         &'a mut self,
         session: &Session,
-        source: &[Datum],
+        source: &'a [Datum<'a>],
+        target: &mut [Datum<'a>],
+    );
+}
+
+impl EvalScalarRow for [Expression] {
+    fn eval_scalar<'a>(
+        &'a mut self,
+        session: &Session,
+        source: &'a [Datum<'a>],
         target: &mut [Datum<'a>],
     ) {
         for (idx, expr) in self.iter_mut().enumerate() {
@@ -85,8 +100,8 @@ mod tests {
         let mut expression = Expression::CompiledFunctionCall(CompiledFunctionCall {
             function,
             signature: Box::from(computed_signature),
-            expr_buffer: vec![],
-            args: vec![Expression::from(3), Expression::from(4)],
+            expr_buffer: Box::from(vec![]),
+            args: Box::from(vec![Expression::from(3), Expression::from(4)]),
         });
 
         let session = Session::new(1);

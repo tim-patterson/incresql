@@ -10,6 +10,7 @@ pub enum LogicalOperator {
     Single, // No from clause, ie select 1 + 1
     Project(Project),
     Values(Values),
+    TableAlias(TableAlias),
 }
 
 impl Default for LogicalOperator {
@@ -33,13 +34,22 @@ pub struct Values {
     pub data: Vec<Vec<Expression>>,
 }
 
+/// An operator whose sole purpose is to capture table aliases
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct TableAlias {
+    pub alias: String,
+    pub source: Box<LogicalOperator>,
+}
+
 impl LogicalOperator {
     /// Iterates over the named(output) expressions *owned* by this operator.
-    /// To iterate over the output fields instead use one of the fields methods.
+    /// To iterate over the output fields instead use one of the fields methods in the planner
     pub fn named_expressions(&self) -> Box<dyn Iterator<Item = &NamedExpression> + '_> {
         match self {
             LogicalOperator::Project(project) => Box::from(project.expressions.iter()),
-            LogicalOperator::Single | LogicalOperator::Values(_) => Box::from(empty()),
+            LogicalOperator::Single
+            | LogicalOperator::Values(_)
+            | LogicalOperator::TableAlias(_) => Box::from(empty()),
         }
     }
 
@@ -48,7 +58,9 @@ impl LogicalOperator {
     pub fn named_expressions_mut(&mut self) -> Box<dyn Iterator<Item = &mut NamedExpression> + '_> {
         match self {
             LogicalOperator::Project(project) => Box::from(project.expressions.iter_mut()),
-            LogicalOperator::Single | LogicalOperator::Values(_) => Box::from(empty()),
+            LogicalOperator::Single
+            | LogicalOperator::Values(_)
+            | LogicalOperator::TableAlias(_) => Box::from(empty()),
         }
     }
 
@@ -61,7 +73,7 @@ impl LogicalOperator {
             LogicalOperator::Values(values) => {
                 Box::from(values.data.iter_mut().flat_map(|row| row.iter_mut()))
             }
-            LogicalOperator::Single => Box::from(empty()),
+            LogicalOperator::Single | LogicalOperator::TableAlias(_) => Box::from(empty()),
         }
     }
 
@@ -69,6 +81,9 @@ impl LogicalOperator {
     pub fn children_mut(&mut self) -> Box<dyn Iterator<Item = &mut LogicalOperator> + '_> {
         match self {
             LogicalOperator::Project(project) => Box::from(once(project.source.as_mut())),
+            LogicalOperator::TableAlias(table_alias) => {
+                Box::from(once(table_alias.source.as_mut()))
+            }
             LogicalOperator::Single | LogicalOperator::Values(_) => Box::from(empty()),
         }
     }

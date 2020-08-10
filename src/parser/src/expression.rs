@@ -1,11 +1,11 @@
-use crate::atoms::{identifier_str, kw};
+use crate::atoms::{as_clause, identifier_str, kw};
 use crate::literals::{datatype, literal};
-use crate::whitespace::{ws_0, ws_1};
+use crate::whitespace::ws_0;
 use crate::ParserResult;
-use ast::expr::{Cast, Expression, FunctionCall, NamedExpression};
+use ast::expr::{Cast, ColumnReference, Expression, FunctionCall, NamedExpression};
 use nom::branch::{alt, Alt};
 use nom::bytes::complete::tag;
-use nom::combinator::{cut, map, opt};
+use nom::combinator::{cut, map};
 use nom::error::VerboseError;
 use nom::multi::{many0, separated_list};
 use nom::sequence::{pair, preceded, tuple};
@@ -17,16 +17,9 @@ pub fn expression(input: &str) -> ParserResult<Expression> {
 
 /// Parses a named expression, ie 1 as one
 pub fn named_expression(input: &str) -> ParserResult<NamedExpression> {
-    map(
-        pair(
-            expression,
-            opt(preceded(
-                pair(opt(pair(ws_0, kw("AS"))), ws_1),
-                identifier_str,
-            )),
-        ),
-        |(expression, alias)| NamedExpression { expression, alias },
-    )(input)
+    map(pair(expression, as_clause), |(expression, alias)| {
+        NamedExpression { expression, alias }
+    })(input)
 }
 
 /// Parse a comma separated list of expressions ie 1,2+2
@@ -43,7 +36,7 @@ fn expression_1(input: &str) -> ParserResult<Expression> {
 }
 
 fn expression_2(input: &str) -> ParserResult<Expression> {
-    alt((function_call, cast, literal))(input)
+    alt((function_call, cast, literal, column_reference))(input)
 }
 
 /// Used to reduce boilerplate at each precedence level for infix operators
@@ -109,6 +102,26 @@ fn cast(input: &str) -> ParserResult<Expression> {
             },
         )),
     )(input)
+}
+
+fn column_reference(input: &str) -> ParserResult<Expression> {
+    alt((
+        map(
+            tuple((identifier_str, tag("."), identifier_str)),
+            |(qualifier, _, alias)| {
+                Expression::ColumnReference(ColumnReference {
+                    qualifier: Some(qualifier),
+                    alias,
+                })
+            },
+        ),
+        map(identifier_str, |alias| {
+            Expression::ColumnReference(ColumnReference {
+                qualifier: None,
+                alias,
+            })
+        }),
+    ))(input)
 }
 
 #[cfg(test)]
@@ -211,6 +224,41 @@ mod tests {
             Expression::Cast(Cast {
                 expr: Box::new(expr),
                 datatype: DataType::Decimal(1, 2)
+            })
+        );
+    }
+
+    #[test]
+    fn test_column_reference() {
+        assert_eq!(
+            expression("foo").unwrap().1,
+            Expression::ColumnReference(ColumnReference {
+                qualifier: None,
+                alias: "foo".to_string()
+            })
+        );
+
+        assert_eq!(
+            expression("foo.bar").unwrap().1,
+            Expression::ColumnReference(ColumnReference {
+                qualifier: Some("foo".to_string()),
+                alias: "bar".to_string()
+            })
+        );
+
+        assert_eq!(
+            expression("`foo`").unwrap().1,
+            Expression::ColumnReference(ColumnReference {
+                qualifier: None,
+                alias: "foo".to_string()
+            })
+        );
+
+        assert_eq!(
+            expression("`foo`.`bar`").unwrap().1,
+            Expression::ColumnReference(ColumnReference {
+                qualifier: Some("foo".to_string()),
+                alias: "bar".to_string()
             })
         );
     }

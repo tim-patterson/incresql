@@ -11,6 +11,8 @@ pub enum Expression {
     FunctionCall(FunctionCall),
     Cast(Cast),
     CompiledFunctionCall(CompiledFunctionCall),
+    ColumnReference(ColumnReference),
+    CompiledColumnReference(CompiledColumnReference),
 }
 
 /// Represents a function call straight from the parser.
@@ -32,11 +34,12 @@ pub struct Cast {
 /// checked
 #[derive(Debug, Clone)]
 pub struct CompiledFunctionCall {
+    // This is a bit overweight(7 words) and is blowing out the size of the Expression
+    // enum a bit hence the boxed slices instead of vec's
     pub function: &'static dyn Function,
-    pub args: Vec<Expression>,
+    pub args: Box<[Expression]>,
     // Used to store the evaluation results of the sub expressions
-    pub expr_buffer: Vec<Datum<'static>>,
-    // Boxed to keep size of expression down
+    pub expr_buffer: Box<[Datum<'static>]>,
     pub signature: Box<FunctionSignature<'static>>,
 }
 
@@ -47,6 +50,22 @@ impl PartialEq for CompiledFunctionCall {
 }
 
 impl Eq for CompiledFunctionCall {}
+
+/// A reference to a column in a source.
+/// ie SELECT foo FROM...
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct ColumnReference {
+    pub qualifier: Option<String>,
+    pub alias: String,
+}
+
+/// Column reference but is indexed via offset instead of having to do
+/// name resolution...
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct CompiledColumnReference {
+    pub offset: usize,
+    pub datatype: DataType,
+}
 
 /// Named expression, ie select foo as bar
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -140,6 +159,12 @@ impl Display for Expression {
                     f.write_fmt(format_args!("`{}`({})", function_call.signature.name, args))
                 }
             }
+            Expression::ColumnReference(column_reference) => Display::fmt(column_reference, f),
+            Expression::CompiledColumnReference(column_reference) => {
+                // To turn this back into real sql we would need to be able to have a peek at
+                // our sources
+                f.write_fmt(format_args!("<OFFSET {}>", &column_reference.offset))
+            }
         }
     }
 }
@@ -158,9 +183,33 @@ impl Display for NamedExpression {
     }
 }
 
+impl Display for ColumnReference {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if let Some(qualifier) = &self.qualifier {
+            if IDENTIFIER_OK.is_match(qualifier) {
+                f.write_fmt(format_args!("{}.", qualifier))?;
+            } else {
+                f.write_fmt(format_args!("`{}`.", qualifier))?;
+            }
+        }
+
+        if IDENTIFIER_OK.is_match(&self.alias) {
+            f.write_fmt(format_args!("{}", &self.alias))
+        } else {
+            f.write_fmt(format_args!("`{}`", &self.alias))
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_expr_size() {
+        // This is already way larger than I would have liked...
+        assert_eq!(std::mem::size_of::<Expression>(), 64);
+    }
 
     #[test]
     fn test_expr_from_boolean() {

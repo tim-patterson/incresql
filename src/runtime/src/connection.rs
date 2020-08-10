@@ -80,6 +80,7 @@ mod tests {
         assert_eq!(
             fields,
             vec![Field {
+                qualifier: None,
                 alias: "_col1".to_string(),
                 data_type: DataType::Integer
             }]
@@ -96,6 +97,7 @@ mod tests {
         assert_eq!(
             fields,
             vec![Field {
+                qualifier: None,
                 alias: "function_name".to_string(),
                 data_type: DataType::Text
             }]
