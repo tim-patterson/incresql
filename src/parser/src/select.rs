@@ -3,14 +3,36 @@ use crate::expression::{expression, named_expression};
 use crate::whitespace::ws_0;
 use crate::ParserResult;
 use ast::expr::{Expression, NamedExpression};
-use ast::rel::logical::{Filter, LogicalOperator, Project, TableAlias};
+use ast::rel::logical::{Filter, LogicalOperator, Project, TableAlias, UnionAll};
 use nom::bytes::complete::tag;
 use nom::combinator::{cut, map, opt};
-use nom::multi::separated_list;
+use nom::multi::{many0, separated_list};
 use nom::sequence::{delimited, pair, preceded, tuple};
 
-/// Parses a select statement
+/// Parses a select statement, a select statement consists of potentially multiple
+/// select expressions unioned together
 pub fn select(input: &str) -> ParserResult<LogicalOperator> {
+    map(
+        pair(
+            select_expr,
+            many0(preceded(
+                tuple((ws_0, kw("UNION"), ws_0, kw("ALL"), ws_0)),
+                select_expr,
+            )),
+        ),
+        |(first, mut rest)| {
+            if rest.is_empty() {
+                first
+            } else {
+                rest.insert(0, first);
+                LogicalOperator::UnionAll(UnionAll { sources: rest })
+            }
+        },
+    )(input)
+}
+
+/// Parses a singular select expression
+fn select_expr(input: &str) -> ParserResult<LogicalOperator> {
     map(
         preceded(
             kw("SELECT"),
@@ -175,6 +197,33 @@ mod tests {
                     predicate: Expression::from(true),
                     source: Box::new(LogicalOperator::Single)
                 }))
+            })
+        );
+    }
+
+    #[test]
+    fn test_union_all() {
+        assert_eq!(
+            select("SELECT 1 UNION ALL SELECT 2").unwrap().1,
+            LogicalOperator::UnionAll(UnionAll {
+                sources: vec![
+                    LogicalOperator::Project(Project {
+                        distinct: false,
+                        expressions: vec![NamedExpression {
+                            expression: Expression::from(1),
+                            alias: None
+                        },],
+                        source: Box::from(LogicalOperator::Single)
+                    }),
+                    LogicalOperator::Project(Project {
+                        distinct: false,
+                        expressions: vec![NamedExpression {
+                            expression: Expression::from(2),
+                            alias: None
+                        },],
+                        source: Box::from(LogicalOperator::Single)
+                    })
+                ]
             })
         );
     }
