@@ -109,6 +109,21 @@ fn render_plan(
             padding.pop();
             padding.pop();
         }
+        LogicalOperator::Limit(limit) => {
+            if let Some(name) = alias {
+                lines.push((format!("{}LIMIT({})", padding, name), None, None));
+            } else {
+                lines.push((format!("{}LIMIT", padding), None, None));
+            }
+            padding.push(" |");
+            lines.push((format!("{}offset: {}", padding, limit.offset), None, None));
+            lines.push((format!("{}limit: {}", padding, limit.limit), None, None));
+            lines.push((format!("{}source:", padding), None, None));
+            padding.push("  ");
+            render_plan(&limit.source, lines, padding, None);
+            padding.pop();
+            padding.pop();
+        }
         LogicalOperator::Values(values) => {
             if let Some(name) = alias {
                 lines.push((format!("{}VALUES({})", padding, name), None, None));
