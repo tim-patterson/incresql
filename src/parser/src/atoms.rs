@@ -110,7 +110,9 @@ pub fn identifier_str(input: &str) -> ParserResult<String> {
     map(
         alt((
             recognize(preceded(
-                not(peek(alt((kw("FROM"), kw("WHERE"))))),
+                // These basically need to be the list of valid keywords that can appear
+                // after a table name
+                not(peek(alt((kw("FROM"), kw("WHERE"), kw("UNION"))))),
                 pair(
                     take_while_m_n(1, 1, |c: char| {
                         c.is_alpha() || c == '_' || c == '$' || c == '@'

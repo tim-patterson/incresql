@@ -127,6 +127,21 @@ fn render_plan(
             }
             padding.pop();
         }
+        LogicalOperator::UnionAll(union_all) => {
+            if let Some(name) = alias {
+                lines.push((format!("{}UNION_ALL({})", padding, name), None, None));
+            } else {
+                lines.push((format!("{}UNION_ALL", padding), None, None));
+            }
+            padding.push(" |");
+            lines.push((format!("{}sources:", padding), None, None));
+            padding.push("  ");
+            for source in &union_all.sources {
+                render_plan(source, lines, padding, None);
+            }
+            padding.pop();
+            padding.pop();
+        }
         LogicalOperator::TableAlias(table_alias) => {
             // We don't render a table alias, we simply pass down the alias to annotate the operator
             // below

@@ -1,6 +1,6 @@
 use crate::{Field, Planner, PlannerError};
 use ast::expr::Expression;
-use ast::rel::logical::{Filter, LogicalOperator, Project};
+use ast::rel::logical::{Filter, LogicalOperator, Project, UnionAll};
 use ast::rel::point_in_time::{self, PointInTimeOperator};
 use data::Session;
 
@@ -58,6 +58,11 @@ fn build_operator(query: LogicalOperator) -> PointInTimeOperator {
             PointInTimeOperator::Values(point_in_time::Values {
                 data,
                 column_count: values.fields.len(),
+            })
+        }
+        LogicalOperator::UnionAll(UnionAll { sources }) => {
+            PointInTimeOperator::UnionAll(point_in_time::UnionAll {
+                sources: sources.into_iter().map(build_operator).collect(),
             })
         }
         LogicalOperator::TableAlias(table_alias) => build_operator(*table_alias.source),

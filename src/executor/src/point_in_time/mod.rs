@@ -1,6 +1,7 @@
 use crate::point_in_time::filter::FilterExecutor;
 use crate::point_in_time::project::ProjectExecutor;
 use crate::point_in_time::single::SingleExecutor;
+use crate::point_in_time::union_all::UnionAllExecutor;
 use crate::point_in_time::values::ValuesExecutor;
 use crate::ExecutionError;
 use ast::rel::point_in_time::PointInTimeOperator;
@@ -10,6 +11,7 @@ use std::sync::Arc;
 mod filter;
 mod project;
 mod single;
+mod union_all;
 mod values;
 
 /// Point in time executor, essentially a streaming iterator
@@ -46,6 +48,13 @@ pub fn build_executor(session: &Arc<Session>, plan: &PointInTimeOperator) -> Box
         PointInTimeOperator::Values(values) => Box::from(ValuesExecutor::new(
             Box::from(values.data.clone().into_iter()),
             values.column_count,
+        )),
+        PointInTimeOperator::UnionAll(union_all) => Box::from(UnionAllExecutor::new(
+            union_all
+                .sources
+                .iter()
+                .map(|source| build_executor(session, source))
+                .collect(),
         )),
     }
 }

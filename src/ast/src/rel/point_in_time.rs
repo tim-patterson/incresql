@@ -7,6 +7,7 @@ pub enum PointInTimeOperator {
     Project(Project),
     Values(Values),
     Filter(Filter),
+    UnionAll(UnionAll),
 }
 
 impl Default for PointInTimeOperator {
@@ -32,4 +33,9 @@ pub struct Project {
 pub struct Filter {
     pub predicate: Expression,
     pub source: Box<PointInTimeOperator>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct UnionAll {
+    pub sources: Vec<PointInTimeOperator>,
 }

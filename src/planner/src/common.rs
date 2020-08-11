@@ -59,6 +59,9 @@ pub(crate) fn fields_for_operator(
                 ..f
             }),
         ),
+        LogicalOperator::UnionAll(union_all) => {
+            fields_for_operator(union_all.sources.first().unwrap())
+        }
         LogicalOperator::Single => Box::from(empty()),
     }
 }
@@ -73,6 +76,9 @@ pub(crate) fn source_fields_for_operator(
         LogicalOperator::Project(project) => fields_for_operator(&project.source),
         LogicalOperator::Filter(filter) => fields_for_operator(&filter.source),
         LogicalOperator::TableAlias(table_alias) => fields_for_operator(&table_alias.source),
+        LogicalOperator::UnionAll(union_all) => {
+            fields_for_operator(union_all.sources.first().unwrap())
+        }
         LogicalOperator::Values(_) => Box::from(empty()),
         LogicalOperator::Single => Box::from(empty()),
     }
