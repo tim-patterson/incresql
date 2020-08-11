@@ -1,7 +1,25 @@
+use data::Datum;
+
 /// Initializes a buffer(vector) to the same size as the passed in vector and returns it.
 /// Fills the buffer with the default values
-pub fn right_size_new<T: Default, Y>(from: &[Y]) -> Vec<T> {
+pub(crate) fn right_size_new<T: Default, Y>(from: &[Y]) -> Vec<T> {
     from.iter().map(|_| T::default()).collect()
+}
+
+/// Used to transmute a datum buffer from static to 'a so we can insert data into it
+pub(crate) fn transmute_muf_buf<'a>(buf: &'a mut [Datum<'static>]) -> &'a mut [Datum<'a>] {
+    unsafe {
+        #[allow(clippy::transmute_ptr_to_ptr)]
+        std::mem::transmute::<&mut [Datum<'static>], &mut [Datum<'_>]>(buf)
+    }
+}
+
+/// Used to transmute a datum buffer from static to 'a for reading and safe use downstream
+pub(crate) fn transmute_buf<'a>(buf: &'a [Datum<'static>]) -> &'a [Datum<'a>] {
+    unsafe {
+        #[allow(clippy::transmute_ptr_to_ptr)]
+        std::mem::transmute::<&[Datum<'static>], &[Datum<'_>]>(buf)
+    }
 }
 
 #[cfg(test)]

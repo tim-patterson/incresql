@@ -9,6 +9,7 @@ fn show_functions() {
         |+|
         |-|
         |/|
+        |=|
         |to_bigint|
         |to_bool|
         |to_decimal|

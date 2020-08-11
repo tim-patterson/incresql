@@ -1,3 +1,4 @@
+use crate::point_in_time::filter::FilterExecutor;
 use crate::point_in_time::project::ProjectExecutor;
 use crate::point_in_time::single::SingleExecutor;
 use crate::point_in_time::values::ValuesExecutor;
@@ -6,6 +7,7 @@ use ast::rel::point_in_time::PointInTimeOperator;
 use data::{Datum, Session};
 use std::sync::Arc;
 
+mod filter;
 mod project;
 mod single;
 mod values;
@@ -35,6 +37,11 @@ pub fn build_executor(session: &Arc<Session>, plan: &PointInTimeOperator) -> Box
             Arc::clone(session),
             build_executor(session, &project.source),
             project.expressions.clone(),
+        )),
+        PointInTimeOperator::Filter(filter) => Box::from(FilterExecutor::new(
+            Arc::clone(session),
+            build_executor(session, &filter.source),
+            filter.predicate.clone(),
         )),
         PointInTimeOperator::Values(values) => Box::from(ValuesExecutor::new(
             Box::from(values.data.clone().into_iter()),

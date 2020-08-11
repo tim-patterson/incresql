@@ -6,6 +6,7 @@ pub enum PointInTimeOperator {
     Single, // No from clause, ie select 1 + 1
     Project(Project),
     Values(Values),
+    Filter(Filter),
 }
 
 impl Default for PointInTimeOperator {
@@ -24,5 +25,11 @@ pub struct Values {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Project {
     pub expressions: Vec<Expression>,
+    pub source: Box<PointInTimeOperator>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Filter {
+    pub predicate: Expression,
     pub source: Box<PointInTimeOperator>,
 }
