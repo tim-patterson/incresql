@@ -1,6 +1,6 @@
 use crate::expression::EvalScalarRow;
 use crate::point_in_time::Executor;
-use crate::utils::right_size_new;
+use crate::utils::*;
 use crate::ExecutionError;
 use ast::expr::Expression;
 use data::{Datum, Session};
@@ -38,24 +38,21 @@ impl Executor for ProjectExecutor {
     // without that coming through us.
     // We need a little unsafe to muddle with the lifetimes to get past the rust compiler
 
-    #[allow(clippy::transmute_ptr_to_ptr)]
     fn advance(&mut self) -> Result<(), ExecutionError> {
         if let Some((tuple, _freq)) = self.source.next()? {
-            self.expressions.eval_scalar(&self.session, tuple, unsafe {
-                std::mem::transmute::<&mut [Datum<'_>], &mut [Datum<'_>]>(&mut self.tuple_buffer)
-            });
+            self.expressions.eval_scalar(
+                &self.session,
+                tuple,
+                transmute_muf_buf(&mut self.tuple_buffer),
+            );
         }
         Ok(())
     }
 
-    #[allow(clippy::transmute_ptr_to_ptr)]
     fn get(&self) -> Option<(&[Datum], i32)> {
-        self.source.get().map(|(_tuple, freq)| {
-            (
-                unsafe { std::mem::transmute::<&[Datum<'_>], &[Datum<'_>]>(&self.tuple_buffer) },
-                freq,
-            )
-        })
+        self.source
+            .get()
+            .map(|(_tuple, freq)| (transmute_buf(&self.tuple_buffer), freq))
     }
 
     fn column_count(&self) -> usize {

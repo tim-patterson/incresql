@@ -6,7 +6,7 @@ mod normalize;
 mod optimize;
 mod point_in_time;
 mod validate;
-use ast::expr::ColumnReference;
+use ast::expr::{ColumnReference, Expression};
 use functions::registry::{FunctionResolutionError, Registry};
 pub use point_in_time::PointInTimePlan;
 use std::fmt::{Display, Formatter};
@@ -27,6 +27,7 @@ impl Planner {
 pub enum PlannerError {
     FunctionResolutionError(FunctionResolutionError),
     FieldResolutionError(FieldResolutionError),
+    PredicateNotBoolean(DataType, Expression),
 }
 
 impl From<FunctionResolutionError> for PlannerError {
@@ -46,6 +47,10 @@ impl Display for PlannerError {
         match self {
             PlannerError::FunctionResolutionError(err) => Display::fmt(err, f),
             PlannerError::FieldResolutionError(err) => Display::fmt(err, f),
+            PlannerError::PredicateNotBoolean(datatype, expr) => f.write_fmt(format_args!(
+                "Predicate returns {} not BOOLEAN - {}",
+                datatype, expr
+            )),
         }
     }
 }

@@ -38,11 +38,14 @@ pub(crate) fn fields_for_operator(
     operator: &LogicalOperator,
 ) -> Box<dyn Iterator<Item = Field> + '_> {
     match operator {
-        LogicalOperator::Project(_) => Box::from(operator.named_expressions().map(|ne| Field {
-            qualifier: None,
-            alias: ne.alias.as_ref().unwrap().clone(),
-            data_type: type_for_expression(&ne.expression),
-        })),
+        LogicalOperator::Project(project) => {
+            Box::from(project.expressions.iter().map(|ne| Field {
+                qualifier: None,
+                alias: ne.alias.as_ref().unwrap().clone(),
+                data_type: type_for_expression(&ne.expression),
+            }))
+        }
+        LogicalOperator::Filter(filter) => fields_for_operator(&filter.source),
         LogicalOperator::Values(values) => {
             Box::from(values.fields.iter().map(|(data_type, alias)| Field {
                 qualifier: None,
@@ -68,8 +71,9 @@ pub(crate) fn source_fields_for_operator(
 ) -> Box<dyn Iterator<Item = Field> + '_> {
     match operator {
         LogicalOperator::Project(project) => fields_for_operator(&project.source),
-        LogicalOperator::Values(_values) => Box::from(empty()),
+        LogicalOperator::Filter(filter) => fields_for_operator(&filter.source),
         LogicalOperator::TableAlias(table_alias) => fields_for_operator(&table_alias.source),
+        LogicalOperator::Values(_) => Box::from(empty()),
         LogicalOperator::Single => Box::from(empty()),
     }
 }

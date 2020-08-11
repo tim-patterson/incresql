@@ -1,6 +1,6 @@
 use crate::{Field, Planner, PlannerError};
 use ast::expr::Expression;
-use ast::rel::logical::{LogicalOperator, Project};
+use ast::rel::logical::{Filter, LogicalOperator, Project};
 use ast::rel::point_in_time::{self, PointInTimeOperator};
 use data::Session;
 
@@ -35,6 +35,12 @@ fn build_operator(query: LogicalOperator) -> PointInTimeOperator {
             assert!(!distinct, "Distinct should not be true at this point!");
             PointInTimeOperator::Project(point_in_time::Project {
                 expressions: expressions.into_iter().map(|ne| ne.expression).collect(),
+                source: Box::new(build_operator(*source)),
+            })
+        }
+        LogicalOperator::Filter(Filter { predicate, source }) => {
+            PointInTimeOperator::Filter(point_in_time::Filter {
+                predicate,
                 source: Box::new(build_operator(*source)),
             })
         }

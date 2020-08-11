@@ -11,6 +11,7 @@ use nom::multi::{many0, separated_list};
 use nom::sequence::{pair, preceded, tuple};
 
 /// Parses a bog standard expression, ie 1 + 2
+/// operators precedence according to https://dev.mysql.com/doc/refman/8.0/en/operator-precedence.html
 pub fn expression(input: &str) -> ParserResult<Expression> {
     expression_0(input)
 }
@@ -28,14 +29,18 @@ pub fn comma_sep_expressions(input: &str) -> ParserResult<Vec<Expression>> {
 }
 
 fn expression_0(input: &str) -> ParserResult<Expression> {
-    infix_many((tag("+"), tag("-")), expression_1)(input)
+    infix_many((tag("="), tag("!=")), expression_1)(input)
 }
 
 fn expression_1(input: &str) -> ParserResult<Expression> {
-    infix_many((tag("*"), tag("/")), expression_2)(input)
+    infix_many((tag("+"), tag("-")), expression_2)(input)
 }
 
 fn expression_2(input: &str) -> ParserResult<Expression> {
+    infix_many((tag("*"), tag("/")), expression_3)(input)
+}
+
+fn expression_3(input: &str) -> ParserResult<Expression> {
     alt((function_call, cast, literal, column_reference))(input)
 }
 

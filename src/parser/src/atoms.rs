@@ -110,7 +110,7 @@ pub fn identifier_str(input: &str) -> ParserResult<String> {
     map(
         alt((
             recognize(preceded(
-                not(peek(kw("FROM"))),
+                not(peek(alt((kw("FROM"), kw("WHERE"))))),
                 pair(
                     take_while_m_n(1, 1, |c: char| {
                         c.is_alpha() || c == '_' || c == '$' || c == '@'

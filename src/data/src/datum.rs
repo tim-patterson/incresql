@@ -54,6 +54,31 @@ impl<'a> Datum<'a> {
             }
         }
     }
+
+    /// Returns true if this value is null
+    pub fn is_null(&self) -> bool {
+        if let Datum::Null = self {
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Returns true if this value is equal to another.
+    /// According to sql rules, null != null, this is the behaviour if null_safe = false,
+    /// if null_safe is set to true then null == null
+    pub fn sql_eq(&self, other: &Self, null_safe: bool) -> bool {
+        match self {
+            Datum::Null => other.is_null() && null_safe,
+            Datum::Boolean(b) => other.as_boolean() == Some(*b),
+            Datum::Integer(i) => other.as_integer() == Some(*i),
+            Datum::BigInt(i) => other.as_bigint() == Some(*i),
+            Datum::Decimal(d) => other.as_decimal() == Some(*d),
+            Datum::TextOwned(_) | Datum::TextInline(..) | Datum::TextRef(_) => {
+                self.as_str() == other.as_str()
+            }
+        }
+    }
 }
 
 // From builders to build datums from the native rust types
@@ -207,6 +232,35 @@ mod tests {
         assert_eq!(
             Datum::TextRef("Hello world123456789123456789").as_static(),
             Datum::TextOwned(Box::from("Hello world123456789123456789"))
+        );
+    }
+
+    #[test]
+    fn test_datum_is_null() {
+        assert_eq!(Datum::Null.is_null(), true);
+
+        assert_eq!(Datum::from(1).is_null(), false);
+    }
+
+    #[test]
+    fn test_datum_sql_eq() {
+        // Nulls
+        assert_eq!(Datum::Null.sql_eq(&Datum::Null, false), false);
+        assert_eq!(Datum::Null.sql_eq(&Datum::Null, true), true);
+        // Mixed Nulls with bools
+        assert_eq!(Datum::from(true).sql_eq(&Datum::Null, true), false);
+        assert_eq!(Datum::Null.sql_eq(&Datum::from(true), true), false);
+        assert_eq!(Datum::from(false).sql_eq(&Datum::from(false), false), true);
+        // Strings
+        assert_eq!(Datum::from("abc").sql_eq(&Datum::from("abc"), false), true);
+        assert_eq!(Datum::from("abc").sql_eq(&Datum::from("efg"), false), false);
+        assert_eq!(
+            Datum::from("abc").sql_eq(&Datum::TextOwned(Box::from("abc")), false),
+            true
+        );
+        assert_eq!(
+            Datum::TextOwned(Box::from("abc")).sql_eq(&Datum::from("abc"), false),
+            true
         );
     }
 
