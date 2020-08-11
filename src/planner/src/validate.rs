@@ -11,6 +11,7 @@ use functions::FunctionSignature;
 impl Planner {
     pub fn validate(&self, mut query: LogicalOperator) -> Result<LogicalOperator, PlannerError> {
         compile_functions(&mut query, &self.function_registry)?;
+        check_predicates(&mut query)?;
         Ok(query)
     }
 }
@@ -138,6 +139,26 @@ fn compile_functions_in_expr(
         Expression::Constant(..)
         | Expression::CompiledFunctionCall(_)
         | Expression::CompiledColumnReference(_) => {}
+    }
+    Ok(())
+}
+
+/// Checks to make sure all predicate expressions are boolean expressions
+fn check_predicates(operator: &mut LogicalOperator) -> Result<(), PlannerError> {
+    for child in operator.children_mut() {
+        check_predicates(child)?;
+    }
+
+    if let LogicalOperator::Filter(filter) = operator {
+        match type_for_expression(&filter.predicate) {
+            DataType::Boolean | DataType::Null => {}
+            datatype => {
+                return Err(PlannerError::PredicateNotBoolean(
+                    datatype,
+                    filter.predicate.clone(),
+                ))
+            }
+        }
     }
     Ok(())
 }

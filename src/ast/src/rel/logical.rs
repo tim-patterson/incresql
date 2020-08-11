@@ -9,6 +9,7 @@ pub enum LogicalOperator {
     // These may appear anywhere in a logical operator at anytime
     Single, // No from clause, ie select 1 + 1
     Project(Project),
+    Filter(Filter),
     Values(Values),
     TableAlias(TableAlias),
 }
@@ -23,6 +24,12 @@ impl Default for LogicalOperator {
 pub struct Project {
     pub distinct: bool, // Comes from parser, planner will rewrite to a group by
     pub expressions: Vec<NamedExpression>,
+    pub source: Box<LogicalOperator>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Filter {
+    pub predicate: Expression,
     pub source: Box<LogicalOperator>,
 }
 
@@ -48,6 +55,7 @@ impl LogicalOperator {
         match self {
             LogicalOperator::Project(project) => Box::from(project.expressions.iter()),
             LogicalOperator::Single
+            | LogicalOperator::Filter(_)
             | LogicalOperator::Values(_)
             | LogicalOperator::TableAlias(_) => Box::from(empty()),
         }
@@ -59,6 +67,7 @@ impl LogicalOperator {
         match self {
             LogicalOperator::Project(project) => Box::from(project.expressions.iter_mut()),
             LogicalOperator::Single
+            | LogicalOperator::Filter(_)
             | LogicalOperator::Values(_)
             | LogicalOperator::TableAlias(_) => Box::from(empty()),
         }
@@ -70,6 +79,7 @@ impl LogicalOperator {
             LogicalOperator::Project(project) => {
                 Box::from(project.expressions.iter_mut().map(|ne| &mut ne.expression))
             }
+            LogicalOperator::Filter(filter) => Box::from(once(&mut filter.predicate)),
             LogicalOperator::Values(values) => {
                 Box::from(values.data.iter_mut().flat_map(|row| row.iter_mut()))
             }
@@ -81,6 +91,7 @@ impl LogicalOperator {
     pub fn children_mut(&mut self) -> Box<dyn Iterator<Item = &mut LogicalOperator> + '_> {
         match self {
             LogicalOperator::Project(project) => Box::from(once(project.source.as_mut())),
+            LogicalOperator::Filter(filter) => Box::from(once(filter.source.as_mut())),
             LogicalOperator::TableAlias(table_alias) => {
                 Box::from(once(table_alias.source.as_mut()))
             }

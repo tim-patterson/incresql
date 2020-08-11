@@ -1,9 +1,9 @@
 use crate::atoms::{as_clause, kw};
-use crate::expression::named_expression;
+use crate::expression::{expression, named_expression};
 use crate::whitespace::ws_0;
 use crate::ParserResult;
-use ast::expr::NamedExpression;
-use ast::rel::logical::{LogicalOperator, Project, TableAlias};
+use ast::expr::{Expression, NamedExpression};
+use ast::rel::logical::{Filter, LogicalOperator, Project, TableAlias};
 use nom::bytes::complete::tag;
 use nom::combinator::{cut, map, opt};
 use nom::multi::separated_list;
@@ -17,10 +17,18 @@ pub fn select(input: &str) -> ParserResult<LogicalOperator> {
             cut(tuple((
                 preceded(ws_0, comma_sep_named_expressions),
                 opt(preceded(ws_0, from_clause)),
+                opt(preceded(ws_0, where_clause)),
             ))),
         ),
-        |(expressions, from_option)| {
-            let query = from_option.unwrap_or(LogicalOperator::Single);
+        |(expressions, from_option, where_option)| {
+            let mut query = from_option.unwrap_or(LogicalOperator::Single);
+
+            if let Some(predicate) = where_option {
+                query = LogicalOperator::Filter(Filter {
+                    predicate,
+                    source: Box::new(query),
+                })
+            }
 
             LogicalOperator::Project(Project {
                 distinct: false,
@@ -58,6 +66,11 @@ fn from_item(input: &str) -> ParserResult<LogicalOperator> {
             }
         },
     )(input)
+}
+
+/// Parse the where clause of a query.
+fn where_clause(input: &str) -> ParserResult<Expression> {
+    preceded(kw("WHERE"), cut(preceded(ws_0, expression)))(input)
 }
 
 #[cfg(test)]
@@ -146,5 +159,23 @@ mod tests {
         assert_eq!(&select(sql1).unwrap().1, &expected);
 
         assert_eq!(&select(sql2).unwrap().1, &expected);
+    }
+
+    #[test]
+    fn test_where() {
+        assert_eq!(
+            select("SELECT 1 WHERE true").unwrap().1,
+            LogicalOperator::Project(Project {
+                distinct: false,
+                expressions: vec![NamedExpression {
+                    expression: Expression::from(1),
+                    alias: None
+                },],
+                source: Box::from(LogicalOperator::Filter(Filter {
+                    predicate: Expression::from(true),
+                    source: Box::new(LogicalOperator::Single)
+                }))
+            })
+        );
     }
 }

@@ -87,6 +87,23 @@ fn render_plan(
             padding.pop();
             padding.pop();
         }
+        LogicalOperator::Filter(filter) => {
+            if let Some(name) = alias {
+                lines.push((format!("{}FILTER({})", padding, name), None));
+            } else {
+                lines.push((format!("{}FILTER", padding), None));
+            }
+            padding.push(" |");
+            lines.push((
+                format!("{}predicate:", padding),
+                Some(filter.predicate.to_string()),
+            ));
+            lines.push((format!("{}source:", padding), None));
+            padding.push("  ");
+            render_plan(&filter.source, lines, padding, None);
+            padding.pop();
+            padding.pop();
+        }
         LogicalOperator::Values(values) => {
             if let Some(name) = alias {
                 lines.push((format!("{}VALUES({})", padding, name), None));
