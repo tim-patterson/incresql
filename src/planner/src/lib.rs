@@ -28,6 +28,7 @@ pub enum PlannerError {
     FunctionResolutionError(FunctionResolutionError),
     FieldResolutionError(FieldResolutionError),
     PredicateNotBoolean(DataType, Expression),
+    UnionAllMismatch(Vec<DataType>, Vec<DataType>, usize),
 }
 
 impl From<FunctionResolutionError> for PlannerError {
@@ -51,6 +52,28 @@ impl Display for PlannerError {
                 "Predicate returns {} not BOOLEAN - {}",
                 datatype, expr
             )),
+            PlannerError::UnionAllMismatch(first, other, other_idx) => {
+                if first.len() != other.len() {
+                    f.write_fmt(format_args!("Union all mismatch, first sub expression has {} rows while the subexpr {} has {} rows", first.len(), *other_idx + 1, other.len()) )
+                } else {
+                    let first_str = first
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    let other_str = other
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    f.write_fmt(format_args!(
+                        "Union all types mismatch\nfirst datatypes: {}\nsubexpr {} datatypes: {}",
+                        first_str,
+                        other_idx + 1,
+                        other_str
+                    ))
+                }
+            }
         }
     }
 }

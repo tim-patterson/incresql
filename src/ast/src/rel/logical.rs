@@ -12,6 +12,7 @@ pub enum LogicalOperator {
     Filter(Filter),
     Values(Values),
     TableAlias(TableAlias),
+    UnionAll(UnionAll),
 }
 
 impl Default for LogicalOperator {
@@ -48,6 +49,11 @@ pub struct TableAlias {
     pub source: Box<LogicalOperator>,
 }
 
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct UnionAll {
+    pub sources: Vec<LogicalOperator>,
+}
+
 impl LogicalOperator {
     /// Iterates over the named(output) expressions *owned* by this operator.
     /// To iterate over the output fields instead use one of the fields methods in the planner
@@ -57,7 +63,8 @@ impl LogicalOperator {
             LogicalOperator::Single
             | LogicalOperator::Filter(_)
             | LogicalOperator::Values(_)
-            | LogicalOperator::TableAlias(_) => Box::from(empty()),
+            | LogicalOperator::TableAlias(_)
+            | LogicalOperator::UnionAll(_) => Box::from(empty()),
         }
     }
 
@@ -69,7 +76,8 @@ impl LogicalOperator {
             LogicalOperator::Single
             | LogicalOperator::Filter(_)
             | LogicalOperator::Values(_)
-            | LogicalOperator::TableAlias(_) => Box::from(empty()),
+            | LogicalOperator::TableAlias(_)
+            | LogicalOperator::UnionAll(_) => Box::from(empty()),
         }
     }
 
@@ -83,7 +91,9 @@ impl LogicalOperator {
             LogicalOperator::Values(values) => {
                 Box::from(values.data.iter_mut().flat_map(|row| row.iter_mut()))
             }
-            LogicalOperator::Single | LogicalOperator::TableAlias(_) => Box::from(empty()),
+            LogicalOperator::Single
+            | LogicalOperator::TableAlias(_)
+            | LogicalOperator::UnionAll(_) => Box::from(empty()),
         }
     }
 
@@ -95,6 +105,7 @@ impl LogicalOperator {
             LogicalOperator::TableAlias(table_alias) => {
                 Box::from(once(table_alias.source.as_mut()))
             }
+            LogicalOperator::UnionAll(union_all) => Box::from(union_all.sources.iter_mut()),
             LogicalOperator::Single | LogicalOperator::Values(_) => Box::from(empty()),
         }
     }
