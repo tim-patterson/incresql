@@ -12,15 +12,15 @@ fn select_subquery_no_alias() {
     query(
         r#"EXPLAIN SELECT foo FROM (SELECT 1 as foo)"#,
         "
-        |PROJECT||
-        | |exprs:||
-        | |  _col1 <INTEGER>|<OFFSET 0>|
-        | |source:||
-        | |  PROJECT||
-        | |   |exprs:||
-        | |   |  foo <INTEGER>|1|
-        | |   |source:||
-        | |   |  SINGLE||
+        |PROJECT|||
+        | |exprs:|||
+        | |  _col1 <INTEGER>|0|<OFFSET 0>|
+        | |source:|||
+        | |  PROJECT|||
+        | |   |exprs:|||
+        | |   |  foo <INTEGER>|0|1|
+        | |   |source:|||
+        | |   |  SINGLE|||
         ",
     );
 }
@@ -58,15 +58,15 @@ fn select_subquery_with_alias() {
     query(
         r#"EXPLAIN SELECT foo FROM (SELECT 1 as foo) as bar"#,
         "
-        |PROJECT||
-        | |exprs:||
-        | |  _col1 <INTEGER>|<OFFSET 0>|
-        | |source:||
-        | |  PROJECT(bar)||
-        | |   |exprs:||
-        | |   |  foo <INTEGER>|1|
-        | |   |source:||
-        | |   |  SINGLE||
+        |PROJECT|||
+        | |exprs:|||
+        | |  _col1 <INTEGER>|0|<OFFSET 0>|
+        | |source:|||
+        | |  PROJECT(bar)|||
+        | |   |exprs:|||
+        | |   |  foo <INTEGER>|0|1|
+        | |   |source:|||
+        | |   |  SINGLE|||
         ",
     );
 }

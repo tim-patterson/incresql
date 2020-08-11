@@ -12,11 +12,11 @@ fn simple_math() {
     query(
         r#"EXPLAIN SELECT 1 + 2 * 3 - 4"#,
         "
-        |PROJECT||
-        | |exprs:||
-        | |  _col1 <INTEGER>|3|
-        | |source:||
-        | |  SINGLE||
+        |PROJECT|||
+        | |exprs:|||
+        | |  _col1 <INTEGER>|0|3|
+        | |source:|||
+        | |  SINGLE|||
         ",
     );
 }
@@ -33,11 +33,11 @@ fn test_types() {
     query(
         r#"EXPLAIN SELECT 1.0 + 2.0 * 3.0 - 4.0"#,
         "
-        |PROJECT||
-        | |exprs:||
-        | |  _col1 <DECIMAL(6,2)>|3.00|
-        | |source:||
-        | |  SINGLE||
+        |PROJECT|||
+        | |exprs:|||
+        | |  _col1 <DECIMAL(6,2)>|0|3.00|
+        | |source:|||
+        | |  SINGLE|||
         ",
     );
 }
