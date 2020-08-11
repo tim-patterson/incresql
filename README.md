@@ -3,6 +3,31 @@
 
 A database supporting incremental updates of materialized views
 
+### Goals
+The goal of the project is to write a functional db to explore the incremental materialized views space.
+
+Incremental materialized views can be thought of as fulfilling the same use cases as ksqlDB but with more standard sql in
+something that feels more like a standard relational database.
+
+The use case's in mind are BI dashboarding/reporting as well as being able to support serving per-user data to user facing apps/services.
+
+### Project Status
+The initial code is largely based on a hacky POC of Tim's, however this project is still a long way off
+fulfilling its goals.
+
+The project will first attempt to support "point in time"(aka normal) queries before circling back to
+materialized views.
+- [x] Basic SQL parsing
+- [x] Mysql protocol Support
+- [x] Basic "point in time" query support, select/where/limit 
+- [ ] Persistence/Table infra.
+- [ ] Inserts / Deletes for tables.
+- [ ] Basic "point in time" order bys, group bys, joins
+- [ ] Data ingestion
+- [ ] Basic "point in time" window functions
+- [ ] View support
+- [ ] Basic MysqlWorkbench/Tableau/Datagrip support - This will mostly be creating system views.
+
 ### Building/Running from source
 To build and/or run incresql from source you will first need the rust toolchain installed, the install
 instructions can be found at https://rustup.rs/
@@ -50,3 +75,8 @@ And then in another terminal (tab) run(assuming you have the mysql client instal
 
   mysql> select 1+2;
 ```
+
+### Related Work
+Other similar projects are
+* https://github.com/mit-pdos/noria - More academic in nature, focusing more on traditional transactional apps used prepared statements.
+* https://github.com/MaterializeInc/materialize - Similar goals but is an in-memory system so has different tradeoffs and therefore target usecases.
