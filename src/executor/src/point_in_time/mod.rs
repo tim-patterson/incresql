@@ -1,4 +1,5 @@
 use crate::point_in_time::filter::FilterExecutor;
+use crate::point_in_time::limit::LimitExecutor;
 use crate::point_in_time::project::ProjectExecutor;
 use crate::point_in_time::single::SingleExecutor;
 use crate::point_in_time::union_all::UnionAllExecutor;
@@ -9,6 +10,7 @@ use data::{Datum, Session};
 use std::sync::Arc;
 
 mod filter;
+mod limit;
 mod project;
 mod single;
 mod union_all;
@@ -44,6 +46,11 @@ pub fn build_executor(session: &Arc<Session>, plan: &PointInTimeOperator) -> Box
             Arc::clone(session),
             build_executor(session, &filter.source),
             filter.predicate.clone(),
+        )),
+        PointInTimeOperator::Limit(limit) => Box::from(LimitExecutor::new(
+            build_executor(session, &limit.source),
+            limit.offset,
+            limit.limit,
         )),
         PointInTimeOperator::Values(values) => Box::from(ValuesExecutor::new(
             Box::from(values.data.clone().into_iter()),

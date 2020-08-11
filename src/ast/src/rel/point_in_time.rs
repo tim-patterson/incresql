@@ -7,6 +7,7 @@ pub enum PointInTimeOperator {
     Project(Project),
     Values(Values),
     Filter(Filter),
+    Limit(Limit),
     UnionAll(UnionAll),
 }
 
@@ -32,6 +33,13 @@ pub struct Project {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Filter {
     pub predicate: Expression,
+    pub source: Box<PointInTimeOperator>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Limit {
+    pub offset: i64,
+    pub limit: i64,
     pub source: Box<PointInTimeOperator>,
 }
 
