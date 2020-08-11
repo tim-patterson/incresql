@@ -5,6 +5,7 @@ fn show_functions() {
     query(
         r#"SHOW FUNCTIONS"#,
         "
+        |!=|
         |*|
         |+|
         |-|
