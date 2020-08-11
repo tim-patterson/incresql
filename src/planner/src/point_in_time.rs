@@ -1,6 +1,6 @@
 use crate::{Field, Planner, PlannerError};
 use ast::expr::Expression;
-use ast::rel::logical::{Filter, LogicalOperator, Project, UnionAll};
+use ast::rel::logical::{Filter, Limit, LogicalOperator, Project, UnionAll};
 use ast::rel::point_in_time::{self, PointInTimeOperator};
 use data::Session;
 
@@ -44,6 +44,15 @@ fn build_operator(query: LogicalOperator) -> PointInTimeOperator {
                 source: Box::new(build_operator(*source)),
             })
         }
+        LogicalOperator::Limit(Limit {
+            offset,
+            limit,
+            source,
+        }) => PointInTimeOperator::Limit(point_in_time::Limit {
+            offset,
+            limit,
+            source: Box::new(build_operator(*source)),
+        }),
         LogicalOperator::Values(values) => {
             let data = values.data.into_iter().map(|row| {
                 row.into_iter().map(|expr| {

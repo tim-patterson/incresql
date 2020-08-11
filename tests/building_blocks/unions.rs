@@ -36,3 +36,28 @@ fn select_union_subquery() {
         ",
     );
 }
+
+#[test]
+fn select_union_explain() {
+    query(
+        r#"EXPLAIN SELECT c1 FROM (SELECT 1 as c1 UNION ALL SELECT 2)"#,
+        "
+        |PROJECT|||
+        | |exprs:|||
+        | |  _col1 <INTEGER>|0|<OFFSET 0>|
+        | |source:|||
+        | |  UNION_ALL|||
+        | |   |sources:|||
+        | |   |  PROJECT|||
+        | |   |   |exprs:|||
+        | |   |   |  c1 <INTEGER>|0|1|
+        | |   |   |source:|||
+        | |   |   |  SINGLE|||
+        | |   |  PROJECT|||
+        | |   |   |exprs:|||
+        | |   |   |  _col1 <INTEGER>|0|2|
+        | |   |   |source:|||
+        | |   |   |  SINGLE|||
+        ",
+    );
+}

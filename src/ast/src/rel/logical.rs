@@ -10,6 +10,7 @@ pub enum LogicalOperator {
     Single, // No from clause, ie select 1 + 1
     Project(Project),
     Filter(Filter),
+    Limit(Limit),
     Values(Values),
     TableAlias(TableAlias),
     UnionAll(UnionAll),
@@ -31,6 +32,13 @@ pub struct Project {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Filter {
     pub predicate: Expression,
+    pub source: Box<LogicalOperator>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Limit {
+    pub offset: i64,
+    pub limit: i64,
     pub source: Box<LogicalOperator>,
 }
 
@@ -62,6 +70,7 @@ impl LogicalOperator {
             LogicalOperator::Project(project) => Box::from(project.expressions.iter()),
             LogicalOperator::Single
             | LogicalOperator::Filter(_)
+            | LogicalOperator::Limit(_)
             | LogicalOperator::Values(_)
             | LogicalOperator::TableAlias(_)
             | LogicalOperator::UnionAll(_) => Box::from(empty()),
@@ -75,6 +84,7 @@ impl LogicalOperator {
             LogicalOperator::Project(project) => Box::from(project.expressions.iter_mut()),
             LogicalOperator::Single
             | LogicalOperator::Filter(_)
+            | LogicalOperator::Limit(_)
             | LogicalOperator::Values(_)
             | LogicalOperator::TableAlias(_)
             | LogicalOperator::UnionAll(_) => Box::from(empty()),
@@ -92,6 +102,7 @@ impl LogicalOperator {
                 Box::from(values.data.iter_mut().flat_map(|row| row.iter_mut()))
             }
             LogicalOperator::Single
+            | LogicalOperator::Limit(_)
             | LogicalOperator::TableAlias(_)
             | LogicalOperator::UnionAll(_) => Box::from(empty()),
         }
@@ -102,6 +113,7 @@ impl LogicalOperator {
         match self {
             LogicalOperator::Project(project) => Box::from(once(project.source.as_mut())),
             LogicalOperator::Filter(filter) => Box::from(once(filter.source.as_mut())),
+            LogicalOperator::Limit(limit) => Box::from(once(limit.source.as_mut())),
             LogicalOperator::TableAlias(table_alias) => {
                 Box::from(once(table_alias.source.as_mut()))
             }
