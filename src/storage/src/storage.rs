@@ -1,6 +1,7 @@
 use crate::error::StorageError;
 use crate::table::Table;
 use data::encoding::SortableEncoding;
+use data::SortOrder;
 use rocksdb::{BlockBasedOptions, DBCompressionType, MergeOperands, Options, SliceTransform, DB};
 use std::sync::Arc;
 
@@ -124,15 +125,15 @@ fn frequency_merge_impl<'a, I: Iterator<Item = &'a [u8]> + 'a>(
     let mut temp = 0_i64;
 
     if let Some(bytes) = existing_value {
-        count.read_sortable_bytes(bytes);
+        count.read_sortable_bytes(SortOrder::Asc, bytes);
     }
 
     for operand in operand_list {
-        temp.read_sortable_bytes(operand);
+        temp.read_sortable_bytes(SortOrder::Asc, operand);
         count += temp;
     }
     let mut ret = Vec::with_capacity(4);
-    count.write_sortable_bytes(&mut ret);
+    count.write_sortable_bytes(SortOrder::Asc, &mut ret);
 
     Some(ret)
 }
