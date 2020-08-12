@@ -6,4 +6,6 @@ edition = "2018"
 publish = false
 
 [dependencies]
+data = { path = "../data" }
+
 rocksdb = "0.14.0"

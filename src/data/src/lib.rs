@@ -2,6 +2,7 @@
 pub use rust_decimal;
 mod datatype;
 mod datum;
+pub mod encoding;
 mod session;
 pub use datatype::*;
 pub use datum::Datum;
