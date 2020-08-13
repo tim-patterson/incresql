@@ -1,6 +1,6 @@
 use crate::error::StorageError;
 use crate::table::Table;
-use data::encoding::{SortableEncoding, VARINT_SIGNED_ZERO_ENC};
+use data::encoding_core::{SortableEncoding, VARINT_SIGNED_ZERO_ENC};
 use data::SortOrder;
 use rocksdb::compaction_filter::Decision;
 use rocksdb::{BlockBasedOptions, MergeOperands, Options, SliceTransform, DB};
