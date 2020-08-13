@@ -20,7 +20,7 @@ pub struct Storage {
 // space gone).
 // This does mean that all state will be stored in terms of datums but with efficient json formats
 // this shouldn't be too much of an issue, we can always drop down to a bytea datum in the worst
-// case.
+// case(and probably implement a debug function to convert from bytea to json etc)
 //
 // Table Format...
 // A table can be broken down into index and log sections
@@ -50,8 +50,8 @@ pub struct Storage {
 // We expect writes to the log section to be merges due to them being made up of deltas while the writes to
 // the log sections are likely to be puts/deletes due to them being absolute frequencies.
 //
-// Prefixes will be written as little endian, meaning that the byte in the key should signal if
-// we're in the log or indexes sections.
+// Prefixes will be written as little endian, meaning that the first byte in the key should signal
+// if we're in the log or indexes sections.
 
 impl Storage {
     pub fn new_with_path(path: &str) -> Result<Self, StorageError> {
@@ -228,5 +228,19 @@ mod tests {
             &[VARINT_SIGNED_ZERO_ENC + 1, 1, 2, 3]
         )
         .is_keep());
+    }
+
+    #[test]
+    fn test_get_table() -> Result<(), StorageError> {
+        let path = "../../target/unittest_dbs/storage/storage/get_table";
+        std::fs::remove_dir_all(path).ok();
+        {
+            let storage = Storage::new_with_path(path)?;
+            let table = storage.table(1234);
+
+            assert_eq!(table.id(), 1234);
+        }
+        std::fs::remove_dir_all(path).ok();
+        Ok(())
     }
 }

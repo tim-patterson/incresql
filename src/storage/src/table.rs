@@ -11,4 +11,8 @@ impl Table {
     pub(crate) fn new(db: Arc<DB>, id: u32) -> Self {
         Table { db, id }
     }
+
+    pub fn id(&self) -> u32 {
+        self.id
+    }
 }
