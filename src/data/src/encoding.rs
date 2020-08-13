@@ -1,4 +1,5 @@
-use crate::SortOrder;
+use crate::{Datum, SortOrder};
+use rust_decimal::Decimal;
 use std::cmp::min;
 use std::convert::TryInto;
 
@@ -11,6 +12,57 @@ pub trait SortableEncoding {
     /// Deserializes from buffer
     /// returns the "rest" of the buffer that didn't get consumed
     fn read_sortable_bytes<'a>(&mut self, sort_order: SortOrder, buffer: &'a [u8]) -> &'a [u8];
+}
+
+impl SortableEncoding for Datum<'_> {
+    fn write_sortable_bytes(&self, sort_order: SortOrder, buffer: &mut Vec<u8>) {
+        match self {
+            Datum::Null => {
+                if sort_order.is_asc() {
+                    buffer.push(0)
+                } else {
+                    buffer.push(!0)
+                }
+            }
+            Datum::Boolean(false) => {
+                if sort_order.is_asc() {
+                    buffer.push(1)
+                } else {
+                    buffer.push(!1)
+                }
+            }
+            Datum::Boolean(true) => {
+                if sort_order.is_asc() {
+                    buffer.push(2)
+                } else {
+                    buffer.push(!2)
+                }
+            }
+            Datum::Integer(i) => {
+                buffer.push(3);
+                i.write_sortable_bytes(sort_order, buffer);
+            }
+            Datum::BigInt(i) => {
+                buffer.push(4);
+                i.write_sortable_bytes(sort_order, buffer);
+            }
+            Datum::Decimal(_d) => {
+                buffer.push(5);
+                unimplemented!("TODO lol")
+            }
+            Datum::TextOwned(_) | Datum::TextRef(_) | Datum::TextInline(..) => {
+                buffer.push(6);
+                self.as_str()
+                    .unwrap()
+                    .as_bytes()
+                    .write_sortable_bytes(sort_order, buffer)
+            }
+        }
+    }
+
+    fn read_sortable_bytes<'a>(&mut self, _sort_order: SortOrder, _buffer: &'a [u8]) -> &'a [u8] {
+        unimplemented!()
+    }
 }
 
 impl SortableEncoding for u64 {
@@ -33,6 +85,19 @@ impl SortableEncoding for i64 {
     }
 }
 
+impl SortableEncoding for i32 {
+    fn write_sortable_bytes(&self, sort_order: SortOrder, buffer: &mut Vec<u8>) {
+        write_varint_signed(*self as i64, sort_order, buffer);
+    }
+
+    fn read_sortable_bytes<'a>(&mut self, sort_order: SortOrder, buffer: &'a [u8]) -> &'a [u8] {
+        let mut i = 0_i64;
+        let rem = read_varint_signed(&mut i, sort_order, buffer);
+        *self = i as i32;
+        rem
+    }
+}
+
 impl SortableEncoding for Vec<u8> {
     fn write_sortable_bytes(&self, sort_order: SortOrder, buffer: &mut Vec<u8>) {
         write_sortable_bytes(&self, sort_order, buffer);
@@ -50,6 +115,26 @@ impl SortableEncoding for [u8] {
 
     fn read_sortable_bytes<'a>(&mut self, _sort_order: SortOrder, _buffer: &'a [u8]) -> &'a [u8] {
         unimplemented!("Attempted to read var length data into a fixed size slice")
+    }
+}
+
+impl SortableEncoding for Decimal {
+    fn write_sortable_bytes(&self, _sort_order: SortOrder, _buffer: &mut Vec<u8>) {
+        // To get a lexicographic sort for a decimal we'll need to do some weird stuff. Basically...
+        // Given 1.2, 2, 3.01, 10 these are nominally stored as 12 / 10**1,  2 / 10**0, 301 / 10**3, 10 / 10**0.
+        // To do this in the same way that floats handle this the decimals would be represented as
+        // 1.2 = 12000 / 10**4, 2 = 20000 / 10**4, 3.01 = 30100 / 10**4, 10 = 10000 / 10**3
+        // (Using the full 28 digits, not 5)
+        // they can then be sorted by -e,m, This would work but would use the full ~13 bytes.
+        // We could serialise like write_sortable_bytes in up to 3 chunks of 4bytes for the full 12
+        // bytes of the mantissa. This would mean that it could range from 6 bytes for up to
+        // 4 significant digits to 16 bytes if using all 28 digits. 0 could be special cased between
+        // +,e=0 and -,e=0 but that's it without giving up sortability.
+        unimplemented!()
+    }
+
+    fn read_sortable_bytes<'a>(&mut self, _sort_order: SortOrder, _buffer: &'a [u8]) -> &'a [u8] {
+        unimplemented!()
     }
 }
 
