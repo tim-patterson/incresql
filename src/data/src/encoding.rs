@@ -453,6 +453,8 @@ fn read_varint_unsigned<'a>(i: &mut u64, sort_order: SortOrder, buffer: &'a [u8]
     }
 }
 
+/// The byte encoding for 0.
+pub const VARINT_SIGNED_ZERO_ENC: u8 = 103;
 /// Writes a signed int into a buffer with lexicographical sort attempting
 /// to not use too much space
 fn write_varint_signed(mut i: i64, sort_order: SortOrder, buffer: &mut Vec<u8>) {
@@ -803,6 +805,13 @@ mod tests {
             assert_eq!(actual, *expected);
             assert!(rem.is_empty());
         }
+    }
+    #[test]
+    fn test_varint_signed_zero_constant() {
+        let encoded = [VARINT_SIGNED_ZERO_ENC];
+        let mut i = 999_i64;
+        i.read_sortable_bytes(SortOrder::Asc, &encoded);
+        assert_eq!(i, 0)
     }
 
     #[test]

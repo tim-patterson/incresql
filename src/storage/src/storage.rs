@@ -1,7 +1,8 @@
 use crate::error::StorageError;
 use crate::table::Table;
-use data::encoding::SortableEncoding;
+use data::encoding::{SortableEncoding, VARINT_SIGNED_ZERO_ENC};
 use data::SortOrder;
+use rocksdb::compaction_filter::Decision;
 use rocksdb::{BlockBasedOptions, MergeOperands, Options, SliceTransform, DB};
 use std::sync::Arc;
 
@@ -62,7 +63,7 @@ impl Storage {
         ));
         options.create_if_missing(true);
         options.set_merge_operator("frequency_merge", frequency_merge, Some(frequency_merge));
-        //options.set_compaction_filter("compaction_filter", compaction_filter);
+        options.set_compaction_filter("compaction_filter", compaction_filter);
 
         // These options are "tunable"
         block_options.set_bloom_filter(10, false);
@@ -97,7 +98,8 @@ fn frequency_merge_impl<'a, I: Iterator<Item = &'a [u8]> + 'a>(
     existing_value: Option<&[u8]>,
     operand_list: I,
 ) -> Option<Vec<u8>> {
-    if key[0] & 1 == 1 {
+    // first byte is even for index, odd for logs
+    if key[0] & 1 != 1 {
         panic!("Merge called for index section")
     }
 
@@ -118,24 +120,58 @@ fn frequency_merge_impl<'a, I: Iterator<Item = &'a [u8]> + 'a>(
     Some(ret)
 }
 
+/// Used in conjunction with the frequency_merge filter to remove 0'd out freq's from the log
+/// section during a compaction.  We'll also use the filter during reads to prevent reading in these
+/// records then for consistency.
+fn compaction_filter(_level: u32, key: &[u8], value: &[u8]) -> Decision {
+    // first byte is even for index, odd for logs
+    if key[0] & 1 == 1 {
+        // We only need to check the first byte for 0
+        if value[0] == VARINT_SIGNED_ZERO_ENC {
+            return Decision::Remove;
+        }
+    }
+
+    Decision::Keep
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// Decision doesn't impl eq or debug etc, this is just to make the compactionfilter output
+    /// testable
+    trait DecisionExtra {
+        fn is_keep(&self) -> bool;
+    }
+
+    impl DecisionExtra for Decision {
+        fn is_keep(&self) -> bool {
+            if let Decision::Keep = self {
+                true
+            } else {
+                false
+            }
+        }
+    }
+
     #[test]
     fn test_frequency_merge_impl_from_put() {
         // put=2,   1, 5, -4 are our deltas
-        let prefix = [0_u8,2,3,4];
+        let prefix = [9_u8, 2, 3, 4];
 
         let mut put_buf = vec![];
         2_i64.write_sortable_bytes(SortOrder::Asc, &mut put_buf);
 
-        let delta_bufs: Vec<_> = [1_i64, 5, -4].as_ref().iter().map(|i| {
-            let mut buf = vec![];
-            i.write_sortable_bytes(SortOrder::Asc, &mut buf);
-            buf
-        }).collect();
+        let delta_bufs: Vec<_> = [1_i64, 5, -4]
+            .as_ref()
+            .iter()
+            .map(|i| {
+                let mut buf = vec![];
+                i.write_sortable_bytes(SortOrder::Asc, &mut buf);
+                buf
+            })
+            .collect();
         let operands = delta_bufs.iter().map(|buf| buf.as_ref());
 
         let mut expected_buf = vec![];
@@ -150,13 +186,17 @@ mod tests {
     #[test]
     fn test_frequency_merge_impl_just_diffs() {
         // 1, 5, -4 are our deltas
-        let prefix = [0_u8,2,3,4];
+        let prefix = [9_u8, 2, 3, 4];
 
-        let delta_bufs: Vec<_> = [1_i64, 5, -4].as_ref().iter().map(|i| {
-            let mut buf = vec![];
-            i.write_sortable_bytes(SortOrder::Asc, & mut buf);
-            buf
-        }).collect();
+        let delta_bufs: Vec<_> = [1_i64, 5, -4]
+            .as_ref()
+            .iter()
+            .map(|i| {
+                let mut buf = vec![];
+                i.write_sortable_bytes(SortOrder::Asc, &mut buf);
+                buf
+            })
+            .collect();
         let operands = delta_bufs.iter().map(|buf| buf.as_ref());
 
         let mut expected_buf = vec![];
@@ -168,5 +208,25 @@ mod tests {
         );
     }
 
-
+    #[test]
+    fn test_compaction_filter() {
+        // PIT section - keep everything, don't even look!
+        assert!(compaction_filter(0, &[0, 0, 0, 0, 0, 2, 3, 4], &[]).is_keep());
+        assert!(
+            compaction_filter(0, &[0, 0, 0, 0, 0, 2, 3, 4], &[VARINT_SIGNED_ZERO_ENC]).is_keep()
+        );
+        // Log section - drop zeros
+        assert!(!compaction_filter(
+            0,
+            &[9, 0, 0, 0, 1, 2, 3, 4],
+            &[VARINT_SIGNED_ZERO_ENC, 1, 2, 3]
+        )
+        .is_keep());
+        assert!(compaction_filter(
+            0,
+            &[9, 0, 0, 0, 1, 2, 3, 4],
+            &[VARINT_SIGNED_ZERO_ENC + 1, 1, 2, 3]
+        )
+        .is_keep());
+    }
 }
