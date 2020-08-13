@@ -2,7 +2,7 @@ use crate::error::StorageError;
 use crate::table::Table;
 use data::encoding::SortableEncoding;
 use data::SortOrder;
-use rocksdb::{BlockBasedOptions, DBCompressionType, MergeOperands, Options, SliceTransform, DB};
+use rocksdb::{BlockBasedOptions, MergeOperands, Options, SliceTransform, DB};
 use std::sync::Arc;
 
 /// The storage subsystem, used to manage low-level storage of tables and atomicity
@@ -65,30 +65,10 @@ impl Storage {
         //options.set_compaction_filter("compaction_filter", compaction_filter);
 
         // These options are "tunable"
-        block_options.set_lru_cache(2 * 1024 * 1024 * 1024);
-        block_options.set_format_version(3);
         block_options.set_bloom_filter(10, false);
         block_options.set_cache_index_and_filter_blocks(true);
         options.set_block_based_table_factory(&block_options);
-        options.set_keep_log_file_num(3);
-        options.increase_parallelism(8);
-        options.set_min_write_buffer_number(3);
-        options.set_max_write_buffer_number(5);
-        options.set_advise_random_on_open(false);
-        // We want to keep the first layer pretty small it's probably sets an upper limit on our
-        // "delete"(negative merge) tuples from our compaction before they're merged/compacted away
-        options.set_write_buffer_size(64 * 1024 * 1024);
-        options.set_max_bytes_for_level_base(640 * 1024 * 1024);
-        options.set_target_file_size_base(64 * 1024 * 1024);
-        options.set_compression_per_level(&[
-            DBCompressionType::None, // 640mb
-            DBCompressionType::None, // 6.4gb
-            DBCompressionType::Zlib, // 64 gb
-            DBCompressionType::Zlib, // 640gb
-            DBCompressionType::Zlib,
-            DBCompressionType::Zlib,
-            DBCompressionType::Zlib,
-        ]);
+        options.increase_parallelism(4);
 
         let db = Arc::from(DB::open(&options, path)?);
 
@@ -136,4 +116,57 @@ fn frequency_merge_impl<'a, I: Iterator<Item = &'a [u8]> + 'a>(
     count.write_sortable_bytes(SortOrder::Asc, &mut ret);
 
     Some(ret)
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_frequency_merge_impl_from_put() {
+        // put=2,   1, 5, -4 are our deltas
+        let prefix = [0_u8,2,3,4];
+
+        let mut put_buf = vec![];
+        2_i64.write_sortable_bytes(SortOrder::Asc, &mut put_buf);
+
+        let delta_bufs: Vec<_> = [1_i64, 5, -4].as_ref().iter().map(|i| {
+            let mut buf = vec![];
+            i.write_sortable_bytes(SortOrder::Asc, &mut buf);
+            buf
+        }).collect();
+        let operands = delta_bufs.iter().map(|buf| buf.as_ref());
+
+        let mut expected_buf = vec![];
+        4_i64.write_sortable_bytes(SortOrder::Asc, &mut expected_buf);
+
+        assert_eq!(
+            frequency_merge_impl(&prefix, Some(&put_buf), operands),
+            Some(expected_buf)
+        );
+    }
+
+    #[test]
+    fn test_frequency_merge_impl_just_diffs() {
+        // 1, 5, -4 are our deltas
+        let prefix = [0_u8,2,3,4];
+
+        let delta_bufs: Vec<_> = [1_i64, 5, -4].as_ref().iter().map(|i| {
+            let mut buf = vec![];
+            i.write_sortable_bytes(SortOrder::Asc, & mut buf);
+            buf
+        }).collect();
+        let operands = delta_bufs.iter().map(|buf| buf.as_ref());
+
+        let mut expected_buf = vec![];
+        2_i64.write_sortable_bytes(SortOrder::Asc, &mut expected_buf);
+
+        assert_eq!(
+            frequency_merge_impl(&prefix, None, operands),
+            Some(expected_buf)
+        );
+    }
+
+
 }
