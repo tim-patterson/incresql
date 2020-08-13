@@ -1,4 +1,5 @@
 use crate::{Datum, SortOrder};
+use rust_decimal::prelude::Zero;
 use rust_decimal::Decimal;
 use std::cmp::min;
 use std::convert::TryInto;
@@ -118,23 +119,185 @@ impl SortableEncoding for [u8] {
     }
 }
 
+lazy_static! {
+    // 1 Bigger than the largest allowable decimal /10.
+    static ref DECIMAL_THRESHOLD_1: Decimal = Decimal::from_i128_with_scale(1_000_000_000_000_000_000_000_000_000,0);
+    static ref DECIMAL_THRESHOLD_1_MUT: Decimal = Decimal::new(10, 0);
+    // 1000x smaller
+    static ref DECIMAL_THRESHOLD_2: Decimal = Decimal::from_i128_with_scale(1_000_000_000_000_000_000_000_000,0);
+    static ref DECIMAL_THRESHOLD_2_MUT: Decimal = Decimal::new(1000, 0);
+    // 1000000x smaller
+    static ref DECIMAL_THRESHOLD_3: Decimal = Decimal::from_i128_with_scale(1_000_000_000_000_000_000_000,0);
+    static ref DECIMAL_THRESHOLD_3_MUT: Decimal = Decimal::new(1_000_000, 0);
+    // 1000000000000x smaller
+    static ref DECIMAL_THRESHOLD_4: Decimal = Decimal::from_i128_with_scale(1_000_000_000_000_000,0);
+    static ref DECIMAL_THRESHOLD_4_MUT: Decimal = Decimal::new(1_000_000_000_000, 0);
+}
+
 impl SortableEncoding for Decimal {
-    fn write_sortable_bytes(&self, _sort_order: SortOrder, _buffer: &mut Vec<u8>) {
-        // To get a lexicographic sort for a decimal we'll need to do some weird stuff. Basically...
+    fn write_sortable_bytes(&self, sort_order: SortOrder, buffer: &mut Vec<u8>) {
+        // To get a lexicographic sort for a decimal we need to do some weird stuff. Basically...
         // Given 1.2, 2, 3.01, 10 these are nominally stored as 12 / 10**1,  2 / 10**0, 301 / 10**3, 10 / 10**0.
         // To do this in the same way that floats handle this the decimals would be represented as
         // 1.2 = 12000 / 10**4, 2 = 20000 / 10**4, 3.01 = 30100 / 10**4, 10 = 10000 / 10**3
         // (Using the full 28 digits, not 5)
         // they can then be sorted by -e,m, This would work but would use the full ~13 bytes.
-        // We could serialise like write_sortable_bytes in up to 3 chunks of 4bytes for the full 12
-        // bytes of the mantissa. This would mean that it could range from 6 bytes for up to
-        // 4 significant digits to 16 bytes if using all 28 digits. 0 could be special cased between
+        // We'll instead serialise like write_sortable_bytes in up to 3 chunks of 4bytes for the full 12
+        // bytes of the mantissa. This would mean's we'll use anywhere from 6 bytes for up to
+        // 4 significant digits to 15 bytes if using all 28 digits. 0 could be special cased between
         // +,e=0 and -,e=0 but that's it without giving up sortability.
-        unimplemented!()
+
+        // Special case for zero
+        if self.is_zero() {
+            buffer.push(127);
+            return;
+        }
+
+        // Normalize
+        let mut d = self.abs();
+        let mut scale = d.scale() as u8;
+        let is_positive = self.is_sign_positive() ^ sort_order.is_desc();
+        d.set_scale(0).unwrap();
+
+        while d < *DECIMAL_THRESHOLD_4 {
+            d *= *DECIMAL_THRESHOLD_4_MUT;
+            scale += 12;
+        }
+        while d < *DECIMAL_THRESHOLD_3 {
+            d *= *DECIMAL_THRESHOLD_3_MUT;
+            scale += 6;
+        }
+        while d < *DECIMAL_THRESHOLD_2 {
+            d *= *DECIMAL_THRESHOLD_2_MUT;
+            scale += 3;
+        }
+        while d < *DECIMAL_THRESHOLD_1 {
+            d *= *DECIMAL_THRESHOLD_1_MUT;
+            scale += 1;
+        }
+        // Invert the scale so that it sorts correctly.
+        scale = 100 - scale;
+
+        let unpacked = d.unpack();
+        if is_positive {
+            buffer.push(128 + scale);
+            buffer.extend_from_slice(&unpacked.hi.to_be_bytes());
+            if unpacked.mid != 0 || unpacked.lo != 0 {
+                buffer.push(1);
+                buffer.extend_from_slice(&unpacked.mid.to_be_bytes());
+                if unpacked.lo != 0 {
+                    buffer.push(1);
+                    buffer.extend_from_slice(&unpacked.lo.to_be_bytes());
+                } else {
+                    buffer.push(0)
+                }
+            } else {
+                buffer.push(0);
+            }
+        } else {
+            buffer.push(126 - scale);
+            buffer.extend_from_slice(&(!unpacked.hi).to_be_bytes());
+            if unpacked.mid != 0 || unpacked.lo != 0 {
+                buffer.push(!1);
+                buffer.extend_from_slice(&(!unpacked.mid).to_be_bytes());
+                if unpacked.lo != 0 {
+                    buffer.push(!1);
+                    buffer.extend_from_slice(&(!unpacked.lo).to_be_bytes());
+                } else {
+                    buffer.push(!0)
+                }
+            } else {
+                buffer.push(!0);
+            }
+        }
     }
 
-    fn read_sortable_bytes<'a>(&mut self, _sort_order: SortOrder, _buffer: &'a [u8]) -> &'a [u8] {
-        unimplemented!()
+    fn read_sortable_bytes<'a>(&mut self, sort_order: SortOrder, buffer: &'a [u8]) -> &'a [u8] {
+        // While decimal only supports scale up to 28, our normalization above may actually produce
+        // scales up to double that if the numbers are between -1 and 1, so we'll have to pull some
+        // tricks.
+
+        let rem = &buffer[1..];
+        match buffer[0] {
+            127 => {
+                *self = Decimal::zero();
+                rem
+            }
+            128..=254 => {
+                let scale = 100 - (buffer[0] - 128) as u32;
+                let hi = u32::from_be_bytes(rem[..4].as_ref().try_into().unwrap());
+                if rem[4] == 0 {
+                    if scale <= 28 {
+                        *self = Decimal::from_parts(0, 0, hi, sort_order.is_desc(), scale);
+                    } else {
+                        *self = Decimal::from_parts(0, 0, hi, sort_order.is_desc(), 28);
+                        *self = self.normalize();
+                        self.set_scale(scale - 28 + self.scale()).unwrap();
+                    }
+                    &rem[5..]
+                } else {
+                    let mid = u32::from_be_bytes(rem[5..9].as_ref().try_into().unwrap());
+                    if rem[9] == 0 {
+                        if scale <= 28 {
+                            *self = Decimal::from_parts(0, mid, hi, sort_order.is_desc(), scale);
+                        } else {
+                            *self = Decimal::from_parts(0, mid, hi, sort_order.is_desc(), 28);
+                            *self = self.normalize();
+                            self.set_scale(scale - 28 + self.scale()).unwrap();
+                        }
+                        &rem[10..]
+                    } else {
+                        let lo = u32::from_be_bytes(rem[10..14].as_ref().try_into().unwrap());
+                        if scale <= 28 {
+                            *self = Decimal::from_parts(lo, mid, hi, sort_order.is_desc(), scale);
+                        } else {
+                            *self = Decimal::from_parts(lo, mid, hi, sort_order.is_desc(), 28);
+                            *self = self.normalize();
+                            self.set_scale(scale - 28 + self.scale()).unwrap();
+                        }
+                        &rem[14..]
+                    }
+                }
+            }
+            0..=126 => {
+                let scale = 100 - (126 - buffer[0]) as u32;
+                let hi = !u32::from_be_bytes(rem[..4].as_ref().try_into().unwrap());
+                if !rem[4] == 0 {
+                    if scale <= 28 {
+                        *self = Decimal::from_parts(0, 0, hi, sort_order.is_asc(), scale);
+                    } else {
+                        *self = Decimal::from_parts(0, 0, hi, sort_order.is_asc(), 28);
+                        *self = self.normalize();
+                        self.set_scale(scale - 28 + self.scale()).unwrap();
+                    }
+                    &rem[5..]
+                } else {
+                    let mid = !u32::from_be_bytes(rem[5..9].as_ref().try_into().unwrap());
+                    if rem[9] == !0 {
+                        if scale <= 28 {
+                            *self = Decimal::from_parts(0, mid, hi, sort_order.is_asc(), scale);
+                        } else {
+                            *self = Decimal::from_parts(0, mid, hi, sort_order.is_asc(), 28);
+                            *self = self.normalize();
+                            self.set_scale(scale - 28 + self.scale()).unwrap();
+                        }
+                        &rem[10..]
+                    } else {
+                        let lo = !u32::from_be_bytes(rem[10..14].as_ref().try_into().unwrap());
+                        if scale <= 28 {
+                            *self = Decimal::from_parts(lo, mid, hi, sort_order.is_asc(), scale);
+                        } else {
+                            *self = Decimal::from_parts(lo, mid, hi, sort_order.is_asc(), 28);
+                            *self = self.normalize();
+                            self.set_scale(scale - 28 + self.scale()).unwrap();
+                        }
+                        &rem[14..]
+                    }
+                }
+            }
+            // Really just here to keep Intellji happy
+            _ => panic!(),
+        }
     }
 }
 
@@ -557,6 +720,62 @@ mod tests {
             strings.iter().zip(asc_byte_arrays).zip(desc_byte_arrays)
         {
             let mut actual: Vec<u8> = vec![];
+            let rem = actual.read_sortable_bytes(SortOrder::Asc, &asc_buf);
+            assert_eq!(actual, *expected);
+            assert!(rem.is_empty());
+
+            let rem = actual.read_sortable_bytes(SortOrder::Desc, &desc_buf);
+            assert_eq!(actual, *expected);
+            assert!(rem.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_decimals() {
+        let mut numbers = [
+            // Smallest and largest
+            Decimal::from_i128_with_scale(1, 28),
+            Decimal::from_i128_with_scale(9_999_999_999_999_999_999_999_999_999, 0),
+            Decimal::from_i128_with_scale(-1, 28),
+            Decimal::from_i128_with_scale(-9_999_999_999_999_999_999_999_999_999, 0),
+            Decimal::new(-1, 0),
+            Decimal::zero(),
+            Decimal::new(1, 0),
+            // Similar magnitude numbers with fractional lengths
+            Decimal::new(1234, 3),
+            Decimal::new(13, 1),
+            Decimal::new(14567, 4),
+            Decimal::new(-1234, 3),
+            Decimal::new(-13, 1),
+            Decimal::new(-14567, 4),
+        ];
+        let mut asc_byte_arrays = vec![];
+        let mut desc_byte_arrays = vec![];
+
+        // Encode into separate buffers
+        for d in &numbers {
+            let mut buf = vec![];
+            d.write_sortable_bytes(SortOrder::Asc, &mut buf);
+            asc_byte_arrays.push(buf);
+
+            let mut buf = vec![];
+            d.write_sortable_bytes(SortOrder::Desc, &mut buf);
+            desc_byte_arrays.push(buf);
+        }
+
+        // Sort the buffers and the decimals;
+        asc_byte_arrays.sort();
+        desc_byte_arrays.sort();
+        desc_byte_arrays.reverse();
+        numbers.sort();
+
+        assert_eq!(asc_byte_arrays.len(), numbers.len());
+
+        // Decode and make sure we're still in lex order
+        for ((expected, asc_buf), desc_buf) in
+            numbers.iter().zip(asc_byte_arrays).zip(desc_byte_arrays)
+        {
+            let mut actual = Decimal::zero();
             let rem = actual.read_sortable_bytes(SortOrder::Asc, &asc_buf);
             assert_eq!(actual, *expected);
             assert!(rem.is_empty());

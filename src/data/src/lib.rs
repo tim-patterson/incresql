@@ -8,6 +8,9 @@ pub use datatype::*;
 pub use datum::Datum;
 pub use session::Session;
 
+#[macro_use]
+extern crate lazy_static;
+
 /// General sort order enum.
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum SortOrder {

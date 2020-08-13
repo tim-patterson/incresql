@@ -6,4 +6,5 @@ edition = "2018"
 publish = false
 
 [dependencies]
+lazy_static = "1.4.0"
 rust_decimal = "1.7.0"
