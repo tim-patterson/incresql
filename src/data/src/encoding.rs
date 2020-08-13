@@ -1,8 +1,9 @@
 use crate::SortOrder;
+use std::cmp::min;
 use std::convert::TryInto;
 
 /// Serializes Self to bytes while maintaining lexicographical sorting
-pub trait SortableEncoding: Sized {
+pub trait SortableEncoding {
     /// Serializes Self to bytes while maintaining lexicographical sorting
     /// bytes are appended to buffer
     fn write_sortable_bytes(&self, sort_order: SortOrder, buffer: &mut Vec<u8>);
@@ -29,6 +30,26 @@ impl SortableEncoding for i64 {
 
     fn read_sortable_bytes<'a>(&mut self, sort_order: SortOrder, buffer: &'a [u8]) -> &'a [u8] {
         read_varint_signed(self, sort_order, buffer)
+    }
+}
+
+impl SortableEncoding for Vec<u8> {
+    fn write_sortable_bytes(&self, sort_order: SortOrder, buffer: &mut Vec<u8>) {
+        write_sortable_bytes(&self, sort_order, buffer);
+    }
+
+    fn read_sortable_bytes<'a>(&mut self, sort_order: SortOrder, buffer: &'a [u8]) -> &'a [u8] {
+        read_sortable_bytes(self, sort_order, buffer)
+    }
+}
+
+impl SortableEncoding for [u8] {
+    fn write_sortable_bytes(&self, sort_order: SortOrder, buffer: &mut Vec<u8>) {
+        write_sortable_bytes(&self, sort_order, buffer);
+    }
+
+    fn read_sortable_bytes<'a>(&mut self, _sort_order: SortOrder, _buffer: &'a [u8]) -> &'a [u8] {
+        unimplemented!("Attempted to read var length data into a fixed size slice")
     }
 }
 
@@ -227,6 +248,87 @@ fn read_varint_signed<'a>(i: &mut i64, sort_order: SortOrder, buffer: &'a [u8]) 
     rem
 }
 
+/// Writes the slice given in a manner that can be sorted, even across slices of different lengths
+fn write_sortable_bytes(mut bytes: &[u8], sort_order: SortOrder, buffer: &mut Vec<u8>) {
+    // While null terminated strings might work, dealing with embedded nulls etc will be tricky, not
+    // to mention we'd have the reverse issue with 0xFF if sorted desc.
+    // The myrocks solution is to break the bytes into chunks of 8, write out each as a fixed sized
+    // chunk with an addition byte signalling to used size and if there's another packet to follow.
+    // we can sort desc by just flipping all the bits.
+    // we'll use 1->8 as bytes used and 9 as "more data"
+    if sort_order.is_asc() {
+        while bytes.len() > 8 {
+            buffer.extend_from_slice(&bytes[..8]);
+            buffer.push(9);
+            bytes = &bytes[8..];
+        }
+        // Buffer should be 8 or less bytes in length now
+        buffer.extend_from_slice(bytes);
+        for _ in 0..(8 - bytes.len()) {
+            buffer.push(0);
+        }
+        buffer.push(bytes.len() as u8);
+    } else {
+        // Big chunks
+        while bytes.len() > 8 {
+            let inverted = !u64::from_le_bytes(bytes[..8].as_ref().try_into().unwrap());
+            buffer.extend_from_slice(&inverted.to_le_bytes());
+            buffer.push(!9);
+            bytes = &bytes[8..];
+        }
+        // Remaining
+        for b in bytes {
+            buffer.push(!(*b));
+        }
+        // Padding
+        for _ in 0..(8 - bytes.len()) {
+            buffer.push(!0);
+        }
+        // Last size
+        buffer.push(!(bytes.len() as u8));
+    }
+}
+
+/// Reads in bytes written by write_sortable_bytes
+fn read_sortable_bytes<'a>(
+    bytes: &mut Vec<u8>,
+    sort_order: SortOrder,
+    buffer: &'a [u8],
+) -> &'a [u8] {
+    let mut rem = buffer;
+    bytes.clear();
+    if sort_order.is_asc() {
+        loop {
+            let t = rem[8];
+            let chunk_len = min(t, 8);
+            bytes.extend_from_slice(&rem[..(chunk_len as usize)]);
+            rem = &rem[9..];
+            if t != 9 {
+                break;
+            }
+        }
+    } else {
+        loop {
+            let t = !rem[8];
+            let chunk_len = min(t, 8);
+            if chunk_len >= 8 {
+                let double_inverted = !u64::from_le_bytes(rem[..8].as_ref().try_into().unwrap());
+                bytes.extend_from_slice(&double_inverted.to_le_bytes());
+            } else {
+                for b in &rem[..(chunk_len as usize)] {
+                    bytes.push(!(*b));
+                }
+            }
+            rem = &rem[9..];
+            if t != 9 {
+                break;
+            }
+        }
+    }
+
+    rem
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -321,6 +423,55 @@ mod tests {
             numbers.iter().zip(asc_byte_arrays).zip(desc_byte_arrays)
         {
             let mut actual = 0_i64;
+            let rem = actual.read_sortable_bytes(SortOrder::Asc, &asc_buf);
+            assert_eq!(actual, *expected);
+            assert!(rem.is_empty());
+
+            let rem = actual.read_sortable_bytes(SortOrder::Desc, &desc_buf);
+            assert_eq!(actual, *expected);
+            assert!(rem.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_bytes() {
+        let mut strings = [
+            "a".as_bytes(),
+            "z".as_bytes(),
+            "ba".as_bytes(),
+            "yz".as_bytes(),
+            "abcdefgh".as_bytes(),
+            "abcdefgaa".as_bytes(),
+            "aaaaaaaaaaaaaaaaaa".as_bytes(),
+            "aaaaaaaaaaaaaaaaz".as_bytes(),
+        ];
+        let mut asc_byte_arrays = vec![];
+        let mut desc_byte_arrays = vec![];
+
+        // Encode into separate buffers
+        for s in &strings {
+            let mut buf = vec![];
+            s.write_sortable_bytes(SortOrder::Asc, &mut buf);
+            asc_byte_arrays.push(buf);
+
+            let mut buf = vec![];
+            s.write_sortable_bytes(SortOrder::Desc, &mut buf);
+            desc_byte_arrays.push(buf);
+        }
+
+        // Sort the buffers and the strings;
+        asc_byte_arrays.sort();
+        desc_byte_arrays.sort();
+        desc_byte_arrays.reverse();
+        strings.sort();
+
+        assert_eq!(asc_byte_arrays.len(), strings.len());
+
+        // Decode and make sure we're still in lex order
+        for ((expected, asc_buf), desc_buf) in
+            strings.iter().zip(asc_byte_arrays).zip(desc_byte_arrays)
+        {
+            let mut actual: Vec<u8> = vec![];
             let rem = actual.read_sortable_bytes(SortOrder::Asc, &asc_buf);
             assert_eq!(actual, *expected);
             assert!(rem.is_empty());
