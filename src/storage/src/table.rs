@@ -187,15 +187,27 @@ impl Writer {
         }
     }
 
-    /// Writes the tuple into the table
-    pub fn write_tuple(
+    /// Writes the tuple into the table without any real mvcc or logging semantics.
+    /// This should really only be used as an optimisation mechanism for the storing
+    /// state for streaming etc, it shouldn't be used on user facing tables.
+    /// Will overwrite the latest version of a tuple for the same primary key
+    pub fn system_write_tuple (
         &mut self,
         table: &Table,
         tuple: &[Datum],
-        timestamp: LogicalTimestamp,
         freq: i64,
     ) {
-        self.write_index_header(table, tuple, timestamp, freq);
+        self.write_index_header(table, tuple, LogicalTimestamp::default(), freq);
+    }
+
+    /// Deletes tuples but should only be used for tuples written with system_write_tuple.
+    pub fn system_delete_tuple (
+        &mut self,
+        table: &Table,
+        tuple: &[Datum],
+    ) {
+        self.populate_index_header_key(table, tuple);
+        self.write_batch.delete(&self.key_buf);
     }
 
     fn write_index_header(
@@ -205,26 +217,12 @@ impl Writer {
         timestamp: LogicalTimestamp,
         freq: i64,
     ) {
-        // Index header value:
-        // key = <prefix as u32 be>:<tuple-pk as sorted>:<ff(timestamp)>
+        self.populate_index_header_key(table, tuple);
+
+        // Index header:
         // value = <timestamp as u64 le><tuple-rest as sorted><freq as i64 varint>
-        let key_buf = &mut self.key_buf;
         let value_buf = &mut self.value_buf;
-
-        key_buf.clear();
         value_buf.clear();
-        ////////// KEY
-        // Prefix
-        key_buf.extend_from_slice(&table.id.to_be_bytes());
-
-        // Tuple-PK
-        (table.pk.len() as u64).write_sortable_bytes(SortOrder::Asc, key_buf);
-        for (sort_order, datum) in table.pk.iter().zip(tuple) {
-            datum.as_sortable_bytes(*sort_order, key_buf);
-        }
-
-        // 0 Timestamp
-        key_buf.push(0xFF);
 
         ////////// VALUE
         // Actual Timestamp
@@ -240,7 +238,24 @@ impl Writer {
         // Freq
         freq.write_sortable_bytes(SortOrder::Asc, value_buf);
 
-        self.write_batch.put(key_buf, value_buf);
+        self.write_batch.put(&self.key_buf, value_buf);
+    }
+
+    fn populate_index_header_key(&mut self, table: &Table, tuple: &[Datum] ) {
+        // Index header:
+        // key = <prefix as u32 be>:<tuple-pk as sorted>:<ff(timestamp)>
+        let key_buf = &mut self.key_buf;
+        key_buf.clear();
+        // Prefix
+        key_buf.extend_from_slice(&table.id.to_be_bytes());
+
+        // Tuple-PK
+        (table.pk.len() as u64).write_sortable_bytes(SortOrder::Asc, key_buf);
+        for (sort_order, datum) in table.pk.iter().zip(tuple) {
+            datum.as_sortable_bytes(*sort_order, key_buf);
+        }
+        // 0 Timestamp
+        key_buf.push(0xFF);
     }
 }
 
@@ -269,8 +284,8 @@ mod tests {
     }
 
     #[test]
-    fn test_read_write_tuple() -> Result<(), StorageError> {
-        let path = "../../target/unittest_dbs/storage/table/write_tuple";
+    fn test_system_write_tuple() -> Result<(), StorageError> {
+        let path = "../../target/unittest_dbs/storage/table/system_write_tuple";
         std::fs::remove_dir_all(path).ok();
         {
             let storage = Storage::new_with_path(path)?;
@@ -285,29 +300,31 @@ mod tests {
                 Datum::Null,
                 Datum::from("efg".to_string()),
             ];
-            let timestamp = LogicalTimestamp::new(1000000);
             let freq: i64 = 3;
 
             table.atomic_write(|writer| {
-                writer.write_tuple(&table, &tuple1, timestamp, freq);
-                writer.write_tuple(&table, &tuple2, timestamp, freq);
+                writer.system_write_tuple(&table, &tuple1, freq);
+                writer.system_write_tuple(&table, &tuple2, freq);
 
                 Ok(())
             })?;
 
-            // Iter with smaller timestamp
-            let mut iter = table.full_scan(LogicalTimestamp::new(999999));
-            assert_eq!(iter.next()?, None);
-
-            // Iter with same timestamp
-            let mut iter = table.full_scan(LogicalTimestamp::new(1000000));
-            assert_eq!(iter.next()?, None);
-
-            // Iter with larger timestamp
-            let mut iter = table.full_scan(LogicalTimestamp::new(1000001));
+            // Iter with whatever timestamp
+            let mut iter = table.full_scan(LogicalTimestamp::new(1));
             assert_eq!(iter.next()?, Some((tuple1.as_ref(), 3)));
             assert_eq!(iter.next()?, Some((tuple2.as_ref(), 3)));
             assert_eq!(iter.next()?, None);
+
+            // Delete a tuple and see if it takes
+            table.atomic_write(|writer| {
+                writer.system_delete_tuple(&table, &tuple1);
+                Ok(())
+            })?;
+
+            let mut iter = table.full_scan(LogicalTimestamp::new(1));
+            assert_eq!(iter.next()?, Some((tuple2.as_ref(), 3)));
+            assert_eq!(iter.next()?, None);
+
         }
         std::fs::remove_dir_all(path).ok();
         Ok(())

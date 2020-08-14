@@ -1,4 +1,2 @@
 [build]
-# rustflags = ["-C", "target-feature=+sse4.1", "-C", "target-feature=+sse4.2", "-C", "target-feature=+avx2"]
-# rustflags = ["-C", "target-cpu=native"]
 rustflags = ["-C", "target-cpu=haswell"]
