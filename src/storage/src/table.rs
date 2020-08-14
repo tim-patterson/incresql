@@ -56,6 +56,36 @@ impl Table {
         Ok(())
     }
 
+    /// Looks up the current value for pk without any MVCC semantics, useful for system
+    /// tables and streaming state tables and as it doesn't iter under the covers it can
+    /// make use of the bloom filters for way better perf.
+    /// Requires a buffer to be passed in, populates rest tuple with the rest of the
+    /// tuple
+    pub fn system_point_lookup<'a>(
+        &'a self,
+        pk: &[Datum<'a>],
+        key_buf: &mut Vec<u8>,
+        rest_tuple: &mut Vec<Datum<'a>>,
+    ) -> Result<Option<()>, StorageError> {
+        write_index_header_key(self, pk, key_buf);
+
+        if let Some(value_slice) = self.db.get_pinned(key_buf)? {
+            rest_tuple.clear();
+
+            let mut tuple_rest_len = 0_u64;
+            // We skip 8 bytes over the timestamp..
+            let mut value_buf =
+                tuple_rest_len.read_sortable_bytes(SortOrder::Asc, &value_slice[8..]);
+            rest_tuple.extend((0..tuple_rest_len).map(|_| Datum::default()));
+            for datum in rest_tuple {
+                value_buf = datum.from_sortable_bytes(value_buf);
+            }
+            Ok(Some(()))
+        } else {
+            Ok(None)
+        }
+    }
+
     /// Full scan of the table, all returned record timestamps are guaranteed to be *less*
     /// than the passed in timestamp
     pub fn full_scan(&self, timestamp: LogicalTimestamp) -> impl TupleIter<StorageError> + '_ {
@@ -191,22 +221,15 @@ impl Writer {
     /// This should really only be used as an optimisation mechanism for the storing
     /// state for streaming etc, it shouldn't be used on user facing tables.
     /// Will overwrite the latest version of a tuple for the same primary key
-    pub fn system_write_tuple (
-        &mut self,
-        table: &Table,
-        tuple: &[Datum],
-        freq: i64,
-    ) {
+    pub fn system_write_tuple(&mut self, table: &Table, tuple: &[Datum], freq: i64) {
         self.write_index_header(table, tuple, LogicalTimestamp::default(), freq);
     }
 
     /// Deletes tuples but should only be used for tuples written with system_write_tuple.
-    pub fn system_delete_tuple (
-        &mut self,
-        table: &Table,
-        tuple: &[Datum],
-    ) {
-        self.populate_index_header_key(table, tuple);
+    /// Only the pk parts of the tuple are needed but passing in more wont hurt but will delete
+    /// according to that pk...
+    pub fn system_delete_tuple(&mut self, table: &Table, pk: &[Datum]) {
+        write_index_header_key(table, pk, &mut self.key_buf);
         self.write_batch.delete(&self.key_buf);
     }
 
@@ -217,7 +240,7 @@ impl Writer {
         timestamp: LogicalTimestamp,
         freq: i64,
     ) {
-        self.populate_index_header_key(table, tuple);
+        write_index_header_key(table, tuple, &mut self.key_buf);
 
         // Index header:
         // value = <timestamp as u64 le><tuple-rest as sorted><freq as i64 varint>
@@ -240,23 +263,22 @@ impl Writer {
 
         self.write_batch.put(&self.key_buf, value_buf);
     }
+}
 
-    fn populate_index_header_key(&mut self, table: &Table, tuple: &[Datum] ) {
-        // Index header:
-        // key = <prefix as u32 be>:<tuple-pk as sorted>:<ff(timestamp)>
-        let key_buf = &mut self.key_buf;
-        key_buf.clear();
-        // Prefix
-        key_buf.extend_from_slice(&table.id.to_be_bytes());
+fn write_index_header_key(table: &Table, tuple: &[Datum], key_buf: &mut Vec<u8>) {
+    // Index header:
+    // key = <prefix as u32 be>:<tuple-pk as sorted>:<ff(timestamp)>
+    key_buf.clear();
+    // Prefix
+    key_buf.extend_from_slice(&table.id.to_be_bytes());
 
-        // Tuple-PK
-        (table.pk.len() as u64).write_sortable_bytes(SortOrder::Asc, key_buf);
-        for (sort_order, datum) in table.pk.iter().zip(tuple) {
-            datum.as_sortable_bytes(*sort_order, key_buf);
-        }
-        // 0 Timestamp
-        key_buf.push(0xFF);
+    // Tuple-PK
+    (table.pk.len() as u64).write_sortable_bytes(SortOrder::Asc, key_buf);
+    for (sort_order, datum) in table.pk.iter().zip(tuple) {
+        datum.as_sortable_bytes(*sort_order, key_buf);
     }
+    // 0 Timestamp
+    key_buf.push(0xFF);
 }
 
 fn right_size_new_to<T: Default>(size: usize) -> Vec<T> {
@@ -317,7 +339,7 @@ mod tests {
 
             // Delete a tuple and see if it takes
             table.atomic_write(|writer| {
-                writer.system_delete_tuple(&table, &tuple1);
+                writer.system_delete_tuple(&table, &[Datum::from(123)]);
                 Ok(())
             })?;
 
@@ -325,6 +347,16 @@ mod tests {
             assert_eq!(iter.next()?, Some((tuple2.as_ref(), 3)));
             assert_eq!(iter.next()?, None);
 
+            // Try a point lookup
+            let mut buf = vec![];
+            let mut target_buf = vec![];
+            let res = table.system_point_lookup(&[Datum::from(456)], &mut buf, &mut target_buf)?;
+
+            assert_eq!(res, Some(()));
+            assert_eq!(
+                target_buf,
+                vec![Datum::Null, Datum::from("efg".to_string())]
+            );
         }
         std::fs::remove_dir_all(path).ok();
         Ok(())
