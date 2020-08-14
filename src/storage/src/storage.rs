@@ -50,10 +50,11 @@ pub struct Storage {
 // We expect writes to the log section to be merges due to them being made up of deltas while the writes to
 // the log sections are likely to be puts/deletes due to them being absolute frequencies.
 //
-// Prefixes will be written as little endian, meaning that the first byte in the key should signal
+// Prefixes will be written as big endian, meaning that the fourth byte in the key should signal
 // if we're in the log or indexes sections.
 
 impl Storage {
+    /// Crates a new storage engine(rocks db) with data stored in the given path
     pub fn new_with_path(path: &str) -> Result<Self, StorageError> {
         let mut options = Options::default();
         let mut block_options = BlockBasedOptions::default();
@@ -76,10 +77,10 @@ impl Storage {
         Ok(Storage { db })
     }
 
-    /// Returns the table for the given id.
-    pub fn table(&self, id: u32) -> Table {
+    /// Returns the table for the given id and primary key info.
+    pub fn table(&self, id: u32, pk: Vec<SortOrder>, column_count: usize) -> Table {
         assert_eq!(id & 1, 0, "Not a valid table id");
-        Table::new(Arc::clone(&self.db), id)
+        Table::new(Arc::clone(&self.db), id, pk, column_count)
     }
 }
 
@@ -98,8 +99,8 @@ fn frequency_merge_impl<'a, I: Iterator<Item = &'a [u8]> + 'a>(
     existing_value: Option<&[u8]>,
     operand_list: I,
 ) -> Option<Vec<u8>> {
-    // first byte is even for index, odd for logs
-    if key[0] & 1 != 1 {
+    // fourth byte is even for index, odd for logs
+    if key[3] & 1 != 1 {
         panic!("Merge called for index section")
     }
 
@@ -124,8 +125,8 @@ fn frequency_merge_impl<'a, I: Iterator<Item = &'a [u8]> + 'a>(
 /// section during a compaction.  We'll also use the filter during reads to prevent reading in these
 /// records then for consistency.
 fn compaction_filter(_level: u32, key: &[u8], value: &[u8]) -> Decision {
-    // first byte is even for index, odd for logs
-    if key[0] & 1 == 1 {
+    // fourth byte is even for index, odd for logs
+    if key[3] & 1 == 1 {
         // We only need to check the first byte for 0
         if value[0] == VARINT_SIGNED_ZERO_ENC {
             return Decision::Remove;
@@ -158,7 +159,7 @@ mod tests {
     #[test]
     fn test_frequency_merge_impl_from_put() {
         // put=2,   1, 5, -4 are our deltas
-        let prefix = [9_u8, 2, 3, 4];
+        let prefix = [0_u8, 2, 3, 9];
 
         let mut put_buf = vec![];
         2_i64.write_sortable_bytes(SortOrder::Asc, &mut put_buf);
@@ -186,7 +187,7 @@ mod tests {
     #[test]
     fn test_frequency_merge_impl_just_diffs() {
         // 1, 5, -4 are our deltas
-        let prefix = [9_u8, 2, 3, 4];
+        let prefix = [0_u8, 2, 3, 9];
 
         let delta_bufs: Vec<_> = [1_i64, 5, -4]
             .as_ref()
@@ -218,13 +219,13 @@ mod tests {
         // Log section - drop zeros
         assert!(!compaction_filter(
             0,
-            &[9, 0, 0, 0, 1, 2, 3, 4],
+            &[0, 0, 0, 1, 1, 2, 3, 4],
             &[VARINT_SIGNED_ZERO_ENC, 1, 2, 3]
         )
         .is_keep());
         assert!(compaction_filter(
             0,
-            &[9, 0, 0, 0, 1, 2, 3, 4],
+            &[0, 0, 0, 1, 1, 2, 3, 4],
             &[VARINT_SIGNED_ZERO_ENC + 1, 1, 2, 3]
         )
         .is_keep());
@@ -232,11 +233,12 @@ mod tests {
 
     #[test]
     fn test_get_table() -> Result<(), StorageError> {
+        // TODO on the next rocksdb rust release we should be getting create_mem_env support
         let path = "../../target/unittest_dbs/storage/storage/get_table";
         std::fs::remove_dir_all(path).ok();
         {
             let storage = Storage::new_with_path(path)?;
-            let table = storage.table(1234);
+            let table = storage.table(1234, vec![], 0);
 
             assert_eq!(table.id(), 1234);
         }

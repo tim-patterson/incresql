@@ -1,18 +1,18 @@
 use crate::expression::EvalScalar;
-use crate::point_in_time::Executor;
+use crate::point_in_time::BoxedExecutor;
 use crate::ExecutionError;
 use ast::expr::Expression;
-use data::{Datum, Session};
+use data::{Datum, Session, TupleIter};
 use std::sync::Arc;
 
 pub struct FilterExecutor {
-    source: Box<dyn Executor>,
+    source: BoxedExecutor,
     session: Arc<Session>,
     predicate: Expression,
 }
 
 impl FilterExecutor {
-    pub fn new(session: Arc<Session>, source: Box<dyn Executor>, predicate: Expression) -> Self {
+    pub fn new(session: Arc<Session>, source: BoxedExecutor, predicate: Expression) -> Self {
         FilterExecutor {
             source,
             session,
@@ -21,7 +21,7 @@ impl FilterExecutor {
     }
 }
 
-impl Executor for FilterExecutor {
+impl TupleIter<ExecutionError> for FilterExecutor {
     fn advance(&mut self) -> Result<(), ExecutionError> {
         while let Some((tuple, _freq)) = self.source.next()? {
             if self.predicate.eval_scalar(&self.session, tuple) == Datum::from(true) {
@@ -31,7 +31,7 @@ impl Executor for FilterExecutor {
         Ok(())
     }
 
-    fn get(&self) -> Option<(&[Datum], i32)> {
+    fn get(&self) -> Option<(&[Datum], i64)> {
         self.source.get()
     }
 

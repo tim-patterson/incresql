@@ -3,7 +3,7 @@ use ast::expr::Expression;
 use ast::rel::logical::{LogicalOperator, Values};
 use ast::rel::statement::Statement;
 use data::{DataType, Session};
-use executor::point_in_time::{build_executor, Executor};
+use executor::point_in_time::{build_executor, BoxedExecutor};
 use parser::parse;
 use planner::Field;
 use std::sync::Arc;
@@ -27,7 +27,7 @@ impl Connection<'_> {
     pub fn execute_statement(
         &self,
         query: &str,
-    ) -> Result<(Vec<Field>, Box<dyn Executor>), QueryError> {
+    ) -> Result<(Vec<Field>, BoxedExecutor), QueryError> {
         let parse_tree = parse(query)?;
 
         // For almost everything we'll rewrite into some kinda logical operator

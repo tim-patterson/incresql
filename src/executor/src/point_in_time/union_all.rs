@@ -1,15 +1,15 @@
-use crate::point_in_time::Executor;
+use crate::point_in_time::BoxedExecutor;
 use crate::ExecutionError;
-use data::Datum;
+use data::{Datum, TupleIter};
 use std::vec::IntoIter;
 
 pub struct UnionAllExecutor {
-    sources: IntoIter<Box<dyn Executor>>,
-    curr_source: Box<dyn Executor>,
+    sources: IntoIter<BoxedExecutor>,
+    curr_source: BoxedExecutor,
 }
 
 impl UnionAllExecutor {
-    pub fn new(sources: Vec<Box<dyn Executor>>) -> Self {
+    pub fn new(sources: Vec<BoxedExecutor>) -> Self {
         let mut sources_iter = sources.into_iter();
         let first = sources_iter
             .next()
@@ -21,7 +21,7 @@ impl UnionAllExecutor {
     }
 }
 
-impl Executor for UnionAllExecutor {
+impl TupleIter<ExecutionError> for UnionAllExecutor {
     fn advance(&mut self) -> Result<(), ExecutionError> {
         // Basically a union all is just a flatmap
         loop {
@@ -38,7 +38,7 @@ impl Executor for UnionAllExecutor {
         Ok(())
     }
 
-    fn get(&self) -> Option<(&[Datum], i32)> {
+    fn get(&self) -> Option<(&[Datum], i64)> {
         self.curr_source.get()
     }
 
@@ -59,9 +59,9 @@ mod tests {
     #[test]
     fn test_union_all_executor() -> Result<(), ExecutionError> {
         let session = Arc::from(Session::new(1));
-        let sources: Vec<Box<dyn Executor>> = (0..3)
+        let sources: Vec<BoxedExecutor> = (0..3)
             .map(|idx| {
-                let source: Box<dyn Executor> = Box::from(ProjectExecutor::new(
+                let source: BoxedExecutor = Box::from(ProjectExecutor::new(
                     session.clone(),
                     Box::from(SingleExecutor::new()),
                     vec![Expression::from(idx)],

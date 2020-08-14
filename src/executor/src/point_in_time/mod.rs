@@ -6,7 +6,7 @@ use crate::point_in_time::union_all::UnionAllExecutor;
 use crate::point_in_time::values::ValuesExecutor;
 use crate::ExecutionError;
 use ast::rel::point_in_time::PointInTimeOperator;
-use data::{Datum, Session};
+use data::{Session, TupleIter};
 use std::sync::Arc;
 
 mod filter;
@@ -16,25 +16,12 @@ mod single;
 mod union_all;
 mod values;
 
-/// Point in time executor, essentially a streaming iterator
-pub trait Executor {
-    /// Advance the iterator to the next position, should be called before get for a new iter
-    fn advance(&mut self) -> Result<(), ExecutionError>;
+pub type BoxedExecutor = Box<dyn TupleIter<ExecutionError>>;
 
-    /// Get the data at the current position of the iterator, the i32 is a frequency/
-    fn get(&self) -> Option<(&[Datum], i32)>;
-
-    /// Short cut function that calls advance followed by get.
-    fn next(&mut self) -> Result<Option<(&[Datum], i32)>, ExecutionError> {
-        self.advance()?;
-        Ok(self.get())
-    }
-
-    /// Returns the count of columns from this operator. Used to help size buffers etc
-    fn column_count(&self) -> usize;
-}
-
-pub fn build_executor(session: &Arc<Session>, plan: &PointInTimeOperator) -> Box<dyn Executor> {
+pub fn build_executor(
+    session: &Arc<Session>,
+    plan: &PointInTimeOperator,
+) -> Box<dyn TupleIter<ExecutionError>> {
     match plan {
         PointInTimeOperator::Single => Box::from(SingleExecutor::new()),
         PointInTimeOperator::Project(project) => Box::from(ProjectExecutor::new(
@@ -71,6 +58,7 @@ mod tests {
     use super::*;
     use ast::expr::Expression;
     use ast::rel::point_in_time;
+    use data::Datum;
 
     #[test]
     fn test_build_executor() -> Result<(), ExecutionError> {
