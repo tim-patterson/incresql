@@ -1,7 +1,8 @@
 use crate::StorageError;
 use data::encoding_core::SortableEncoding;
-use data::{Datum, LogicalTimestamp, SortOrder};
-use rocksdb::{ReadOptions, WriteBatch, DB};
+use data::{Datum, LogicalTimestamp, SortOrder, TupleIter};
+use rocksdb::{DBRawIterator, ReadOptions, WriteBatch, DB};
+use std::convert::TryInto;
 use std::sync::Arc;
 
 /// A Table is at this level is a collection of rows, identified by an id.
@@ -55,16 +56,117 @@ impl Table {
         Ok(())
     }
 
-    /// Full scan of the table
-    pub fn full_scan(&self, _timestamp: LogicalTimestamp) {
-        // TODO snapshot
+    /// Full scan of the table, all returned record timestamps are guaranteed to be *less*
+    /// than the passed in timestamp
+    pub fn full_scan(&self, timestamp: LogicalTimestamp) -> impl TupleIter<StorageError> + '_ {
         let mut iter_options = ReadOptions::default();
         iter_options.set_prefix_same_as_start(true);
         iter_options.set_iterate_upper_bound((self.id + 1).to_be_bytes());
         let mut iter = self.db.raw_iterator_opt(iter_options);
         // Seek to start.
         iter.seek(&self.id.to_be_bytes());
-        unimplemented!()
+
+        IndexIter::new(iter, timestamp, self.column_count)
+    }
+}
+
+/// TupleIter implementation for iterating over the index section of tables
+struct IndexIter<'a> {
+    iter: DBRawIterator<'a>,
+    timestamp: LogicalTimestamp,
+    /// Rocks db iters start already positioned on the first item
+    /// so we want the first call to advance to not advance the underlying
+    /// rocksdb iter
+    first: bool,
+    tuple_buffer: Vec<Datum<'static>>,
+    freq: Option<i64>,
+}
+
+impl<'a> IndexIter<'a> {
+    fn new(iter: DBRawIterator<'a>, timestamp: LogicalTimestamp, column_count: usize) -> Self {
+        let tuple_buffer = right_size_new_to(column_count);
+        IndexIter {
+            iter,
+            timestamp,
+            first: true,
+            tuple_buffer,
+            freq: None,
+        }
+    }
+}
+
+impl TupleIter<StorageError> for IndexIter<'_> {
+    fn advance(&mut self) -> Result<(), StorageError> {
+        loop {
+            if self.first {
+                self.first = false;
+            } else {
+                self.iter.next();
+            }
+
+            if self.iter.valid() {
+                // key = <prefix as u32 be>:<tuple-pk as sorted>:<ff>
+                // value = <tuple-rest as sorted><timestamp as u64 le><freq as i64 varint>
+
+                // Chop prefix
+                let mut key_buf = &self.iter.key().unwrap()[4..];
+                let mut value_buf = self.iter.value().unwrap();
+                // Tuple Pk
+                let mut tuple_pk_len = 0_u64;
+                key_buf = tuple_pk_len.read_sortable_bytes(SortOrder::Asc, &key_buf);
+                for idx in 0..tuple_pk_len {
+                    key_buf = self.tuple_buffer[idx as usize].from_sortable_bytes(key_buf);
+                }
+
+                // Timestamp
+                let mut tuple_timestamp = LogicalTimestamp::default();
+                if key_buf[0] == 0xff {
+                    // "Header" record
+                    tuple_timestamp.ms =
+                        u64::from_le_bytes(value_buf[..8].as_ref().try_into().unwrap());
+                    value_buf = &value_buf[8..];
+                } else {
+                    tuple_timestamp.ms =
+                        u64::from_le_bytes(key_buf[..8].as_ref().try_into().unwrap());
+                };
+
+                // Check to make sure the tuple isn't in the future, if so loop to the next record
+                if tuple_timestamp >= self.timestamp {
+                    continue;
+                }
+
+                // Populate the non-pk part of the tuple
+                let mut datum_count = 0_u64;
+                value_buf = datum_count.read_sortable_bytes(SortOrder::Asc, value_buf);
+                for idx in 0..datum_count {
+                    value_buf = self.tuple_buffer[(tuple_pk_len + idx) as usize]
+                        .from_sortable_bytes(value_buf);
+                }
+                // And freq
+                let mut freq = 0_i64;
+                freq.read_sortable_bytes(SortOrder::Asc, value_buf);
+                self.freq = Some(freq);
+
+                break;
+            } else {
+                self.freq = None;
+                self.iter.status()?;
+                break;
+            }
+        }
+        Ok(())
+    }
+
+    fn get(&self) -> Option<(&[Datum<'_>], i64)> {
+        if let Some(freq) = self.freq {
+            Some((&self.tuple_buffer, freq))
+        } else {
+            None
+        }
+    }
+
+    fn column_count(&self) -> usize {
+        self.tuple_buffer.len()
     }
 }
 
@@ -104,8 +206,8 @@ impl Writer {
         freq: i64,
     ) {
         // Index header value:
-        // key = <prefix as u32 be>:<tuple-pk as sorted>:<0 as u64 be desc>
-        // value = <tuple-rest as sorted><timestamp as u64 le><freq as i64 varint>
+        // key = <prefix as u32 be>:<tuple-pk as sorted>:<ff(timestamp)>
+        // value = <timestamp as u64 le><tuple-rest as sorted><freq as i64 varint>
         let key_buf = &mut self.key_buf;
         let value_buf = &mut self.value_buf;
 
@@ -122,18 +224,19 @@ impl Writer {
         }
 
         // 0 Timestamp
-        key_buf.extend_from_slice(&u64::MAX.to_be_bytes());
+        key_buf.push(0xFF);
 
         ////////// VALUE
+        // Actual Timestamp
+        value_buf.extend_from_slice(&timestamp.ms.to_le_bytes());
+
         // Tuple-rest
         let rest = &tuple[(table.pk.len())..];
         (rest.len() as u64).write_sortable_bytes(SortOrder::Asc, value_buf);
         for datum in rest {
-            datum.as_sortable_bytes(SortOrder::Asc, key_buf);
+            datum.as_sortable_bytes(SortOrder::Asc, value_buf);
         }
 
-        // Actual Timestamp
-        value_buf.extend_from_slice(&timestamp.ms().to_le_bytes());
         // Freq
         freq.write_sortable_bytes(SortOrder::Asc, value_buf);
 
@@ -141,8 +244,13 @@ impl Writer {
     }
 }
 
+fn right_size_new_to<T: Default>(size: usize) -> Vec<T> {
+    (0..size).map(|_| T::default()).collect()
+}
+
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::{Storage, StorageError};
     use data::{Datum, LogicalTimestamp, SortOrder};
 
@@ -161,24 +269,54 @@ mod tests {
     }
 
     #[test]
-    /// TODO just a smoke test until we get a read path working!
-    fn test_write_tuple() -> Result<(), StorageError> {
+    fn test_read_write_tuple() -> Result<(), StorageError> {
         let path = "../../target/unittest_dbs/storage/table/write_tuple";
         std::fs::remove_dir_all(path).ok();
         {
             let storage = Storage::new_with_path(path)?;
             let table = storage.table(1234, vec![SortOrder::Asc], 3);
-            let tuple = vec![Datum::from(123), Datum::Null, Datum::from("abc")];
-            let timestamp = LogicalTimestamp::new(89732893);
-            let freq = 1;
+            let tuple1 = vec![
+                Datum::from(123),
+                Datum::Null,
+                Datum::from("abc".to_string()),
+            ];
+            let tuple2 = vec![
+                Datum::from(456),
+                Datum::Null,
+                Datum::from("efg".to_string()),
+            ];
+            let timestamp = LogicalTimestamp::new(1000000);
+            let freq: i64 = 3;
 
             table.atomic_write(|writer| {
-                writer.write_tuple(&table, &tuple, timestamp, freq);
+                writer.write_tuple(&table, &tuple1, timestamp, freq);
+                writer.write_tuple(&table, &tuple2, timestamp, freq);
 
                 Ok(())
             })?;
+
+            // Iter with smaller timestamp
+            let mut iter = table.full_scan(LogicalTimestamp::new(999999));
+            assert_eq!(iter.next()?, None);
+
+            // Iter with same timestamp
+            let mut iter = table.full_scan(LogicalTimestamp::new(1000000));
+            assert_eq!(iter.next()?, None);
+
+            // Iter with larger timestamp
+            let mut iter = table.full_scan(LogicalTimestamp::new(1000001));
+            assert_eq!(iter.next()?, Some((tuple1.as_ref(), 3)));
+            assert_eq!(iter.next()?, Some((tuple2.as_ref(), 3)));
+            assert_eq!(iter.next()?, None);
         }
         std::fs::remove_dir_all(path).ok();
         Ok(())
+    }
+
+    #[test]
+    fn test_right_size_new_to() {
+        let to: Vec<bool> = right_size_new_to(5);
+
+        assert_eq!(to, vec![false, false, false, false, false])
     }
 }

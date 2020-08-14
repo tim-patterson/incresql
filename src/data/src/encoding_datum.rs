@@ -118,7 +118,7 @@ impl Datum<'_> {
                 *self = Datum::TextOwned(str_buffer.into_boxed_str());
                 rem
             }
-            _ => panic!(),
+            _ => panic!("Got unexpected datum encoding {}", buffer[0]),
         }
     }
 }

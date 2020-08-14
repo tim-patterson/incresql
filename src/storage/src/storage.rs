@@ -34,7 +34,7 @@ pub struct Storage {
 //   Here timestamps are stored in reverse order, this allows efficiently finding the correct rows
 //   during forward iteration. We do however have a special case, the most recent record for each
 //   tuple-pk is stored as:
-// key = <prefix>:<tuple-pk>:<0>, value = <tuple-rest><timestamp><freq>
+// key = <prefix>:<tuple-pk>:<FF>, value = <timestamp><tuple-rest><freq>
 //   This allows any point reads of the latest values(as used by state lookups for incremental
 //   operators) be able to be done using rocksdb point lookups(and be able to make use of rocks
 //   bloom filters).  As inserts also require reading the previous values this helps out here too,
