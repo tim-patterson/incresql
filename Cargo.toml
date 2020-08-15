@@ -8,6 +8,7 @@ publish = false
 [workspace]
 members = [
     "src/ast",
+    "src/catalog",
     "src/data",
     "src/executor",
     "src/functions",
