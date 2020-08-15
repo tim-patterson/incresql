@@ -3,7 +3,7 @@ use crate::table::Table;
 use data::encoding_core::{SortableEncoding, VARINT_SIGNED_ZERO_ENC};
 use data::SortOrder;
 use rocksdb::compaction_filter::Decision;
-use rocksdb::{BlockBasedOptions, MergeOperands, Options, SliceTransform, DB};
+use rocksdb::{BlockBasedOptions, Env, MergeOperands, Options, SliceTransform, DB, DBCompressionType};
 use std::sync::Arc;
 
 /// The storage subsystem, used to manage low-level storage of tables and atomicity
@@ -12,6 +12,10 @@ use std::sync::Arc;
 /// no name, its just referenced via a u32
 pub struct Storage {
     db: Arc<DB>,
+    // Just here to keep the env alive when using custom env's as the rust-rockdb doesn't
+    // manage the lifetimes properly here
+    #[allow(dead_code)]
+    env: Option<Env>,
 }
 
 // STORAGE IMPLEMENTATION DETAILS
@@ -56,6 +60,29 @@ pub struct Storage {
 impl Storage {
     /// Crates a new storage engine(rocks db) with data stored in the given path
     pub fn new_with_path(path: &str) -> Result<Self, StorageError> {
+        let options = Storage::options();
+        let db = Arc::from(DB::open(&options, path)?);
+
+        Ok(Storage { db, env: None })
+    }
+
+    /// Creates a new storage based on the passed in db env.
+    pub fn new_in_mem() -> Result<Self, StorageError> {
+        let mut options = Storage::options();
+        let env = Env::mem_env()?;
+        options.set_env(&env);
+        let db = Arc::from(DB::open(&options, "")?);
+        Ok(Storage { db, env: Some(env) })
+    }
+
+    /// Returns the table for the given id and primary key info.
+    pub fn table(&self, id: u32, pk: Vec<SortOrder>, column_count: usize) -> Table {
+        assert_eq!(id & 1, 0, "Not a valid table id");
+        Table::new(Arc::clone(&self.db), id, pk, column_count)
+    }
+
+    /// Return the our default rocks db options
+    fn options() -> Options {
         let mut options = Options::default();
         let mut block_options = BlockBasedOptions::default();
         // These options are non-negotiable
@@ -71,16 +98,8 @@ impl Storage {
         block_options.set_cache_index_and_filter_blocks(true);
         options.set_block_based_table_factory(&block_options);
         options.increase_parallelism(4);
-
-        let db = Arc::from(DB::open(&options, path)?);
-
-        Ok(Storage { db })
-    }
-
-    /// Returns the table for the given id and primary key info.
-    pub fn table(&self, id: u32, pk: Vec<SortOrder>, column_count: usize) -> Table {
-        assert_eq!(id & 1, 0, "Not a valid table id");
-        Table::new(Arc::clone(&self.db), id, pk, column_count)
+        options.set_compression_type(DBCompressionType::Lz4);
+        options
     }
 }
 
@@ -233,16 +252,10 @@ mod tests {
 
     #[test]
     fn test_get_table() -> Result<(), StorageError> {
-        // TODO on the next rocksdb rust release we should be getting create_mem_env support
-        let path = "../../target/unittest_dbs/storage/storage/get_table";
-        std::fs::remove_dir_all(path).ok();
-        {
-            let storage = Storage::new_with_path(path)?;
-            let table = storage.table(1234, vec![], 0);
+        let storage = Storage::new_in_mem()?;
+        let table = storage.table(1234, vec![], 0);
 
-            assert_eq!(table.id(), 1234);
-        }
-        std::fs::remove_dir_all(path).ok();
+        assert_eq!(table.id(), 1234);
         Ok(())
     }
 }

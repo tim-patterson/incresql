@@ -8,4 +8,8 @@ publish = false
 [dependencies]
 data = { path = "../data" }
 
-rocksdb = "0.14.0"
+[dependencies.rocksdb]
+git = "https://github.com/incresql/rust-rocksdb"
+branch = "feature/writebatchindex"
+default-features = false
+features = ["lz4"]

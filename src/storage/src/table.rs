@@ -1,7 +1,8 @@
 use crate::StorageError;
 use data::encoding_core::SortableEncoding;
 use data::{Datum, LogicalTimestamp, SortOrder, TupleIter};
-use rocksdb::{DBRawIterator, ReadOptions, WriteBatch, DB};
+use rocksdb::prelude::*;
+use rocksdb::{DBRawIterator, WriteBatchWithIndex};
 use std::convert::TryInto;
 use std::sync::Arc;
 
@@ -203,7 +204,7 @@ impl TupleIter<StorageError> for IndexIter<'_> {
 /// Abstraction through which all writes happens, allows some degree of
 /// read after write functionality which is not offered by rocksdb.
 pub struct Writer {
-    write_batch: WriteBatch,
+    write_batch: WriteBatchWithIndex,
     key_buf: Vec<u8>,
     value_buf: Vec<u8>,
 }
@@ -211,7 +212,7 @@ pub struct Writer {
 impl Writer {
     fn new() -> Self {
         Writer {
-            write_batch: WriteBatch::default(),
+            write_batch: WriteBatchWithIndex::default(),
             key_buf: Vec::with_capacity(64),
             value_buf: Vec::with_capacity(64),
         }
@@ -294,71 +295,61 @@ mod tests {
     /// Hard to functionally test this, so this is more just a smoke test that anything else!
     #[test]
     fn test_force_rocks_compaction() -> Result<(), StorageError> {
-        let path = "../../target/unittest_dbs/storage/table/force_rocks_compaction";
-        std::fs::remove_dir_all(path).ok();
-        {
-            let storage = Storage::new_with_path(path)?;
-            let table = storage.table(1234, vec![SortOrder::Asc], 1);
-            table.force_rocks_compaction();
-        }
-        std::fs::remove_dir_all(path).ok();
+        let storage = Storage::new_in_mem()?;
+        let table = storage.table(1234, vec![SortOrder::Asc], 1);
+        table.force_rocks_compaction();
         Ok(())
     }
 
     #[test]
     fn test_system_write_tuple() -> Result<(), StorageError> {
-        let path = "../../target/unittest_dbs/storage/table/system_write_tuple";
-        std::fs::remove_dir_all(path).ok();
-        {
-            let storage = Storage::new_with_path(path)?;
-            let table = storage.table(1234, vec![SortOrder::Asc], 3);
-            let tuple1 = vec![
-                Datum::from(123),
-                Datum::Null,
-                Datum::from("abc".to_string()),
-            ];
-            let tuple2 = vec![
-                Datum::from(456),
-                Datum::Null,
-                Datum::from("efg".to_string()),
-            ];
-            let freq: i64 = 3;
+        let storage = Storage::new_in_mem()?;
+        let table = storage.table(1234, vec![SortOrder::Asc], 3);
+        let tuple1 = vec![
+            Datum::from(123),
+            Datum::Null,
+            Datum::from("abc".to_string()),
+        ];
+        let tuple2 = vec![
+            Datum::from(456),
+            Datum::Null,
+            Datum::from("efg".to_string()),
+        ];
+        let freq: i64 = 3;
 
-            table.atomic_write(|writer| {
-                writer.system_write_tuple(&table, &tuple1, freq);
-                writer.system_write_tuple(&table, &tuple2, freq);
+        table.atomic_write(|writer| {
+            writer.system_write_tuple(&table, &tuple1, freq);
+            writer.system_write_tuple(&table, &tuple2, freq);
 
-                Ok(())
-            })?;
+            Ok(())
+        })?;
 
-            // Iter with whatever timestamp
-            let mut iter = table.full_scan(LogicalTimestamp::new(1));
-            assert_eq!(iter.next()?, Some((tuple1.as_ref(), 3)));
-            assert_eq!(iter.next()?, Some((tuple2.as_ref(), 3)));
-            assert_eq!(iter.next()?, None);
+        // Iter with whatever timestamp
+        let mut iter = table.full_scan(LogicalTimestamp::new(1));
+        assert_eq!(iter.next()?, Some((tuple1.as_ref(), 3)));
+        assert_eq!(iter.next()?, Some((tuple2.as_ref(), 3)));
+        assert_eq!(iter.next()?, None);
 
-            // Delete a tuple and see if it takes
-            table.atomic_write(|writer| {
-                writer.system_delete_tuple(&table, &[Datum::from(123)]);
-                Ok(())
-            })?;
+        // Delete a tuple and see if it takes
+        table.atomic_write(|writer| {
+            writer.system_delete_tuple(&table, &[Datum::from(123)]);
+            Ok(())
+        })?;
 
-            let mut iter = table.full_scan(LogicalTimestamp::new(1));
-            assert_eq!(iter.next()?, Some((tuple2.as_ref(), 3)));
-            assert_eq!(iter.next()?, None);
+        let mut iter = table.full_scan(LogicalTimestamp::new(1));
+        assert_eq!(iter.next()?, Some((tuple2.as_ref(), 3)));
+        assert_eq!(iter.next()?, None);
 
-            // Try a point lookup
-            let mut buf = vec![];
-            let mut target_buf = vec![];
-            let res = table.system_point_lookup(&[Datum::from(456)], &mut buf, &mut target_buf)?;
+        // Try a point lookup
+        let mut buf = vec![];
+        let mut target_buf = vec![];
+        let res = table.system_point_lookup(&[Datum::from(456)], &mut buf, &mut target_buf)?;
 
-            assert_eq!(res, Some(()));
-            assert_eq!(
-                target_buf,
-                vec![Datum::Null, Datum::from("efg".to_string())]
-            );
-        }
-        std::fs::remove_dir_all(path).ok();
+        assert_eq!(res, Some(()));
+        assert_eq!(
+            target_buf,
+            vec![Datum::Null, Datum::from("efg".to_string())]
+        );
         Ok(())
     }
 
