@@ -81,7 +81,7 @@ impl Function for ToBigIntFromText {
         _signature: &FunctionSignature,
         args: &'a [Datum<'a>],
     ) -> Datum<'a> {
-        if let Some(a) = args[0].as_str() {
+        if let Some(a) = args[0].as_text() {
             a.parse::<i64>()
                 .ok()
                 .map(Datum::from)

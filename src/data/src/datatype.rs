@@ -10,6 +10,8 @@ pub enum DataType {
     // Precision and scale
     Decimal(u8, u8),
     Text,
+    ByteA,
+    Json,
 }
 
 pub const DECIMAL_MAX_PRECISION: u8 = 28;
@@ -24,6 +26,8 @@ impl Display for DataType {
             DataType::BigInt => f.write_str("BIGINT"),
             DataType::Decimal(p, s) => f.write_fmt(format_args!("DECIMAL({},{})", p, s)),
             DataType::Text => f.write_str("TEXT"),
+            DataType::ByteA => f.write_str("BYTEA"),
+            DataType::Json => f.write_str("JSON"),
         }
     }
 }

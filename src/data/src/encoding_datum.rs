@@ -54,15 +54,14 @@ impl Datum<'_> {
                 }
                 d.write_sortable_bytes(sort_order, buffer);
             }
-            Datum::TextOwned(_) | Datum::TextRef(_) | Datum::TextInline(..) => {
+            Datum::ByteAOwned(_) | Datum::ByteARef(_) | Datum::ByteAInline(..) => {
                 if sort_order.is_asc() {
                     buffer.push(6)
                 } else {
                     buffer.push(!6)
                 }
-                self.as_str()
+                self.as_bytea()
                     .unwrap()
-                    .as_bytes()
                     .write_sortable_bytes(sort_order, buffer)
             }
         }
@@ -113,9 +112,9 @@ impl Datum<'_> {
                 // we can pass in a single buffer that can be used for all strings/bytea's.
                 // However that wont quite work due to the backing array being deallocated on a
                 // resize. A "pool" of strings  or vectors might be better instead.
-                let mut str_buffer = String::new();
-                let rem = unsafe { str_buffer.as_mut_vec() }.read_sortable_bytes(sort_order, rem);
-                *self = Datum::TextOwned(str_buffer.into_boxed_str());
+                let mut str_buffer = Vec::new();
+                let rem = str_buffer.read_sortable_bytes(sort_order, rem);
+                *self = Datum::ByteAOwned(Box::from(str_buffer));
                 rem
             }
             _ => panic!("Got unexpected datum encoding {}", buffer[0]),

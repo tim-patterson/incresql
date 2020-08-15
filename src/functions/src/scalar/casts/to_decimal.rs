@@ -99,7 +99,7 @@ impl Function for ToDecimalFromText {
         signature: &FunctionSignature,
         args: &'a [Datum<'a>],
     ) -> Datum<'a> {
-        if let Some(a) = args[0].as_str() {
+        if let Some(a) = args[0].as_text() {
             if let (Ok(mut d), DataType::Decimal(_p, s)) = (Decimal::from_str(a), signature.ret) {
                 // We'll rescale to match the cast, (down scaling only, no point upscaling as it just potentially loses
                 // data
