@@ -253,7 +253,7 @@ dependencies = [
 [[package]]
 name = "librocksdb-sys"
 version = "6.11.4"
-source = "git+https://github.com/incresql/rust-rocksdb?branch=feature/writebatchindex#b595062a19c76bf9981cd11e10e26e1f2f9cf2fe"
+source = "git+https://github.com/incresql/rust-rocksdb?branch=feature/writebatchindex#30907c245c3cd600072135f86dea0255573875fa"
 dependencies = [
  "bindgen 0.54.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "cc 1.0.58 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -355,7 +355,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "rocksdb"
 version = "0.14.0"
-source = "git+https://github.com/incresql/rust-rocksdb?branch=feature/writebatchindex#b595062a19c76bf9981cd11e10e26e1f2f9cf2fe"
+source = "git+https://github.com/incresql/rust-rocksdb?branch=feature/writebatchindex#30907c245c3cd600072135f86dea0255573875fa"
 dependencies = [
  "ambassador 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "delegate 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",

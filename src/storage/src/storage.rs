@@ -3,7 +3,9 @@ use crate::table::Table;
 use data::encoding_core::{SortableEncoding, VARINT_SIGNED_ZERO_ENC};
 use data::SortOrder;
 use rocksdb::compaction_filter::Decision;
-use rocksdb::{BlockBasedOptions, Env, MergeOperands, Options, SliceTransform, DB, DBCompressionType};
+use rocksdb::{
+    BlockBasedOptions, DBCompressionType, Env, MergeOperands, Options, SliceTransform, DB,
+};
 use std::sync::Arc;
 
 /// The storage subsystem, used to manage low-level storage of tables and atomicity
@@ -34,11 +36,11 @@ pub struct Storage {
 // incremental operators to keep track of where they're up to.
 // On disk these are stored as..
 // Index section
-// key = <prefix>:<tuple-pk>:<-timestamp>, value = <tuple-rest><freq>
+// key = <prefix>:<tuple-pk>:<-timestamp>, value = <freq><tuple-rest>
 //   Here timestamps are stored in reverse order, this allows efficiently finding the correct rows
 //   during forward iteration. We do however have a special case, the most recent record for each
 //   tuple-pk is stored as:
-// key = <prefix>:<tuple-pk>:<FF>, value = <timestamp><tuple-rest><freq>
+// key = <prefix>:<tuple-pk>:<0>, value = <timestamp><freq><tuple-rest>
 //   This allows any point reads of the latest values(as used by state lookups for incremental
 //   operators) be able to be done using rocksdb point lookups(and be able to make use of rocks
 //   bloom filters).  As inserts also require reading the previous values this helps out here too,

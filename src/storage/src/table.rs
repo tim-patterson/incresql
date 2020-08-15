@@ -10,7 +10,12 @@ use std::sync::Arc;
 /// We'll expose all of these tables by id in some special schema but in general not all of these
 /// are "tables" from the users perspective, some may be indexes.
 /// There's no "real" typing or naming of columns at this level either but we do need to know the
-/// column count and sort orders for the primary key columns(which must come first in the tuples)
+/// column count and sort orders for the primary key columns(which must come first in the tuples).
+/// The primary key isn't exactly a primary key as freq doesn't always = 1. It's more to give KV
+/// semantics(and the performance that comes with it) for system/streaming state tables.
+/// It's not really defined what it means for a user table as of yet, At least for a start we'll
+/// consider all columns of a user table to be primary, if we wanted to expose it at the user level
+/// then we'd have to detect when the tuple-rest didn't match and throw an error.
 pub struct Table {
     db: Arc<DB>,
     id: u32,
@@ -67,21 +72,23 @@ impl Table {
         pk: &[Datum<'a>],
         key_buf: &mut Vec<u8>,
         rest_tuple: &mut Vec<Datum<'a>>,
-    ) -> Result<Option<()>, StorageError> {
+    ) -> Result<Option<i64>, StorageError> {
         write_index_header_key(self, pk, key_buf);
 
         if let Some(value_slice) = self.db.get_pinned(key_buf)? {
             rest_tuple.clear();
 
             let mut tuple_rest_len = 0_u64;
-            // We skip 8 bytes over the timestamp..
-            let mut value_buf =
-                tuple_rest_len.read_sortable_bytes(SortOrder::Asc, &value_slice[8..]);
+            // We skip 8 bytes over the timestamp, then read in the freq
+            let mut freq = 0_i64;
+            let mut value_buf = freq.read_sortable_bytes(SortOrder::Asc, &value_slice[8..]);
+            // Not the tuple
+            value_buf = tuple_rest_len.read_sortable_bytes(SortOrder::Asc, value_buf);
             rest_tuple.extend((0..tuple_rest_len).map(|_| Datum::default()));
             for datum in rest_tuple {
                 value_buf = datum.from_sortable_bytes(value_buf);
             }
-            Ok(Some(()))
+            Ok(Some(freq))
         } else {
             Ok(None)
         }
@@ -128,6 +135,10 @@ impl<'a> IndexIter<'a> {
 
 impl TupleIter<StorageError> for IndexIter<'_> {
     fn advance(&mut self) -> Result<(), StorageError> {
+        // Once we emit a record we need to skip to the header of the next.
+        // When true this seeks to the next header record
+        let mut seek_next_header = true;
+
         loop {
             if self.first {
                 self.first = false;
@@ -136,8 +147,8 @@ impl TupleIter<StorageError> for IndexIter<'_> {
             }
 
             if self.iter.valid() {
-                // key = <prefix as u32 be>:<tuple-pk as sorted>:<ff>
-                // value = <tuple-rest as sorted><timestamp as u64 le><freq as i64 varint>
+                // key = <prefix as u32 be>:<tuple-pk as sorted>:<0>
+                // value = <timestamp as u64 le><freq as i64 varint><tuple-rest as sorted>
 
                 // Chop prefix
                 let mut key_buf = &self.iter.key().unwrap()[4..];
@@ -151,14 +162,17 @@ impl TupleIter<StorageError> for IndexIter<'_> {
 
                 // Timestamp
                 let mut tuple_timestamp = LogicalTimestamp::default();
-                if key_buf[0] == 0xff {
+                if key_buf[0] == 0 {
                     // "Header" record
                     tuple_timestamp.ms =
                         u64::from_le_bytes(value_buf[..8].as_ref().try_into().unwrap());
                     value_buf = &value_buf[8..];
+                    seek_next_header = false;
+                } else if seek_next_header {
+                    continue;
                 } else {
                     tuple_timestamp.ms =
-                        u64::from_le_bytes(key_buf[..8].as_ref().try_into().unwrap());
+                        u64::MAX - u64::from_be_bytes(key_buf[..8].as_ref().try_into().unwrap());
                 };
 
                 // Check to make sure the tuple isn't in the future, if so loop to the next record
@@ -166,18 +180,18 @@ impl TupleIter<StorageError> for IndexIter<'_> {
                     continue;
                 }
 
-                // Populate the non-pk part of the tuple
+                // freq
+                let mut freq = 0_i64;
+                value_buf = freq.read_sortable_bytes(SortOrder::Asc, value_buf);
+                self.freq = Some(freq);
+
+                // non-pk part of the tuple
                 let mut datum_count = 0_u64;
                 value_buf = datum_count.read_sortable_bytes(SortOrder::Asc, value_buf);
                 for idx in 0..datum_count {
                     value_buf = self.tuple_buffer[(tuple_pk_len + idx) as usize]
                         .from_sortable_bytes(value_buf);
                 }
-                // And freq
-                let mut freq = 0_i64;
-                freq.read_sortable_bytes(SortOrder::Asc, value_buf);
-                self.freq = Some(freq);
-
                 break;
             } else {
                 self.freq = None;
@@ -218,6 +232,47 @@ impl Writer {
         }
     }
 
+    /// Writes the tuple into the table
+    pub fn write_tuple(
+        &mut self,
+        table: &Table,
+        tuple: &[Datum],
+        timestamp: LogicalTimestamp,
+        mut freq: i64,
+    ) -> Result<(), StorageError> {
+        // create rocksdb key
+        write_index_header_key(table, tuple, &mut self.key_buf);
+
+        // TODO investigate holding onto slice as rocksdb may reuse it if we pass it back in.
+        if let Some(value_bytes) = self.write_batch.get(&table.db, &self.key_buf)? {
+            // There's an existing record..
+            // We need to bump it down from the header.
+            let last_timestamp = u64::from_le_bytes(value_bytes.as_ref()[..8].try_into().unwrap());
+            // We need to update the freqs here.
+            let mut last_freq = 0_i64;
+            last_freq.read_sortable_bytes(SortOrder::Asc, &value_bytes.as_ref()[8..]);
+            freq += last_freq;
+
+            if last_timestamp != timestamp.ms {
+                self.key_buf.pop();
+                self.key_buf
+                    .extend_from_slice(&(u64::MAX - last_timestamp).to_be_bytes());
+
+                self.write_batch
+                    .put(&self.key_buf, &value_bytes.as_ref()[8..]);
+
+                // Restore the key
+                self.key_buf.truncate(self.key_buf.len() - 8);
+                self.key_buf.push(0);
+            }
+        }
+
+        write_index_header_value(table, tuple, timestamp, freq, &mut self.value_buf);
+
+        self.write_batch.put(&self.key_buf, &self.value_buf);
+        Ok(())
+    }
+
     /// Writes the tuple into the table without any real mvcc or logging semantics.
     /// This should really only be used as an optimisation mechanism for the storing
     /// state for streaming etc, it shouldn't be used on user facing tables.
@@ -242,33 +297,15 @@ impl Writer {
         freq: i64,
     ) {
         write_index_header_key(table, tuple, &mut self.key_buf);
+        write_index_header_value(table, tuple, timestamp, freq, &mut self.value_buf);
 
-        // Index header:
-        // value = <timestamp as u64 le><tuple-rest as sorted><freq as i64 varint>
-        let value_buf = &mut self.value_buf;
-        value_buf.clear();
-
-        ////////// VALUE
-        // Actual Timestamp
-        value_buf.extend_from_slice(&timestamp.ms.to_le_bytes());
-
-        // Tuple-rest
-        let rest = &tuple[(table.pk.len())..];
-        (rest.len() as u64).write_sortable_bytes(SortOrder::Asc, value_buf);
-        for datum in rest {
-            datum.as_sortable_bytes(SortOrder::Asc, value_buf);
-        }
-
-        // Freq
-        freq.write_sortable_bytes(SortOrder::Asc, value_buf);
-
-        self.write_batch.put(&self.key_buf, value_buf);
+        self.write_batch.put(&self.key_buf, &self.value_buf);
     }
 }
 
 fn write_index_header_key(table: &Table, tuple: &[Datum], key_buf: &mut Vec<u8>) {
     // Index header:
-    // key = <prefix as u32 be>:<tuple-pk as sorted>:<ff(timestamp)>
+    // key = <prefix as u32 be>:<tuple-pk as sorted>:<0(timestamp)>
     key_buf.clear();
     // Prefix
     key_buf.extend_from_slice(&table.id.to_be_bytes());
@@ -279,7 +316,33 @@ fn write_index_header_key(table: &Table, tuple: &[Datum], key_buf: &mut Vec<u8>)
         datum.as_sortable_bytes(*sort_order, key_buf);
     }
     // 0 Timestamp
-    key_buf.push(0xFF);
+    key_buf.push(0);
+}
+
+fn write_index_header_value(
+    table: &Table,
+    tuple: &[Datum],
+    timestamp: LogicalTimestamp,
+    freq: i64,
+    value_buf: &mut Vec<u8>,
+) {
+    // Index header:
+    // value = <timestamp as u64 le><freq as i64 varint><tuple-rest as sorted>
+    value_buf.clear();
+
+    ////////// VALUE
+    // Actual Timestamp
+    value_buf.extend_from_slice(&timestamp.ms.to_le_bytes());
+
+    // Freq
+    freq.write_sortable_bytes(SortOrder::Asc, value_buf);
+
+    // Tuple-rest
+    let rest = &tuple[(table.pk.len())..];
+    (rest.len() as u64).write_sortable_bytes(SortOrder::Asc, value_buf);
+    for datum in rest {
+        datum.as_sortable_bytes(SortOrder::Asc, value_buf);
+    }
 }
 
 fn right_size_new_to<T: Default>(size: usize) -> Vec<T> {
@@ -343,13 +406,46 @@ mod tests {
         // Try a point lookup
         let mut buf = vec![];
         let mut target_buf = vec![];
-        let res = table.system_point_lookup(&[Datum::from(456)], &mut buf, &mut target_buf)?;
+        let freq = table.system_point_lookup(&[Datum::from(456)], &mut buf, &mut target_buf)?;
 
-        assert_eq!(res, Some(()));
+        assert_eq!(freq, Some(3));
         assert_eq!(
             target_buf,
             vec![Datum::Null, Datum::from("efg".to_string())]
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_write_tuple() -> Result<(), StorageError> {
+        let storage = Storage::new_in_mem()?;
+        let table = storage.table(1234, vec![SortOrder::Asc], 2);
+        let tuple = vec![Datum::from(123), Datum::from("abc".to_string())];
+
+        table.atomic_write(|writer| {
+            writer.write_tuple(&table, &tuple, LogicalTimestamp::new(10), 1)?;
+            writer.write_tuple(&table, &tuple, LogicalTimestamp::new(20), 1)?;
+            writer.write_tuple(&table, &tuple, LogicalTimestamp::new(20), 1)?;
+            writer.write_tuple(&table, &tuple, LogicalTimestamp::new(30), 1)?;
+            Ok(())
+        })?;
+
+        // Iter at different times
+        let mut iter = table.full_scan(LogicalTimestamp::new(5));
+        assert_eq!(iter.next()?, None);
+
+        let mut iter = table.full_scan(LogicalTimestamp::new(15));
+        assert_eq!(iter.next()?, Some((tuple.as_ref(), 1)));
+        assert_eq!(iter.next()?, None);
+
+        let mut iter = table.full_scan(LogicalTimestamp::new(25));
+        assert_eq!(iter.next()?, Some((tuple.as_ref(), 3)));
+        assert_eq!(iter.next()?, None);
+
+        let mut iter = table.full_scan(LogicalTimestamp::new(35));
+        assert_eq!(iter.next()?, Some((tuple.as_ref(), 4)));
+        assert_eq!(iter.next()?, None);
+
         Ok(())
     }
 
