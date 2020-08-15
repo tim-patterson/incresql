@@ -1,13 +1,13 @@
 use crate::expression::EvalScalarRow;
-use crate::point_in_time::Executor;
+use crate::point_in_time::BoxedExecutor;
 use crate::utils::*;
 use crate::ExecutionError;
 use ast::expr::Expression;
-use data::{Datum, Session};
+use data::{Datum, Session, TupleIter};
 use std::sync::Arc;
 
 pub struct ProjectExecutor {
-    source: Box<dyn Executor>,
+    source: BoxedExecutor,
     session: Arc<Session>,
     expressions: Vec<Expression>,
 
@@ -15,11 +15,7 @@ pub struct ProjectExecutor {
 }
 
 impl ProjectExecutor {
-    pub fn new(
-        session: Arc<Session>,
-        source: Box<dyn Executor>,
-        expressions: Vec<Expression>,
-    ) -> Self {
+    pub fn new(session: Arc<Session>, source: BoxedExecutor, expressions: Vec<Expression>) -> Self {
         let tuple_buffer = right_size_new(&expressions);
         ProjectExecutor {
             source,
@@ -30,7 +26,7 @@ impl ProjectExecutor {
     }
 }
 
-impl Executor for ProjectExecutor {
+impl TupleIter<ExecutionError> for ProjectExecutor {
     // When we get a tuple from the next/get method, the values are only valid until the next call.
     // The project builds a new tuple from the source tuple, those values may have references back
     // to some byte buffer etc in the source.  Its all safe as to call advance our consumer has to
@@ -49,7 +45,7 @@ impl Executor for ProjectExecutor {
         Ok(())
     }
 
-    fn get(&self) -> Option<(&[Datum], i32)> {
+    fn get(&self) -> Option<(&[Datum], i64)> {
         self.source
             .get()
             .map(|(_tuple, freq)| (transmute_buf(&self.tuple_buffer), freq))

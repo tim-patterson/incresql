@@ -1,6 +1,5 @@
-use crate::point_in_time::Executor;
 use crate::ExecutionError;
-use data::Datum;
+use data::{Datum, TupleIter};
 
 pub struct ValuesExecutor {
     iter: Box<dyn Iterator<Item = Vec<Datum<'static>>>>,
@@ -18,13 +17,13 @@ impl ValuesExecutor {
     }
 }
 
-impl Executor for ValuesExecutor {
+impl TupleIter<ExecutionError> for ValuesExecutor {
     fn advance(&mut self) -> Result<(), ExecutionError> {
         self.curr_row = self.iter.next();
         Ok(())
     }
 
-    fn get(&self) -> Option<(&[Datum], i32)> {
+    fn get(&self) -> Option<(&[Datum], i64)> {
         self.curr_row.as_ref().map(|row| (row.as_ref(), 1))
     }
 

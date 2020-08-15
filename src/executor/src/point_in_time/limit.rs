@@ -1,17 +1,17 @@
-use crate::point_in_time::Executor;
+use crate::point_in_time::BoxedExecutor;
 use crate::ExecutionError;
-use data::Datum;
+use data::{Datum, TupleIter};
 use std::cmp::min;
 
 pub struct LimitExecutor {
-    source: Box<dyn Executor>,
+    source: BoxedExecutor,
     offset_remaining: i64,
     limit_remaining: i64,
-    current_freq: i32,
+    current_freq: i64,
 }
 
 impl LimitExecutor {
-    pub fn new(source: Box<dyn Executor>, offset: i64, limit: i64) -> Self {
+    pub fn new(source: BoxedExecutor, offset: i64, limit: i64) -> Self {
         LimitExecutor {
             source,
             offset_remaining: offset,
@@ -21,13 +21,13 @@ impl LimitExecutor {
     }
 }
 
-impl Executor for LimitExecutor {
+impl TupleIter<ExecutionError> for LimitExecutor {
     fn advance(&mut self) -> Result<(), ExecutionError> {
         while self.offset_remaining > 0 {
             if let Some((_tuple, freq)) = self.source.next()? {
                 self.offset_remaining -= freq as i64;
                 if self.offset_remaining < 0 {
-                    self.current_freq = -self.offset_remaining as i32;
+                    self.current_freq = -self.offset_remaining;
                     return Ok(());
                 }
             } else {
@@ -37,8 +37,8 @@ impl Executor for LimitExecutor {
 
         if self.limit_remaining > 0 {
             if let Some((_tuple, freq)) = self.source.next()? {
-                self.current_freq = min(freq as i64, self.limit_remaining) as i32;
-                self.limit_remaining -= freq as i64;
+                self.current_freq = min(freq, self.limit_remaining);
+                self.limit_remaining -= freq;
                 return Ok(());
             }
         }
@@ -47,7 +47,7 @@ impl Executor for LimitExecutor {
         Ok(())
     }
 
-    fn get(&self) -> Option<(&[Datum], i32)> {
+    fn get(&self) -> Option<(&[Datum], i64)> {
         if self.current_freq != 0 {
             self.source
                 .get()

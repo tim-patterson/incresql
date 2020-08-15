@@ -1,0 +1,15 @@
+[package]
+name = "storage"
+version = "0.1.0"
+authors = ["Tim Patterson <tim.wanaka@gmail.com>"]
+edition = "2018"
+publish = false
+
+[dependencies]
+data = { path = "../data" }
+
+[dependencies.rocksdb]
+git = "https://github.com/incresql/rust-rocksdb"
+branch = "feature/writebatchindex"
+default-features = false
+features = ["lz4"]

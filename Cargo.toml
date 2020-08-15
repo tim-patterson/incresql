@@ -14,13 +14,17 @@ members = [
     "src/parser",
     "src/planner",
     "src/runtime",
-    "src/server"
+    "src/server",
+    "src/storage"
 ]
 
 [dependencies]
+server = { path = "src/server" }
+
+# These are needed to support the integration tests
+[dev-dependencies]
 data = { path = "src/data" }
 runtime = { path = "src/runtime" }
-server = { path = "src/server" }
 
 [profile.release]
 debug = true

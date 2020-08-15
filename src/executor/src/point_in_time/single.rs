@@ -1,6 +1,5 @@
-use crate::point_in_time::Executor;
 use crate::ExecutionError;
-use data::Datum;
+use data::{Datum, TupleIter};
 
 pub struct SingleExecutor {
     state: State,
@@ -20,7 +19,7 @@ impl SingleExecutor {
     }
 }
 
-impl Executor for SingleExecutor {
+impl TupleIter<ExecutionError> for SingleExecutor {
     fn advance(&mut self) -> Result<(), ExecutionError> {
         self.state = match self.state {
             State::Ready => State::Single,
@@ -30,7 +29,7 @@ impl Executor for SingleExecutor {
         Ok(())
     }
 
-    fn get(&self) -> Option<(&[Datum], i32)> {
+    fn get(&self) -> Option<(&[Datum], i64)> {
         if let State::Single = self.state {
             Some((&[], 1))
         } else {
