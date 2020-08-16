@@ -130,6 +130,12 @@ impl<'a> From<&'a str> for Datum<'a> {
     }
 }
 
+impl From<Vec<u8>> for Datum<'static> {
+    fn from(vec: Vec<u8>) -> Self {
+        Datum::ByteAOwned(vec.into_boxed_slice())
+    }
+}
+
 /// A Wrapper that can be used to temporarily associate a datum
 /// with it's typing information to perform low level operations
 /// where we need that extra typing
@@ -162,6 +168,10 @@ impl Display for TypedDatum<'_> {
                         } else {
                             f.write_str(str)
                         }
+                    }
+                    DataType::Json => {
+                        let json = Json::from_bytes(self.datum.as_bytea().unwrap());
+                        f.write_str(&serde_json::to_string(&json).unwrap())
                     }
                     _ => {
                         let bytes = self.datum.as_bytea().unwrap();
@@ -251,6 +261,7 @@ impl<'a> Datum<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::json::JsonBuilder;
     use std::io::Write;
     use std::mem::size_of;
     use std::str::FromStr;
@@ -348,6 +359,14 @@ mod tests {
         );
 
         assert_eq!(Datum::from("Hello world"), Datum::ByteARef(b"Hello world"));
+    }
+
+    #[test]
+    fn test_datum_from_vec() {
+        assert_eq!(
+            Datum::from(Vec::from(b"123".as_ref())),
+            Datum::ByteAOwned(Box::from(b"123".as_ref()))
+        );
     }
 
     #[test]
@@ -459,6 +478,19 @@ mod tests {
                 Datum::from("hello".to_string()).typed_with(DataType::ByteA)
             ),
             "68656c6c6f"
+        );
+    }
+
+    #[test]
+    fn test_datum_display_json() {
+        let tape = JsonBuilder::default().object(|object| {
+            object.push_int("one", 1);
+            object.push_int("two", 2);
+        });
+
+        assert_eq!(
+            format!("{}", Datum::from(tape).typed_with(DataType::Json)),
+            r#"{"one":1,"two":2}"#
         );
     }
 }
