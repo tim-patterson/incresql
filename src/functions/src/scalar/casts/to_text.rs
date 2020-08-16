@@ -45,13 +45,13 @@ impl Function for ToTextFromAny {
     fn execute<'a>(
         &self,
         _session: &Session,
-        _signature: &FunctionSignature,
+        signature: &FunctionSignature,
         args: &'a [Datum<'a>],
     ) -> Datum<'a> {
         if args[0] == Datum::Null {
             Datum::Null
         } else {
-            Datum::from(args[0].to_string())
+            Datum::from(args[0].typed_with(signature.args[0]).to_string())
         }
     }
 }
@@ -84,16 +84,18 @@ mod tests {
     use super::*;
     use data::rust_decimal::Decimal;
 
-    const DUMMY_SIG: FunctionSignature = FunctionSignature {
-        name: "to_text",
-        args: vec![],
-        ret: DataType::Text,
-    };
+    fn sig(input_type: DataType) -> FunctionSignature<'static> {
+        FunctionSignature {
+            name: "to_text",
+            args: vec![input_type],
+            ret: DataType::Text,
+        }
+    }
 
     #[test]
     fn test_null() {
         assert_eq!(
-            ToTextFromText {}.execute(&Session::new(1), &DUMMY_SIG, &[Datum::Null]),
+            ToTextFromText {}.execute(&Session::new(1), &sig(DataType::Text), &[Datum::Null]),
             Datum::Null
         )
     }
@@ -101,15 +103,19 @@ mod tests {
     #[test]
     fn test_from_bool() {
         assert_eq!(
-            ToTextFromBoolean {}.execute(&Session::new(1), &DUMMY_SIG, &[Datum::from(true)]),
-            Datum::TextRef("TRUE")
+            ToTextFromBoolean {}.execute(
+                &Session::new(1),
+                &sig(DataType::Boolean),
+                &[Datum::from(true)]
+            ),
+            Datum::ByteARef(b"TRUE")
         )
     }
 
     #[test]
     fn test_from_int() {
         assert_eq!(
-            ToTextFromAny {}.execute(&Session::new(1), &DUMMY_SIG, &[Datum::from(1)]),
+            ToTextFromAny {}.execute(&Session::new(1), &sig(DataType::Integer), &[Datum::from(1)]),
             Datum::from("1".to_string())
         )
     }
@@ -117,7 +123,11 @@ mod tests {
     #[test]
     fn test_from_bigint() {
         assert_eq!(
-            ToTextFromAny {}.execute(&Session::new(1), &DUMMY_SIG, &[Datum::from(1_i64)]),
+            ToTextFromAny {}.execute(
+                &Session::new(1),
+                &sig(DataType::BigInt),
+                &[Datum::from(1_i64)]
+            ),
             Datum::from("1".to_string())
         )
     }
@@ -127,10 +137,19 @@ mod tests {
         assert_eq!(
             ToTextFromAny {}.execute(
                 &Session::new(1),
-                &DUMMY_SIG,
+                &sig(DataType::Decimal(10, 1)),
                 &[Datum::from(Decimal::new(10, 1))]
             ),
             Datum::from("1.0".to_string())
+        );
+
+        assert_eq!(
+            ToTextFromAny {}.execute(
+                &Session::new(1),
+                &sig(DataType::Decimal(10, 2)),
+                &[Datum::from(Decimal::new(10, 1))]
+            ),
+            Datum::from("1.00".to_string())
         )
     }
 
@@ -138,7 +157,7 @@ mod tests {
     fn test_from_text() {
         // String Ref
         assert_eq!(
-            ToTextFromText {}.execute(&Session::new(1), &DUMMY_SIG, &[Datum::from("1")]),
+            ToTextFromText {}.execute(&Session::new(1), &sig(DataType::Text), &[Datum::from("1")]),
             Datum::from("1")
         );
 
@@ -146,7 +165,7 @@ mod tests {
         assert_eq!(
             ToTextFromText {}.execute(
                 &Session::new(1),
-                &DUMMY_SIG,
+                &sig(DataType::Text),
                 &[Datum::from("1".to_string())]
             ),
             Datum::from("1")

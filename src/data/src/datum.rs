@@ -1,20 +1,23 @@
-use crate::DECIMAL_MAX_SCALE;
+use crate::json::Json;
+use crate::{DataType, DECIMAL_MAX_SCALE};
 use rust_decimal::Decimal;
 use std::fmt::{Debug, Display, Formatter};
 
 /// Datum - in memory representation of sql value.
+/// The same datum may be able to be interpreted as multiple different
+/// datatypes. Ie bytea can is used to back json and text.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Datum<'a> {
     Null,
     Boolean(bool),
     // Text type from on-disk tuple, just points back to the rocks db key/value bytes
-    TextRef(&'a str),
+    ByteARef(&'a [u8]),
     // On-heap text type, potentially used for function return types or where we need a static
     // lifetime, ie select max(str_col)
-    TextOwned(Box<str>),
+    ByteAOwned(Box<[u8]>),
     // Inline text type, optimization of TextOwned where the text is small enough to store inline
     // without having pay the cost of allocation/pointer chasing.
-    TextInline(u8, [u8; 22]),
+    ByteAInline(u8, [u8; 22]),
     Integer(i32),
     BigInt(i64),
     Decimal(Decimal),
@@ -23,8 +26,8 @@ pub enum Datum<'a> {
 impl<'a> Datum<'a> {
     /// Like clone but instead of cloning Datum::TextOwned etc it will just take a reference
     pub fn ref_clone(&'a self) -> Datum<'a> {
-        if let Datum::TextOwned(s) = self {
-            Datum::TextRef(&s)
+        if let Datum::ByteAOwned(s) = self {
+            Datum::ByteARef(&s)
         } else {
             self.clone()
         }
@@ -40,16 +43,16 @@ impl<'a> Datum<'a> {
             Datum::Integer(i) => Datum::Integer(*i),
             Datum::BigInt(i) => Datum::BigInt(*i),
             Datum::Decimal(d) => Datum::Decimal(*d),
-            Datum::TextOwned(s) => Datum::TextOwned(s.clone()),
-            Datum::TextInline(l, bytes) => Datum::TextInline(*l, *bytes),
-            Datum::TextRef(s) => {
+            Datum::ByteAOwned(s) => Datum::ByteAOwned(s.clone()),
+            Datum::ByteAInline(l, bytes) => Datum::ByteAInline(*l, *bytes),
+            Datum::ByteARef(s) => {
                 let len = s.len();
                 if len <= 22 {
                     let mut bytes = [0_u8; 22];
-                    bytes.as_mut()[..len].copy_from_slice(s.as_bytes());
-                    Datum::TextInline(len as u8, bytes)
+                    bytes.as_mut()[..len].copy_from_slice(s);
+                    Datum::ByteAInline(len as u8, bytes)
                 } else {
-                    Datum::TextOwned(Box::from(*s))
+                    Datum::ByteAOwned(Box::from(*s))
                 }
             }
         }
@@ -74,8 +77,8 @@ impl<'a> Datum<'a> {
             Datum::Integer(i) => other.as_integer() == Some(*i),
             Datum::BigInt(i) => other.as_bigint() == Some(*i),
             Datum::Decimal(d) => other.as_decimal() == Some(*d),
-            Datum::TextOwned(_) | Datum::TextInline(..) | Datum::TextRef(_) => {
-                self.as_str() == other.as_str()
+            Datum::ByteAOwned(_) | Datum::ByteAInline(..) | Datum::ByteARef(_) => {
+                self.as_text() == other.as_text()
             }
         }
     }
@@ -117,34 +120,86 @@ impl From<Decimal> for Datum<'static> {
 
 impl From<String> for Datum<'static> {
     fn from(s: String) -> Self {
-        Datum::TextOwned(s.into_boxed_str())
+        Datum::ByteAOwned(s.into_boxed_str().into_boxed_bytes())
     }
 }
 
 impl<'a> From<&'a str> for Datum<'a> {
     fn from(s: &'a str) -> Self {
-        Datum::TextRef(s)
+        Datum::ByteARef(s.as_bytes())
     }
 }
 
-impl Display for Datum<'_> {
+impl From<Vec<u8>> for Datum<'static> {
+    fn from(vec: Vec<u8>) -> Self {
+        Datum::ByteAOwned(vec.into_boxed_slice())
+    }
+}
+
+/// A Wrapper that can be used to temporarily associate a datum
+/// with it's typing information to perform low level operations
+/// where we need that extra typing
+pub struct TypedDatum<'a> {
+    datum: &'a Datum<'a>,
+    datatype: DataType,
+}
+
+impl Datum<'_> {
+    pub fn typed_with(&self, datatype: DataType) -> TypedDatum {
+        TypedDatum {
+            datum: self,
+            datatype,
+        }
+    }
+}
+
+impl Display for TypedDatum<'_> {
     /// When used with the alternate flag this will format as a sql string, ie strings will be quoted
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
+        match self.datum {
             Datum::Null => f.write_str("NULL"),
-            Datum::TextRef(_) | Datum::TextOwned(_) | Datum::TextInline(..) => {
-                let str = self.as_str().unwrap();
-                if f.alternate() {
-                    // The debug trait should quote and escape our strings for us
-                    Debug::fmt(str, f)
-                } else {
-                    f.write_str(str)
+            Datum::ByteARef(_) | Datum::ByteAOwned(_) | Datum::ByteAInline(..) => {
+                match self.datatype {
+                    DataType::Text => {
+                        let str = self.datum.as_text().unwrap();
+                        if f.alternate() {
+                            // The debug trait should quote and escape our strings for us
+                            Debug::fmt(str, f)
+                        } else {
+                            f.write_str(str)
+                        }
+                    }
+                    DataType::Json => {
+                        let json = Json::from_bytes(self.datum.as_bytea().unwrap());
+                        f.write_str(&serde_json::to_string(&json).unwrap())
+                    }
+                    _ => {
+                        let bytes = self.datum.as_bytea().unwrap();
+                        if f.alternate() {
+                            f.write_str("\"")?;
+                            for b in bytes {
+                                f.write_fmt(format_args!("{:x}", b))?;
+                            }
+                            f.write_str("\"")
+                        } else {
+                            for b in bytes {
+                                f.write_fmt(format_args!("{:x}", b))?;
+                            }
+                            Ok(())
+                        }
+                    }
                 }
             }
             Datum::Boolean(b) => f.write_str(if *b { "TRUE" } else { "FALSE" }),
             Datum::Integer(i) => Display::fmt(i, f),
             Datum::BigInt(i) => Display::fmt(i, f),
-            Datum::Decimal(d) => Display::fmt(d, f),
+            Datum::Decimal(d) => {
+                if let DataType::Decimal(_p, s) = self.datatype {
+                    f.write_fmt(format_args!("{:.*}", s as usize, d))
+                } else {
+                    Display::fmt(d, f)
+                }
+            }
         }
     }
 }
@@ -152,15 +207,22 @@ impl Display for Datum<'_> {
 // Into's to get back rust types from datums, these are just "dumb" and simply map 1-1 without any
 // attempts to do any casting
 impl<'a> Datum<'a> {
-    pub fn as_str(&'a self) -> Option<&'a str> {
+    pub fn as_bytea(&'a self) -> Option<&'a [u8]> {
         match self {
-            Datum::TextRef(s) => Some(s),
-            Datum::TextInline(len, b) => {
-                Some(unsafe { std::str::from_utf8_unchecked(&b.as_ref()[..(*len as usize)]) })
-            }
-            Datum::TextOwned(s) => Some(s.as_ref()),
+            Datum::ByteARef(s) => Some(s),
+            Datum::ByteAInline(len, b) => Some(&b.as_ref()[..(*len as usize)]),
+            Datum::ByteAOwned(s) => Some(s.as_ref()),
             _ => None,
         }
+    }
+
+    pub fn as_text(&'a self) -> Option<&'a str> {
+        self.as_bytea()
+            .map(|bytes| unsafe { std::str::from_utf8_unchecked(bytes) })
+    }
+
+    pub fn as_json(&'a self) -> Option<Json<'a>> {
+        self.as_bytea().map(Json::from_bytes)
     }
 
     pub fn as_integer(&self) -> Option<i32> {
@@ -199,6 +261,7 @@ impl<'a> Datum<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::json::JsonBuilder;
     use std::io::Write;
     use std::mem::size_of;
     use std::str::FromStr;
@@ -217,21 +280,21 @@ mod tests {
         assert_eq!(Datum::from(1).ref_clone(), Datum::Integer(1));
 
         assert_eq!(
-            Datum::TextOwned("hello".to_string().into_boxed_str()).ref_clone(),
-            Datum::TextRef("hello")
+            Datum::ByteAOwned(Box::from(b"hello".as_ref())).ref_clone(),
+            Datum::ByteARef(b"hello")
         );
     }
 
     #[test]
     fn test_datum_as_static() {
         assert_eq!(
-            Datum::TextRef("Hello world").as_static(),
-            Datum::TextInline(11, *b"Hello world\0\0\0\0\0\0\0\0\0\0\0")
+            Datum::ByteARef(b"Hello world").as_static(),
+            Datum::ByteAInline(11, *b"Hello world\0\0\0\0\0\0\0\0\0\0\0")
         );
 
         assert_eq!(
-            Datum::TextRef("Hello world123456789123456789").as_static(),
-            Datum::TextOwned(Box::from("Hello world123456789123456789"))
+            Datum::ByteARef(b"Hello world123456789123456789").as_static(),
+            Datum::ByteAOwned(Box::from(b"Hello world123456789123456789".as_ref()))
         );
     }
 
@@ -255,11 +318,11 @@ mod tests {
         assert_eq!(Datum::from("abc").sql_eq(&Datum::from("abc"), false), true);
         assert_eq!(Datum::from("abc").sql_eq(&Datum::from("efg"), false), false);
         assert_eq!(
-            Datum::from("abc").sql_eq(&Datum::TextOwned(Box::from("abc")), false),
+            Datum::from("abc").sql_eq(&Datum::ByteAOwned(Box::from(b"abc".as_ref())), false),
             true
         );
         assert_eq!(
-            Datum::TextOwned(Box::from("abc")).sql_eq(&Datum::from("abc"), false),
+            Datum::ByteAOwned(Box::from(b"abc".as_ref())).sql_eq(&Datum::from("abc"), false),
             true
         );
     }
@@ -292,28 +355,39 @@ mod tests {
     fn test_datum_from_string() {
         assert_eq!(
             Datum::from(String::from("Hello world")),
-            Datum::TextOwned(Box::from("Hello world"))
+            Datum::ByteAOwned(Box::from(b"Hello world".as_ref()))
         );
 
-        assert_eq!(Datum::from("Hello world"), Datum::TextRef("Hello world"));
+        assert_eq!(Datum::from("Hello world"), Datum::ByteARef(b"Hello world"));
+    }
+
+    #[test]
+    fn test_datum_from_vec() {
+        assert_eq!(
+            Datum::from(Vec::from(b"123".as_ref())),
+            Datum::ByteAOwned(Box::from(b"123".as_ref()))
+        );
     }
 
     #[test]
     fn test_datum_as_str() {
         assert_eq!(
-            Datum::TextOwned(Box::from("Hello world")).as_str(),
+            Datum::ByteAOwned(Box::from(b"Hello world".as_ref())).as_text(),
             Some("Hello world")
         );
 
         let mut bytes = [0_u8; 22];
         bytes.as_mut().write_all("Hello world".as_bytes()).unwrap();
 
-        assert_eq!(Datum::TextInline(11, bytes).as_str(), Some("Hello world"));
+        assert_eq!(Datum::ByteAInline(11, bytes).as_text(), Some("Hello world"));
 
-        let backing_slice = "Hello world";
-        assert_eq!(Datum::TextRef(backing_slice).as_str(), Some("Hello world"));
+        let backing_slice = b"Hello world";
+        assert_eq!(
+            Datum::ByteARef(backing_slice).as_text(),
+            Some("Hello world")
+        );
 
-        assert_eq!(Datum::Null.as_str(), None);
+        assert_eq!(Datum::Null.as_text(), None);
     }
 
     #[test]
@@ -346,22 +420,77 @@ mod tests {
 
     #[test]
     fn test_datum_display() {
-        assert_eq!(format!("{}", Datum::Null), "NULL");
-
-        assert_eq!(format!("{}", Datum::Boolean(true)), "TRUE");
-
-        assert_eq!(format!("{}", Datum::Integer(123)), "123");
-        assert_eq!(format!("{}", Datum::BigInt(123)), "123");
+        assert_eq!(
+            format!("{}", Datum::Null.typed_with(DataType::Text)),
+            "NULL"
+        );
 
         assert_eq!(
-            format!("{}", Datum::Decimal(Decimal::from_str("12.34").unwrap())),
+            format!("{}", Datum::Boolean(true).typed_with(DataType::Boolean)),
+            "TRUE"
+        );
+
+        assert_eq!(
+            format!("{}", Datum::Integer(123).typed_with(DataType::Integer)),
+            "123"
+        );
+        assert_eq!(
+            format!("{}", Datum::BigInt(123).typed_with(DataType::BigInt)),
+            "123"
+        );
+
+        assert_eq!(
+            format!(
+                "{}",
+                Datum::Decimal(Decimal::from_str("12.34").unwrap())
+                    .typed_with(DataType::Decimal(10, 2))
+            ),
             "12.34"
         );
 
-        assert_eq!(format!("{}", Datum::from("hello".to_string())), "hello");
         assert_eq!(
-            format!("{:#}", Datum::from("he\"llo".to_string())),
+            format!(
+                "{}",
+                Datum::Decimal(Decimal::from_str("12.34").unwrap())
+                    .typed_with(DataType::Decimal(10, 4))
+            ),
+            "12.3400"
+        );
+
+        assert_eq!(
+            format!(
+                "{}",
+                Datum::from("hello".to_string()).typed_with(DataType::Text)
+            ),
+            "hello"
+        );
+        assert_eq!(
+            format!(
+                "{:#}",
+                Datum::from("he\"llo".to_string()).typed_with(DataType::Text)
+            ),
             "\"he\\\"llo\""
+        );
+
+        assert_eq!(
+            format!(
+                "{}",
+                Datum::from("hello".to_string()).typed_with(DataType::ByteA)
+            ),
+            "68656c6c6f"
+        );
+    }
+
+    #[test]
+    fn test_datum_display_json() {
+        let tape = JsonBuilder::default().object(|object| {
+            object.push_int("one", 1);
+            object.push_int("two", 2);
+        });
+
+        assert_eq!(
+            format!("{}", Datum::from(tape).typed_with(DataType::Json)),
+            r#"{"one":1,"two":2}"#
         );
     }
 }

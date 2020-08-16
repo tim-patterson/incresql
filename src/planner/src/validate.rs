@@ -75,6 +75,8 @@ fn compile_functions_in_expr(
                 DataType::BigInt => "to_bigint",
                 DataType::Decimal(..) => "to_decimal",
                 DataType::Text => "to_text",
+                DataType::ByteA => "to_bytes",
+                DataType::Json => "to_json",
             };
 
             let lookup_sig = FunctionSignature {

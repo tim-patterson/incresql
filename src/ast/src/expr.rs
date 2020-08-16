@@ -130,7 +130,7 @@ impl Display for Expression {
     /// Formats the expression back to sql
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Expression::Constant(d, _) => f.write_fmt(format_args!("{:#}", d)),
+            Expression::Constant(d, dt) => f.write_fmt(format_args!("{:#}", d.typed_with(*dt))),
             Expression::Cast(c) => f.write_fmt(format_args!("CAST({} AS {})", c.expr, c.datatype)),
             // For any function name containing anything other that letters and underscores we'll quote.
             Expression::FunctionCall(function_call) => {
@@ -276,7 +276,7 @@ mod tests {
         assert_eq!(
             Expression::from(String::from("Hello world")),
             Expression::Constant(
-                Datum::TextOwned(String::from("Hello world").into_boxed_str()),
+                Datum::ByteAOwned(Box::from(b"Hello world".as_ref())),
                 DataType::Text
             )
         );
