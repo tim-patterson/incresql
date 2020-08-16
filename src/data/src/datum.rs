@@ -1,3 +1,4 @@
+use crate::json::Json;
 use crate::{DataType, DECIMAL_MAX_SCALE};
 use rust_decimal::Decimal;
 use std::fmt::{Debug, Display, Formatter};
@@ -208,6 +209,10 @@ impl<'a> Datum<'a> {
     pub fn as_text(&'a self) -> Option<&'a str> {
         self.as_bytea()
             .map(|bytes| unsafe { std::str::from_utf8_unchecked(bytes) })
+    }
+
+    pub fn as_json(&'a self) -> Option<Json<'a>> {
+        self.as_bytea().map(Json::from_bytes)
     }
 
     pub fn as_integer(&self) -> Option<i32> {
