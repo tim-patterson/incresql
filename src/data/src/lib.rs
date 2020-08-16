@@ -5,6 +5,7 @@ mod datum;
 pub mod encoding_core;
 mod encoding_datum;
 pub mod json;
+mod json_serde;
 mod session;
 mod tuple_iter;
 pub use datatype::*;
