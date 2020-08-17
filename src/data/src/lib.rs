@@ -44,4 +44,14 @@ impl LogicalTimestamp {
     pub fn new(ms: u64) -> Self {
         LogicalTimestamp { ms }
     }
+
+    /// Creates a new Logical timestamp based on the current system time.
+    pub fn now() -> Self {
+        LogicalTimestamp {
+            ms: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as u64,
+        }
+    }
 }
