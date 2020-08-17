@@ -1,5 +1,6 @@
+mod bootstrap;
 use data::json::JsonBuilder;
-use data::{DataType, Datum, LogicalTimestamp, SortOrder};
+use data::{DataType, Datum, LogicalTimestamp, SortOrder, TupleIter};
 use storage::{Storage, StorageError, Table};
 
 /// The catalog is responsible for the lifecycles and naming of all the
@@ -13,7 +14,7 @@ pub struct Catalog {
     // name:text(pk)
     databases_table: Table,
     // Table listing tables
-    // database_name:text(pk), table_name:text(pk), table_id:bigint, columns:json
+    // database_id:text(pk), table_name:text(pk), table_id:bigint, columns:json
     tables_table: Table,
 }
 
@@ -22,7 +23,7 @@ const DATABASES_TABLE_ID: u32 = 2;
 const TABLES_TABLE_ID: u32 = 4;
 
 impl Catalog {
-    /// Creates a catalog from the passed in storage
+    /// Creates a catalog, wrapping the passed in storage
     pub fn new(storage: Storage) -> Result<Self, StorageError> {
         let prefix_metadata_table =
             storage.table(PREFIX_METADATA_TABLE_ID, vec![SortOrder::Asc], 3);
@@ -37,57 +38,17 @@ impl Catalog {
         Ok(catalog)
     }
 
-    /// Function used on first boot to initialize system tables
-    fn bootstrap(&mut self) -> Result<(), StorageError> {
-        let mut key_buf = vec![];
-        let mut value_buf = vec![];
-        // Initialization check
-        if self
-            .prefix_metadata_table
-            .system_point_lookup(
-                &[Datum::from(PREFIX_METADATA_TABLE_ID as i64)],
-                &mut key_buf,
-                &mut value_buf,
-            )?
-            .is_some()
-        {
-            return Ok(());
+    pub fn list_databases(&self) -> Result<Vec<String>, StorageError> {
+        let mut iter = self.databases_table.full_scan(LogicalTimestamp::MAX);
+        let mut results = vec![];
+        while let Some((tuple, _freq)) = iter.next()? {
+            results.push(tuple[0].as_text().unwrap().to_string());
         }
-
-        self.create_database("incresql")?;
-        self.create_table(
-            "incresql",
-            "prefix_tables",
-            PREFIX_METADATA_TABLE_ID,
-            &[
-                ("table_id", DataType::BigInt),
-                ("column_len", DataType::Integer),
-                ("pk_sort", DataType::Json),
-            ],
-            &[SortOrder::Asc],
-        )?;
-        self.create_table(
-            "incresql",
-            "databases",
-            DATABASES_TABLE_ID,
-            &[("name", DataType::Text)],
-            &[SortOrder::Asc],
-        )?;
-        self.create_table(
-            "incresql",
-            "tables",
-            TABLES_TABLE_ID,
-            &[
-                ("database_name", DataType::Text),
-                ("name", DataType::Text),
-                ("table_id", DataType::BigInt),
-                ("columns", DataType::Json),
-            ],
-            &[SortOrder::Asc, SortOrder::Asc],
-        )
+        Ok(results)
     }
 
-    fn create_database(&self, database_name: &str) -> Result<(), StorageError> {
+    /// Creates a database, doesn't do any checks to see if the database already exists etc.
+    fn create_database_impl(&mut self, database_name: &str) -> Result<(), StorageError> {
         self.databases_table.atomic_write(|batch| {
             batch.write_tuple(
                 &self.databases_table,
@@ -98,8 +59,9 @@ impl Catalog {
         })
     }
 
-    fn create_table(
-        &self,
+    /// Creates a table but doesn't do any checks around the database, table, or id.
+    fn create_table_impl(
+        &mut self,
         database_name: &str,
         table_name: &str,
         table_id: u32,
@@ -149,7 +111,11 @@ mod tests {
     #[test]
     fn test_bootstrap() -> Result<(), StorageError> {
         let storage = Storage::new_in_mem()?;
-        let _catalog = Catalog::new(storage)?;
+        let catalog = Catalog::new(storage)?;
+        assert_eq!(
+            catalog.list_databases().unwrap(),
+            vec!["default".to_string(), "incresql".to_string()]
+        );
         Ok(())
     }
 }

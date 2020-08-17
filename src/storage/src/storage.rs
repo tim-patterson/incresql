@@ -64,7 +64,7 @@ impl Storage {
         Ok(Storage { db })
     }
 
-    /// Creates a new storage based on the passed in db env,
+    /// Creates a new in memory backed storage.
     /// to be used for testing etc
     pub fn new_in_mem() -> Result<Self, StorageError> {
         let mut options = Storage::options();
