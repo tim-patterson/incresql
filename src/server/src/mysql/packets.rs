@@ -210,17 +210,9 @@ pub fn write_tuple_packet(tuple: &[Datum], types: &[DataType], buffer: &mut Vec<
         match value {
             Datum::Null => buffer.push(0xFB),
             Datum::Boolean(b) => write_enc_string(if *b { "1" } else { "0" }, buffer),
-            Datum::Decimal(d) => {
-                // Format decimals to match the data type!
-                if let DataType::Decimal(_p, scale) = types[idx] {
-                    write_enc_string(format!("{:.*}", scale as usize, d), buffer)
-                } else {
-                    panic!()
-                }
-            }
             // TODO We could keep a buffer and write into that, then calc the length and copy across
             // to avoid format allocating strings...
-            _ => write_enc_string(format!("{}", value), buffer),
+            _ => write_enc_string(format!("{}", value.typed_with(types[idx])), buffer),
         }
     }
 }
@@ -305,6 +297,8 @@ pub fn write_column_packet(
             decimals = scale;
             MYSQL_TYPE_NEWDECIMAL
         }
+        DataType::ByteA => MYSQL_TYPE_BLOB,
+        DataType::Json => MYSQL_TYPE_VAR_STRING,
     };
 
     if (capabilities & CAPABILITY_CLIENT_PROTOCOL_41) != 0 {

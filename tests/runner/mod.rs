@@ -1,4 +1,3 @@
-use data::{DataType, Datum};
 use runtime::Runtime;
 
 /// Test helper that creates a new runtime/connection, submits the queries and
@@ -11,18 +10,12 @@ pub fn query(query: &str, expected: &str) {
     let mut rows: Vec<String> = vec![];
     while let Some((tuple, freq)) = executor.next().unwrap() {
         for _ in 0..freq {
-            let row = tuple.iter().enumerate().map(|(idx, value)|
-                // For decimal we want to grab the precision for formatting
-                if let Datum::Decimal(d) = value {
-                    if let DataType::Decimal(_, scale) = types[idx] {
-                        format!("{:.*}", scale as usize, d)
-                    } else {
-                        panic!()
-                    }
-                } else {
-                    value.to_string()
-                }
-            ).collect::<Vec<_>>().join("|");
+            let row = tuple
+                .iter()
+                .enumerate()
+                .map(|(idx, value)| value.typed_with(types[idx]).to_string())
+                .collect::<Vec<_>>()
+                .join("|");
 
             rows.push(format!("|{}|", row));
         }
