@@ -14,10 +14,6 @@ use std::sync::Arc;
 /// no name, its just referenced via a u32
 pub struct Storage {
     db: Arc<DB>,
-    // Just here to keep the env alive when using custom env's as the rust-rockdb doesn't
-    // manage the lifetimes properly here
-    #[allow(dead_code)]
-    env: Option<Env>,
 }
 
 // STORAGE IMPLEMENTATION DETAILS
@@ -65,16 +61,20 @@ impl Storage {
         let options = Storage::options();
         let db = Arc::from(DB::open(&options, path)?);
 
-        Ok(Storage { db, env: None })
+        Ok(Storage { db })
     }
 
-    /// Creates a new storage based on the passed in db env.
+    /// Creates a new in memory backed storage.
+    /// to be used for testing etc
     pub fn new_in_mem() -> Result<Self, StorageError> {
         let mut options = Storage::options();
         let env = Env::mem_env()?;
         options.set_env(&env);
+        // TODO memory leak here, looking at the c api it looks like we should own the env
+        // and lend it to the db for it's whole lifetime.
+        std::mem::forget(env);
         let db = Arc::from(DB::open(&options, "")?);
-        Ok(Storage { db, env: Some(env) })
+        Ok(Storage { db })
     }
 
     /// Returns the table for the given id and primary key info.

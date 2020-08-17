@@ -40,8 +40,19 @@ pub struct LogicalTimestamp {
 }
 
 impl LogicalTimestamp {
+    pub const MAX: LogicalTimestamp = LogicalTimestamp { ms: u64::MAX };
     /// Creates a new Logical timestamp based on the number of ms since 1970.
     pub fn new(ms: u64) -> Self {
         LogicalTimestamp { ms }
+    }
+
+    /// Creates a new Logical timestamp based on the current system time.
+    pub fn now() -> Self {
+        LogicalTimestamp {
+            ms: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as u64,
+        }
     }
 }
