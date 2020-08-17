@@ -13,6 +13,7 @@ mod filter;
 mod limit;
 mod project;
 mod single;
+mod table_scan;
 mod union_all;
 mod values;
 
