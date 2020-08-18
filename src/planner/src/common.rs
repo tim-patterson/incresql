@@ -75,6 +75,45 @@ pub(crate) fn fields_for_operator(
     }
 }
 
+/// A much lighter version of fields_for_operator that can be run before function
+/// and type resolution
+pub(crate) fn fieldnames_for_operator(
+    operator: &LogicalOperator,
+) -> Box<dyn Iterator<Item = (Option<&str>, &str)> + '_> {
+    match operator {
+        LogicalOperator::Project(project) => Box::from(
+            project
+                .expressions
+                .iter()
+                .map(|ne| (None, ne.alias.as_ref().unwrap().as_str())),
+        ),
+        LogicalOperator::Filter(filter) => fieldnames_for_operator(&filter.source),
+        LogicalOperator::Limit(limit) => fieldnames_for_operator(&limit.source),
+        LogicalOperator::Values(values) => Box::from(
+            values
+                .fields
+                .iter()
+                .map(|(_datatype, alias)| (None, alias.as_str())),
+        ),
+        LogicalOperator::TableAlias(table_alias) => Box::from(
+            fieldnames_for_operator(&table_alias.source)
+                .map(move |(_, alias)| (Some(table_alias.alias.as_str()), alias)),
+        ),
+        LogicalOperator::UnionAll(union_all) => {
+            fieldnames_for_operator(union_all.sources.first().unwrap())
+        }
+        LogicalOperator::Single => Box::from(empty()),
+        LogicalOperator::ResolvedTable(table) => Box::from(
+            table
+                .table
+                .columns()
+                .iter()
+                .map(|(alias, _datatype)| (None, alias.as_str())),
+        ),
+        LogicalOperator::TableReference(_) => panic!(),
+    }
+}
+
 /// Returns the source fields for an operator.
 /// This is the fields that expressions in the operator can "see".
 /// For now this is only going to be expressions from the immediate children.
@@ -162,6 +201,23 @@ mod tests {
                 alias: "bar".to_string(),
                 data_type: DataType::Decimal(3, 2)
             }]
+        );
+    }
+
+    #[test]
+    fn test_fieldnames_for_operator() {
+        let projection = LogicalOperator::Project(Project {
+            distinct: false,
+            expressions: vec![NamedExpression {
+                alias: Some("bar".to_string()),
+                expression: Expression::from(Decimal::from_str("1.23").unwrap()),
+            }],
+            source: Box::new(LogicalOperator::Single),
+        });
+
+        assert_eq!(
+            fieldnames_for_operator(&projection).collect::<Vec<_>>(),
+            vec![(None, "bar")]
         );
     }
 }

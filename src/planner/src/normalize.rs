@@ -22,10 +22,8 @@ fn normalize_impl(query: &mut LogicalOperator) {
     // Column Aliases
     for (idx, ne) in query.named_expressions_mut().enumerate() {
         if ne.alias.is_none() {
-            ne.alias = if let Expression::ColumnReference(ColumnReference {
-                qualifier: _,
-                alias,
-            }) = &ne.expression
+            ne.alias = if let Expression::ColumnReference(ColumnReference { alias, .. }) =
+                &ne.expression
             {
                 Some(alias.clone())
             } else {

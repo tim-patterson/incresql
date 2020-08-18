@@ -1,6 +1,10 @@
-use crate::common::{fields_for_operator, source_fields_for_operator, type_for_expression};
+use crate::common::{
+    fieldnames_for_operator, fields_for_operator, source_fields_for_operator, type_for_expression,
+};
 use crate::{Field, FieldResolutionError, Planner, PlannerError};
-use ast::expr::{ColumnReference, CompiledColumnReference, CompiledFunctionCall, Expression};
+use ast::expr::{
+    ColumnReference, CompiledColumnReference, CompiledFunctionCall, Expression, NamedExpression,
+};
 use ast::rel::logical::{LogicalOperator, ResolvedTable};
 use data::{DataType, Datum, Session};
 use functions::registry::Registry;
@@ -15,6 +19,7 @@ impl Planner {
         session: &Session,
     ) -> Result<LogicalOperator, PlannerError> {
         self.resolve_tables(&mut query, session)?;
+        expand_stars(&mut query)?;
         compile_functions(&mut query, &self.function_registry)?;
         check_predicates(&mut query)?;
         check_union_alls(&mut query)?;
@@ -55,6 +60,56 @@ fn compile_functions(
     let source_fields: Vec<_> = source_fields_for_operator(operator).collect();
     for expr in operator.expressions_mut() {
         compile_functions_in_expr(expr, &source_fields, function_registry)?;
+    }
+    Ok(())
+}
+
+/// Walks the named expressions of projects looking for stars and replaces them with
+/// column references from the sources.
+fn expand_stars(operator: &mut LogicalOperator) -> Result<(), PlannerError> {
+    /// Inner function to create a reference back to the field
+    fn fields_to_ne(field: (Option<&str>, &str)) -> NamedExpression {
+        NamedExpression {
+            alias: Some(field.1.to_string()),
+            expression: Expression::ColumnReference(ColumnReference {
+                qualifier: field.0.map(str::to_string),
+                alias: field.1.to_string(),
+                star: false,
+            }),
+        }
+    }
+
+    for child in operator.children_mut() {
+        expand_stars(child)?;
+    }
+
+    if let LogicalOperator::Project(project) = operator {
+        let mut exprs = Vec::with_capacity(project.expressions.len());
+        std::mem::swap(&mut exprs, &mut project.expressions);
+        for ne in exprs {
+            if let Expression::ColumnReference(ColumnReference {
+                qualifier,
+                alias: _,
+                star: true,
+            }) = ne.expression
+            {
+                if qualifier.is_some() {
+                    project.expressions.extend(
+                        fieldnames_for_operator(&project.source)
+                            .filter(|(field_qualifier, _alias)| {
+                                field_qualifier == &qualifier.as_deref()
+                            })
+                            .map(fields_to_ne),
+                    );
+                } else {
+                    project
+                        .expressions
+                        .extend(fieldnames_for_operator(&project.source).map(fields_to_ne));
+                }
+            } else {
+                project.expressions.push(ne);
+            }
+        }
     }
     Ok(())
 }
