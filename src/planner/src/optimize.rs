@@ -85,12 +85,11 @@ mod tests {
     use ast::expr::{CompiledFunctionCall, Expression, NamedExpression};
     use ast::rel::logical::Project;
     use data::DataType;
-    use functions::registry::Registry;
     use functions::FunctionSignature;
 
     #[test]
     fn test_constant_fold() -> Result<(), PlannerError> {
-        let planner = Planner::new(Registry::new(true));
+        let planner = Planner::new_for_test();
         let session = Session::new(1);
         let add_signature = FunctionSignature {
             name: "+",

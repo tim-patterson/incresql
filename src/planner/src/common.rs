@@ -11,7 +11,7 @@ impl Planner {
         session: &Session,
     ) -> Result<(Vec<Field>, LogicalOperator), PlannerError> {
         let query = self.normalize(query)?;
-        let query = self.validate(query)?;
+        let query = self.validate(query, session)?;
         let query = self.optimize(query, session)?;
         let fields = fields_for_operator(&query).collect();
         Ok((fields, query))
@@ -64,6 +64,14 @@ pub(crate) fn fields_for_operator(
             fields_for_operator(union_all.sources.first().unwrap())
         }
         LogicalOperator::Single => Box::from(empty()),
+        LogicalOperator::ResolvedTable(table) => {
+            Box::from(table.table.columns().iter().map(|(alias, datatype)| Field {
+                qualifier: None,
+                alias: alias.clone(),
+                data_type: *datatype,
+            }))
+        }
+        LogicalOperator::TableReference(_) => panic!(),
     }
 }
 
@@ -81,8 +89,10 @@ pub(crate) fn source_fields_for_operator(
         LogicalOperator::UnionAll(union_all) => {
             fields_for_operator(union_all.sources.first().unwrap())
         }
-        LogicalOperator::Values(_) => Box::from(empty()),
-        LogicalOperator::Single => Box::from(empty()),
+        LogicalOperator::Values(_)
+        | LogicalOperator::Single
+        | LogicalOperator::TableReference(_)
+        | LogicalOperator::ResolvedTable(_) => Box::from(empty()),
     }
 }
 
@@ -92,12 +102,11 @@ mod tests {
     use ast::expr::NamedExpression;
     use ast::rel::logical::{Project, TableAlias};
     use data::rust_decimal::Decimal;
-    use functions::registry::Registry;
     use std::str::FromStr;
 
     #[test]
     fn test_plan_common_fields() -> Result<(), PlannerError> {
-        let planner = Planner::new(Registry::new(false));
+        let planner = Planner::new_for_test();
         let session = Session::new(1);
         let raw_query = LogicalOperator::Project(Project {
             distinct: false,

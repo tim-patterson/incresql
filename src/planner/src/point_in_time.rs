@@ -1,8 +1,8 @@
 use crate::{Field, Planner, PlannerError};
 use ast::expr::Expression;
-use ast::rel::logical::{Filter, Limit, LogicalOperator, Project, UnionAll};
+use ast::rel::logical::{Filter, Limit, LogicalOperator, Project, ResolvedTable, UnionAll};
 use ast::rel::point_in_time::{self, PointInTimeOperator};
-use data::Session;
+use data::{LogicalTimestamp, Session};
 
 pub struct PointInTimePlan {
     pub fields: Vec<Field>,
@@ -74,7 +74,16 @@ fn build_operator(query: LogicalOperator) -> PointInTimeOperator {
                 sources: sources.into_iter().map(build_operator).collect(),
             })
         }
+        LogicalOperator::ResolvedTable(ResolvedTable { table }) => {
+            PointInTimeOperator::TableScan(point_in_time::TableScan {
+                table,
+                // Having a timestamp in the future gives us read after write within the same ms
+                // Rockdb already gives us atomic writes so I can't think of any downsides with this
+                timestamp: LogicalTimestamp::MAX,
+            })
+        }
         LogicalOperator::TableAlias(table_alias) => build_operator(*table_alias.source),
+        LogicalOperator::TableReference(_) => panic!(),
     }
 }
 
@@ -84,11 +93,10 @@ mod tests {
     use crate::{Planner, PlannerError};
     use ast::expr::{Expression, NamedExpression};
     use data::{DataType, Datum};
-    use functions::registry::Registry;
 
     #[test]
     fn test_plan_for_point_in_time() -> Result<(), PlannerError> {
-        let planner = Planner::new(Registry::new(false));
+        let planner = Planner::new_for_test();
         let session = Session::new(1);
         let raw_query = LogicalOperator::Project(Project {
             distinct: false,

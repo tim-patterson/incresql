@@ -21,7 +21,7 @@ fn select_limit_no_offset() {
         | |source:|||
         | |  PROJECT|||
         | |   |exprs:|||
-        | |   |  _col1 <INTEGER>|0|<OFFSET 0>|
+        | |   |  foo <INTEGER>|0|<OFFSET 0>|
         | |   |source:|||
         | |   |  PROJECT|||
         | |   |   |exprs:|||
@@ -63,7 +63,7 @@ fn select_limit_with_offset() {
         | |source:|||
         | |  PROJECT|||
         | |   |exprs:|||
-        | |   |  _col1 <INTEGER>|0|<OFFSET 0>|
+        | |   |  foo <INTEGER>|0|<OFFSET 0>|
         | |   |source:|||
         | |   |  PROJECT|||
         | |   |   |exprs:|||

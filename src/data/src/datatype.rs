@@ -1,3 +1,5 @@
+use regex::Regex;
+use std::convert::TryFrom;
 use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
@@ -32,13 +34,52 @@ impl Display for DataType {
     }
 }
 
+lazy_static! {
+    static ref DECIMAL_RE: Regex = Regex::new(r"^DECIMAL\(([0-9]+),([0-9]+)\)$").unwrap();
+}
+
+/// Takes strings serialized from Display and turns them back
+/// into a datatype
+impl TryFrom<&str> for DataType {
+    type Error = ();
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "NULL" => Ok(DataType::Null),
+            "BOOLEAN" => Ok(DataType::Boolean),
+            "INTEGER" => Ok(DataType::Integer),
+            "BIGINT" => Ok(DataType::BigInt),
+            "TEXT" => Ok(DataType::Text),
+            "BYTEA" => Ok(DataType::ByteA),
+            "JSON" => Ok(DataType::Json),
+            _ => DECIMAL_RE
+                .captures(value)
+                .map(|d_match| {
+                    let p = d_match.get(1).unwrap().as_str().parse::<u8>().unwrap();
+                    let s = d_match.get(2).unwrap().as_str().parse::<u8>().unwrap();
+                    DataType::Decimal(p, s)
+                })
+                .ok_or(()),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_datum_display() {
+    fn test_datatype_display() {
         assert_eq!(DataType::Null.to_string(), "NULL");
         assert_eq!(DataType::Decimal(1, 2).to_string(), "DECIMAL(1,2)");
+    }
+
+    #[test]
+    fn test_datatype_from_str() {
+        assert_eq!(DataType::try_from("NULL"), Ok(DataType::Null));
+        assert_eq!(
+            DataType::try_from("DECIMAL(1,2)"),
+            Ok(DataType::Decimal(1, 2))
+        );
     }
 }

@@ -157,6 +157,24 @@ fn render_plan(
             padding.pop();
             padding.pop();
         }
+        LogicalOperator::ResolvedTable(table) => {
+            if let Some(name) = alias {
+                lines.push((format!("{}TABLE({})", padding, name), None, None));
+            } else {
+                lines.push((format!("{}TABLE", padding), None, None));
+            }
+            padding.push(" |");
+            lines.push((format!("{}cols:", padding), None, None));
+            for (idx, (alias, datatype)) in table.table.columns().iter().enumerate() {
+                lines.push((
+                    format!("{}  {} <{}>", padding, alias, datatype),
+                    Some(idx),
+                    None,
+                ));
+            }
+            padding.pop();
+        }
+        LogicalOperator::TableReference(_) => panic!(),
         LogicalOperator::TableAlias(table_alias) => {
             // We don't render a table alias, we simply pass down the alias to annotate the operator
             // below

@@ -1,37 +1,56 @@
 use crate::StorageError;
 use data::encoding_core::SortableEncoding;
-use data::{Datum, LogicalTimestamp, SortOrder, TupleIter};
+use data::{DataType, Datum, LogicalTimestamp, SortOrder, TupleIter};
 use rocksdb::prelude::*;
 use rocksdb::{DBRawIterator, WriteBatchWithIndex};
 use std::convert::TryInto;
+use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 
 /// A Table is at this level is a collection of rows, identified by an id.
 /// We'll expose all of these tables by id in some special schema but in general not all of these
-/// are "tables" from the users perspective, some may be indexes.
-/// There's no "real" typing or naming of columns at this level either but we do need to know the
-/// column count and sort orders for the primary key columns(which must come first in the tuples).
+/// are "tables" from the users perspective, some may be indexes..
 /// The primary key isn't exactly a primary key as freq doesn't always = 1. It's more to give KV
 /// semantics(and the performance that comes with it) for system/streaming state tables.
 /// It's not really defined what it means for a user table as of yet, At least for a start we'll
 /// consider all columns of a user table to be primary, if we wanted to expose it at the user level
 /// then we'd have to detect when the tuple-rest didn't match and throw an error.
+#[derive(Clone)]
 pub struct Table {
     db: Arc<DB>,
     id: u32,
+    columns: Vec<(String, DataType)>,
     pk: Vec<SortOrder>,
-    column_count: usize,
+}
+
+impl PartialEq for Table {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+impl Eq for Table {}
+
+impl Debug for Table {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("Table({})", self.id))
+    }
 }
 
 impl Table {
     /// Creates a new table. The pk represents the number of columns in the pk and their sort
     /// orders
-    pub(crate) fn new(db: Arc<DB>, id: u32, pk: Vec<SortOrder>, column_count: usize) -> Self {
+    pub(crate) fn new(
+        db: Arc<DB>,
+        id: u32,
+        columns: Vec<(String, DataType)>,
+        pk: Vec<SortOrder>,
+    ) -> Self {
+        assert!(columns.len() >= pk.len());
         Table {
             db,
             id,
+            columns,
             pk,
-            column_count,
         }
     }
 
@@ -104,7 +123,11 @@ impl Table {
         // Seek to start.
         iter.seek(&self.id.to_be_bytes());
 
-        IndexIter::new(iter, timestamp, self.column_count)
+        IndexIter::new(iter, timestamp, self.columns.len())
+    }
+
+    pub fn columns(&self) -> &[(String, DataType)] {
+        &self.columns
     }
 }
 
@@ -240,6 +263,7 @@ impl Writer {
         timestamp: LogicalTimestamp,
         mut freq: i64,
     ) -> Result<(), StorageError> {
+        assert_eq!(tuple.len(), table.columns.len());
         // create rocksdb key
         write_index_header_key(table, tuple, &mut self.key_buf);
 
@@ -359,7 +383,11 @@ mod tests {
     #[test]
     fn test_force_rocks_compaction() -> Result<(), StorageError> {
         let storage = Storage::new_in_mem()?;
-        let table = storage.table(1234, vec![SortOrder::Asc], 1);
+        let table = storage.table(
+            1234,
+            vec![("col1".to_string(), DataType::Text)],
+            vec![SortOrder::Asc],
+        );
         table.force_rocks_compaction();
         Ok(())
     }
@@ -367,7 +395,12 @@ mod tests {
     #[test]
     fn test_system_write_tuple() -> Result<(), StorageError> {
         let storage = Storage::new_in_mem()?;
-        let table = storage.table(1234, vec![SortOrder::Asc], 3);
+        let columns = vec![
+            ("col1".to_string(), DataType::Integer),
+            ("col2".to_string(), DataType::Integer),
+            ("col3".to_string(), DataType::Text),
+        ];
+        let table = storage.table(1234, columns, vec![SortOrder::Asc]);
         let tuple1 = vec![
             Datum::from(123),
             Datum::Null,
@@ -419,7 +452,11 @@ mod tests {
     #[test]
     fn test_write_tuple() -> Result<(), StorageError> {
         let storage = Storage::new_in_mem()?;
-        let table = storage.table(1234, vec![SortOrder::Asc], 2);
+        let columns = vec![
+            ("col1".to_string(), DataType::Integer),
+            ("col3".to_string(), DataType::Text),
+        ];
+        let table = storage.table(1234, columns, vec![SortOrder::Asc]);
         let tuple = vec![Datum::from(123), Datum::from("abc".to_string())];
 
         table.atomic_write(|writer| {

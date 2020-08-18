@@ -14,7 +14,7 @@ fn select_subquery_no_alias() {
         "
         |PROJECT|||
         | |exprs:|||
-        | |  _col1 <INTEGER>|0|<OFFSET 0>|
+        | |  foo <INTEGER>|0|<OFFSET 0>|
         | |source:|||
         | |  PROJECT|||
         | |   |exprs:|||
@@ -60,7 +60,7 @@ fn select_subquery_with_alias() {
         "
         |PROJECT|||
         | |exprs:|||
-        | |  _col1 <INTEGER>|0|<OFFSET 0>|
+        | |  foo <INTEGER>|0|<OFFSET 0>|
         | |source:|||
         | |  PROJECT(bar)|||
         | |   |exprs:|||

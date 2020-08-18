@@ -7,18 +7,30 @@ mod optimize;
 mod point_in_time;
 mod validate;
 use ast::expr::{ColumnReference, Expression};
+use catalog::{Catalog, CatalogError};
 use functions::registry::{FunctionResolutionError, Registry};
 pub use point_in_time::PointInTimePlan;
 use std::fmt::{Display, Formatter};
+use std::sync::RwLock;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Planner {
     pub function_registry: Registry,
+    pub catalog: RwLock<Catalog>,
 }
 
 impl Planner {
-    pub fn new(function_registry: Registry) -> Self {
-        Planner { function_registry }
+    pub fn new(function_registry: Registry, catalog: Catalog) -> Self {
+        Planner {
+            function_registry,
+            catalog: RwLock::new(catalog),
+        }
+    }
+
+    /// Creates a new planner wrapping the default register and a new
+    /// catalog backed by in-memory storage
+    pub fn new_for_test() -> Self {
+        Planner::new(Registry::default(), Catalog::new_for_test().unwrap())
     }
 }
 
@@ -27,6 +39,7 @@ impl Planner {
 pub enum PlannerError {
     FunctionResolutionError(FunctionResolutionError),
     FieldResolutionError(FieldResolutionError),
+    CatalogError(CatalogError),
     PredicateNotBoolean(DataType, Expression),
     UnionAllMismatch(Vec<DataType>, Vec<DataType>, usize),
 }
@@ -43,11 +56,18 @@ impl From<FieldResolutionError> for PlannerError {
     }
 }
 
+impl From<CatalogError> for PlannerError {
+    fn from(err: CatalogError) -> Self {
+        PlannerError::CatalogError(err)
+    }
+}
+
 impl Display for PlannerError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             PlannerError::FunctionResolutionError(err) => Display::fmt(err, f),
             PlannerError::FieldResolutionError(err) => Display::fmt(err, f),
+            PlannerError::CatalogError(err) => Display::fmt(err, f),
             PlannerError::PredicateNotBoolean(datatype, expr) => f.write_fmt(format_args!(
                 "Predicate returns {} not BOOLEAN - {}",
                 datatype, expr

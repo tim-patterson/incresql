@@ -1,4 +1,5 @@
 use crate::{Planner, PlannerError};
+use ast::expr::{ColumnReference, Expression};
 use ast::rel::logical::LogicalOperator;
 
 impl Planner {
@@ -21,7 +22,15 @@ fn normalize_impl(query: &mut LogicalOperator) {
     // Column Aliases
     for (idx, ne) in query.named_expressions_mut().enumerate() {
         if ne.alias.is_none() {
-            ne.alias = Some(format!("_col{}", idx + 1));
+            ne.alias = if let Expression::ColumnReference(ColumnReference {
+                qualifier: _,
+                alias,
+            }) = &ne.expression
+            {
+                Some(alias.clone())
+            } else {
+                Some(format!("_col{}", idx + 1))
+            };
         }
     }
 }
@@ -32,11 +41,10 @@ mod tests {
     use ast::expr::{Expression, NamedExpression};
     use ast::rel::logical::Project;
     use data::{DataType, Datum};
-    use functions::registry::Registry;
 
     #[test]
     fn test_normalize_column_aliases() -> Result<(), PlannerError> {
-        let planner = Planner::new(Registry::new(false));
+        let planner = Planner::new_for_test();
         let operator = LogicalOperator::Project(Project {
             distinct: false,
             expressions: vec![

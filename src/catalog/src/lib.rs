@@ -1,11 +1,40 @@
 mod bootstrap;
 use data::json::JsonBuilder;
-use data::{DataType, Datum, LogicalTimestamp, SortOrder, TupleIter};
+use data::{DataType, Datum, LogicalTimestamp, SortOrder};
+use std::convert::TryFrom;
+use std::fmt::{Display, Formatter};
 use storage::{Storage, StorageError, Table};
+
+#[derive(Debug)]
+pub enum CatalogError {
+    StorageError(StorageError),
+    TableNotFound(String, String),
+}
+
+impl Display for CatalogError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CatalogError::StorageError(err) => Display::fmt(err, f),
+            CatalogError::TableNotFound(db, table) => {
+                f.write_fmt(format_args!("Table {}.{} not found", db, table))
+            }
+        }
+    }
+}
+
+impl std::error::Error for CatalogError {}
+
+impl From<StorageError> for CatalogError {
+    fn from(err: StorageError) -> Self {
+        CatalogError::StorageError(err)
+    }
+}
 
 /// The catalog is responsible for the lifecycles and naming of all the
 /// database objects.
+#[derive(Debug)]
 pub struct Catalog {
+    storage: Storage,
     // The lowest level of metadata stored by the catalog.
     // a table of
     // table_id:bigint(pk), column_len:int, pks_sorts:[bool]:json
@@ -24,12 +53,33 @@ const TABLES_TABLE_ID: u32 = 4;
 
 impl Catalog {
     /// Creates a catalog, wrapping the passed in storage
-    pub fn new(storage: Storage) -> Result<Self, StorageError> {
-        let prefix_metadata_table =
-            storage.table(PREFIX_METADATA_TABLE_ID, vec![SortOrder::Asc], 3);
-        let databases_table = storage.table(DATABASES_TABLE_ID, vec![SortOrder::Asc], 1);
-        let tables_table = storage.table(TABLES_TABLE_ID, vec![SortOrder::Asc, SortOrder::Asc], 4);
+    pub fn new(storage: Storage) -> Result<Self, CatalogError> {
+        let prefix_metadata_table = storage.table(
+            PREFIX_METADATA_TABLE_ID,
+            vec![
+                ("table_id".to_string(), DataType::BigInt),
+                ("column_len".to_string(), DataType::Integer),
+                ("pks_sorts".to_string(), DataType::Json),
+            ],
+            vec![SortOrder::Asc],
+        );
+        let databases_table = storage.table(
+            DATABASES_TABLE_ID,
+            vec![("name".to_string(), DataType::Text)],
+            vec![SortOrder::Asc],
+        );
+        let tables_table = storage.table(
+            TABLES_TABLE_ID,
+            vec![
+                ("database_name".to_string(), DataType::Text),
+                ("name".to_string(), DataType::Text),
+                ("table_id".to_string(), DataType::BigInt),
+                ("columns".to_string(), DataType::Json),
+            ],
+            vec![SortOrder::Asc, SortOrder::Asc],
+        );
         let mut catalog = Catalog {
+            storage,
             prefix_metadata_table,
             databases_table,
             tables_table,
@@ -38,17 +88,59 @@ impl Catalog {
         Ok(catalog)
     }
 
-    pub fn list_databases(&self) -> Result<Vec<String>, StorageError> {
-        let mut iter = self.databases_table.full_scan(LogicalTimestamp::MAX);
-        let mut results = vec![];
-        while let Some((tuple, _freq)) = iter.next()? {
-            results.push(tuple[0].as_text().unwrap().to_string());
-        }
-        Ok(results)
+    /// Creates a new catalog backed by in-memory storage
+    pub fn new_for_test() -> Result<Self, CatalogError> {
+        Catalog::new(Storage::new_in_mem()?)
+    }
+
+    pub fn table(&self, database: &str, table: &str) -> Result<Table, CatalogError> {
+        let tables_pk = [Datum::from(database), Datum::from(table)];
+        let mut key_buf = vec![];
+        let mut value = vec![];
+
+        self.tables_table
+            .system_point_lookup(&tables_pk, &mut key_buf, &mut value)?
+            .ok_or_else(|| CatalogError::TableNotFound(database.to_string(), table.to_string()))?;
+
+        let id = value[0].as_bigint().unwrap() as u32;
+        let columns: Vec<_> = value[1]
+            .as_json()
+            .unwrap()
+            .iter_array()
+            .unwrap()
+            .map(|col| {
+                let mut iter = col.iter_array().unwrap();
+                let col_name = iter.next().unwrap().get_string().unwrap();
+                let col_type =
+                    DataType::try_from(iter.next().unwrap().get_string().unwrap()).unwrap();
+                (col_name.to_string(), col_type)
+            })
+            .collect();
+
+        let prefix_pk = [value[0].clone()];
+        self.prefix_metadata_table
+            .system_point_lookup(&prefix_pk, &mut key_buf, &mut value)?
+            .unwrap();
+
+        let pk = value[1]
+            .as_json()
+            .unwrap()
+            .iter_array()
+            .unwrap()
+            .map(|b| {
+                if b.get_boolean().unwrap() {
+                    SortOrder::Desc
+                } else {
+                    SortOrder::Asc
+                }
+            })
+            .collect();
+
+        Ok(self.storage.table(id, columns, pk))
     }
 
     /// Creates a database, doesn't do any checks to see if the database already exists etc.
-    fn create_database_impl(&mut self, database_name: &str) -> Result<(), StorageError> {
+    fn create_database_impl(&mut self, database_name: &str) -> Result<(), CatalogError> {
         self.databases_table.atomic_write(|batch| {
             batch.write_tuple(
                 &self.databases_table,
@@ -56,7 +148,8 @@ impl Catalog {
                 LogicalTimestamp::now(),
                 1,
             )
-        })
+        })?;
+        Ok(())
     }
 
     /// Creates a table but doesn't do any checks around the database, table, or id.
@@ -74,7 +167,7 @@ impl Catalog {
             for (alias, datatype) in columns {
                 array.push_array(|col_array| {
                     col_array.push_string(alias);
-                    col_array.push_string(&datatype.to_string());
+                    col_array.push_string(&format!("{:#}", datatype));
                 })
             }
         }));
@@ -107,15 +200,17 @@ impl Catalog {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use data::TupleIter;
 
     #[test]
-    fn test_bootstrap() -> Result<(), StorageError> {
-        let storage = Storage::new_in_mem()?;
-        let catalog = Catalog::new(storage)?;
-        assert_eq!(
-            catalog.list_databases().unwrap(),
-            vec!["default".to_string(), "incresql".to_string()]
-        );
+    fn test_get_table() -> Result<(), CatalogError> {
+        let catalog = Catalog::new_for_test()?;
+        let table = catalog.table("incresql", "databases")?;
+
+        assert_eq!(table.columns(), catalog.databases_table.columns());
+
+        let mut iter = table.full_scan(LogicalTimestamp::MAX);
+        assert_eq!(iter.next()?, Some(([Datum::from("default")].as_ref(), 1)));
         Ok(())
     }
 }

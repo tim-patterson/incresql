@@ -10,7 +10,6 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 pub mod mysql;
 
 /// Implements a tcp server that accepts mysql connections
-#[derive(Default)]
 pub struct Server {
     runtime: Runtime,
 }

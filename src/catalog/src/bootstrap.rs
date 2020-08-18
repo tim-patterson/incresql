@@ -1,10 +1,9 @@
-use crate::{Catalog, DATABASES_TABLE_ID, PREFIX_METADATA_TABLE_ID, TABLES_TABLE_ID};
+use crate::{Catalog, CatalogError, DATABASES_TABLE_ID, PREFIX_METADATA_TABLE_ID, TABLES_TABLE_ID};
 use data::{DataType, Datum, SortOrder};
-use storage::StorageError;
 
 impl Catalog {
     /// Function used on first boot to initialize system tables
-    pub(crate) fn bootstrap(&mut self) -> Result<(), StorageError> {
+    pub(crate) fn bootstrap(&mut self) -> Result<(), CatalogError> {
         let mut key_buf = vec![];
         let mut value_buf = vec![];
         // Initialization check
@@ -51,6 +50,7 @@ impl Catalog {
                 ("columns", DataType::Json),
             ],
             &[SortOrder::Asc, SortOrder::Asc],
-        )
+        )?;
+        Ok(())
     }
 }

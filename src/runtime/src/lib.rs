@@ -4,12 +4,15 @@ mod error;
 pub use error::QueryError;
 
 use crate::connection::Connection;
+use catalog::Catalog;
 use data::Session;
 use functions::registry::Registry;
 use planner::Planner;
 use std::collections::HashMap;
+use std::error::Error;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, RwLock, Weak};
+use storage::Storage;
 
 /// Wraps all the runtime services of incresql.
 /// connections are created from a runtime and then sql can then be run against a connection.
@@ -27,24 +30,30 @@ struct ConnectionsState {
 
 impl Runtime {
     /// Create a new runtime
-    pub fn new() -> Self {
+    pub fn new(db_path: &str) -> Result<Runtime, Box<dyn Error>> {
+        let storage = Storage::new_with_path(db_path)?;
+        Runtime::new_with_storage(storage)
+    }
+
+    fn new_with_storage(storage: Storage) -> Result<Runtime, Box<dyn Error>> {
+        let function_registry = Registry::new(true);
+        let catalog = Catalog::new(storage)?;
+        let planner = Planner::new(function_registry, catalog);
+
         let connections_state = RwLock::from(ConnectionsState {
             connection_id_counter: 0,
             connections: HashMap::new(),
         });
 
-        let function_registry = Registry::new(true);
-        let planner = Planner::new(function_registry);
-        Runtime {
+        Ok(Runtime {
             connections_state,
             planner,
-        }
+        })
     }
-}
 
-impl Default for Runtime {
-    fn default() -> Self {
-        Self::new()
+    /// Creates a new runtime with in-memory storage etc to be used during tests
+    pub fn new_for_test() -> Runtime {
+        Runtime::new_with_storage(Storage::new_in_mem().unwrap()).unwrap()
     }
 }
 
@@ -95,7 +104,7 @@ mod tests {
 
     #[test]
     fn test_new_connection() {
-        let runtime = Runtime::new();
+        let runtime = Runtime::new_for_test();
         let connection_1 = runtime.new_connection();
         let connection_2 = runtime.new_connection();
 
@@ -109,7 +118,7 @@ mod tests {
 
     #[test]
     fn test_connection_kill() {
-        let runtime = Runtime::new();
+        let runtime = Runtime::new_for_test();
         let connection_1 = runtime.new_connection();
 
         assert_eq!(
@@ -124,7 +133,7 @@ mod tests {
 
     #[test]
     fn test_connection_drop() {
-        let runtime = Runtime::new();
+        let runtime = Runtime::new_for_test();
         let connection_1 = runtime.new_connection();
         let connection_2 = runtime.new_connection();
 

@@ -44,7 +44,7 @@ fn select_union_explain() {
         "
         |PROJECT|||
         | |exprs:|||
-        | |  _col1 <INTEGER>|0|<OFFSET 0>|
+        | |  c1 <INTEGER>|0|<OFFSET 0>|
         | |source:|||
         | |  UNION_ALL|||
         | |   |sources:|||
