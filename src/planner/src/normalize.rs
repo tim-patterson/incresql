@@ -1,4 +1,5 @@
 use crate::{Planner, PlannerError};
+use ast::expr::{ColumnReference, Expression};
 use ast::rel::logical::LogicalOperator;
 
 impl Planner {
@@ -21,7 +22,15 @@ fn normalize_impl(query: &mut LogicalOperator) {
     // Column Aliases
     for (idx, ne) in query.named_expressions_mut().enumerate() {
         if ne.alias.is_none() {
-            ne.alias = Some(format!("_col{}", idx + 1));
+            ne.alias = if let Expression::ColumnReference(ColumnReference {
+                qualifier: _,
+                alias,
+            }) = &ne.expression
+            {
+                Some(alias.clone())
+            } else {
+                Some(format!("_col{}", idx + 1))
+            };
         }
     }
 }

@@ -38,7 +38,7 @@ fn select_predicate_reference() {
         "
         |PROJECT|||
         | |exprs:|||
-        | |  _col1 <INTEGER>|0|<OFFSET 0>|
+        | |  foo <INTEGER>|0|<OFFSET 0>|
         | |source:|||
         | |  FILTER|||
         | |   |predicate:||`=`(<OFFSET 0>, 1)|

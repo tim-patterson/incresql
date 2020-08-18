@@ -77,7 +77,9 @@ fn build_operator(query: LogicalOperator) -> PointInTimeOperator {
         LogicalOperator::ResolvedTable(ResolvedTable { table }) => {
             PointInTimeOperator::TableScan(point_in_time::TableScan {
                 table,
-                timestamp: LogicalTimestamp::now(),
+                // Having a timestamp in the future gives us read after write within the same ms
+                // Rockdb already gives us atomic writes so I can't think of any downsides with this
+                timestamp: LogicalTimestamp::MAX,
             })
         }
         LogicalOperator::TableAlias(table_alias) => build_operator(*table_alias.source),

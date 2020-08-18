@@ -1,9 +1,11 @@
-use crate::atoms::{as_clause, integer, kw};
+use crate::atoms::{as_clause, identifier_str, integer, kw};
 use crate::expression::{expression, named_expression};
 use crate::whitespace::ws_0;
 use crate::ParserResult;
 use ast::expr::{Expression, NamedExpression};
-use ast::rel::logical::{Filter, Limit, LogicalOperator, Project, TableAlias, UnionAll};
+use ast::rel::logical::{
+    Filter, Limit, LogicalOperator, Project, TableAlias, TableReference, UnionAll,
+};
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::combinator::{cut, map, opt};
@@ -83,12 +85,8 @@ fn from_clause(input: &str) -> ParserResult<LogicalOperator> {
 }
 
 fn from_item(input: &str) -> ParserResult<LogicalOperator> {
-    // sub query
     map(
-        pair(
-            delimited(pair(tag("("), ws_0), select, pair(ws_0, tag(")"))),
-            as_clause,
-        ),
+        pair(unaliased_from_item, as_clause),
         |(sub_query, alias_opt)| {
             if let Some(alias) = alias_opt {
                 LogicalOperator::TableAlias(TableAlias {
@@ -100,6 +98,14 @@ fn from_item(input: &str) -> ParserResult<LogicalOperator> {
             }
         },
     )(input)
+}
+
+fn unaliased_from_item(input: &str) -> ParserResult<LogicalOperator> {
+    alt((
+        // sub query
+        delimited(pair(tag("("), ws_0), select, pair(ws_0, tag(")"))),
+        table_reference,
+    ))(input)
 }
 
 /// Parse the where clause of a query.
@@ -130,6 +136,37 @@ fn limit_clause(input: &str) -> ParserResult<(i64, i64)> {
             )),
         )),
     )(input)
+}
+
+/// Parse as a table AND wrap in a Table Alias
+fn table_reference(input: &str) -> ParserResult<LogicalOperator> {
+    alt((
+        map(
+            tuple((identifier_str, tag("."), identifier_str)),
+            |(database, _, table)| {
+                let tbl = LogicalOperator::TableReference(TableReference {
+                    database: Some(database),
+                    table: table.clone(),
+                });
+
+                LogicalOperator::TableAlias(TableAlias {
+                    alias: table,
+                    source: Box::new(tbl),
+                })
+            },
+        ),
+        map(identifier_str, |table| {
+            let tbl = LogicalOperator::TableReference(TableReference {
+                database: None,
+                table: table.clone(),
+            });
+
+            LogicalOperator::TableAlias(TableAlias {
+                alias: table,
+                source: Box::new(tbl),
+            })
+        }),
+    ))(input)
 }
 
 #[cfg(test)]
@@ -296,6 +333,31 @@ mod tests {
                         source: Box::from(LogicalOperator::Single)
                     })
                 ]
+            })
+        );
+    }
+
+    #[test]
+    fn test_table_reference() {
+        assert_eq!(
+            table_reference("foo").unwrap().1,
+            LogicalOperator::TableAlias(TableAlias {
+                alias: "foo".to_string(),
+                source: Box::new(LogicalOperator::TableReference(TableReference {
+                    database: None,
+                    table: "foo".to_string()
+                })),
+            })
+        );
+
+        assert_eq!(
+            table_reference("foo.bar").unwrap().1,
+            LogicalOperator::TableAlias(TableAlias {
+                alias: "bar".to_string(),
+                source: Box::new(LogicalOperator::TableReference(TableReference {
+                    database: Some("foo".to_string()),
+                    table: "bar".to_string()
+                })),
             })
         );
     }
