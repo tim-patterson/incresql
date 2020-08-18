@@ -4,6 +4,7 @@ use data::{Datum, LogicalTimestamp, SortOrder, TupleIter};
 use rocksdb::prelude::*;
 use rocksdb::{DBRawIterator, WriteBatchWithIndex};
 use std::convert::TryInto;
+use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 
 /// A Table is at this level is a collection of rows, identified by an id.
@@ -16,11 +17,25 @@ use std::sync::Arc;
 /// It's not really defined what it means for a user table as of yet, At least for a start we'll
 /// consider all columns of a user table to be primary, if we wanted to expose it at the user level
 /// then we'd have to detect when the tuple-rest didn't match and throw an error.
+#[derive(Clone)]
 pub struct Table {
     db: Arc<DB>,
     id: u32,
     pk: Vec<SortOrder>,
     column_count: usize,
+}
+
+impl PartialEq for Table {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+impl Eq for Table {}
+
+impl Debug for Table {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("Table({})", self.id))
+    }
 }
 
 impl Table {

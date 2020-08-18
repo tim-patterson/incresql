@@ -1,5 +1,6 @@
 use crate::expr::Expression;
-use data::Datum;
+use data::{Datum, LogicalTimestamp};
+use storage::Table;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum PointInTimeOperator {
@@ -9,6 +10,7 @@ pub enum PointInTimeOperator {
     Filter(Filter),
     Limit(Limit),
     UnionAll(UnionAll),
+    TableScan(TableScan),
 }
 
 impl Default for PointInTimeOperator {
@@ -46,4 +48,10 @@ pub struct Limit {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct UnionAll {
     pub sources: Vec<PointInTimeOperator>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct TableScan {
+    pub table: Table,
+    pub timestamp: LogicalTimestamp,
 }
