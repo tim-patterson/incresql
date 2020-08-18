@@ -11,6 +11,7 @@ fn show_functions() {
         |-|
         |/|
         |=|
+        |database|
         |to_bigint|
         |to_bool|
         |to_decimal|

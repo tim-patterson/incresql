@@ -2,7 +2,7 @@ use crate::{QueryError, Runtime};
 use ast::expr::Expression;
 use ast::rel::logical::{LogicalOperator, Values};
 use ast::rel::statement::Statement;
-use data::{DataType, Session};
+use data::{DataType, Session, TupleIter};
 use executor::point_in_time::{build_executor, BoxedExecutor};
 use parser::parse;
 use planner::Field;
@@ -45,6 +45,18 @@ impl Connection<'_> {
                     fields: vec![(DataType::Text, String::from("function_name"))],
                     data,
                 })
+            }
+            Statement::ShowDatabases => {
+                return self.execute_statement("SELECT name as database FROM incresql.databases")
+            }
+            Statement::ShowTables => {
+                return self.execute_statement(
+                    "SELECT name as table FROM incresql.tables WHERE database_name = database()",
+                );
+            }
+            Statement::UseDatabase(database) => {
+                *self.session.current_database.write().unwrap() = database;
+                return Ok((vec![], TupleIter::empty()));
             }
             Statement::Query(logical_operator) => logical_operator,
             Statement::Explain(explain) => self
