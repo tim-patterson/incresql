@@ -5,6 +5,9 @@ use crate::rel::logical::LogicalOperator;
 pub enum Statement {
     Query(LogicalOperator),
     ShowFunctions,
+    ShowDatabases,
+    ShowTables,
+    UseDatabase(String),
     Explain(Explain),
 }
 
