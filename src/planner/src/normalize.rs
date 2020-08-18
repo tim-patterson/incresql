@@ -32,11 +32,10 @@ mod tests {
     use ast::expr::{Expression, NamedExpression};
     use ast::rel::logical::Project;
     use data::{DataType, Datum};
-    use functions::registry::Registry;
 
     #[test]
     fn test_normalize_column_aliases() -> Result<(), PlannerError> {
-        let planner = Planner::new(Registry::new(false));
+        let planner = Planner::new_for_test();
         let operator = LogicalOperator::Project(Project {
             distinct: false,
             expressions: vec![

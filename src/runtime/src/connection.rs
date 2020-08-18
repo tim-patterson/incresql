@@ -74,7 +74,7 @@ mod tests {
 
     #[test]
     fn test_execute_statement() -> Result<(), QueryError> {
-        let runtime = Runtime::new();
+        let runtime = Runtime::new_for_test();
         let connection = runtime.new_connection();
         let (fields, mut executor) = connection.execute_statement("select 1")?;
         assert_eq!(
@@ -91,7 +91,7 @@ mod tests {
 
     #[test]
     fn test_execute_statement_rewrite() -> Result<(), QueryError> {
-        let runtime = Runtime::new();
+        let runtime = Runtime::new_for_test();
         let connection = runtime.new_connection();
         let (fields, _executor) = connection.execute_statement("show functions")?;
         assert_eq!(
@@ -107,7 +107,7 @@ mod tests {
 
     #[test]
     fn test_change_database() -> Result<(), QueryError> {
-        let runtime = Runtime::new();
+        let runtime = Runtime::new_for_test();
         let connection = runtime.new_connection();
         connection.change_database("change_to_foo")?;
         assert_eq!(

@@ -15,6 +15,8 @@ impl Display for StorageError {
     }
 }
 
+impl std::error::Error for StorageError {}
+
 impl From<rocksdb::Error> for StorageError {
     fn from(err: Error) -> Self {
         StorageError::RocksDbError(err)

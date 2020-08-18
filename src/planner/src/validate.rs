@@ -1,19 +1,46 @@
 use crate::common::{fields_for_operator, source_fields_for_operator, type_for_expression};
 use crate::{Field, FieldResolutionError, Planner, PlannerError};
 use ast::expr::{ColumnReference, CompiledColumnReference, CompiledFunctionCall, Expression};
-use ast::rel::logical::LogicalOperator;
-use data::{DataType, Datum};
+use ast::rel::logical::{LogicalOperator, ResolvedTable};
+use data::{DataType, Datum, Session};
 use functions::registry::Registry;
 use functions::FunctionSignature;
 
 /// Validate the query, as part of the process of validating the query we will actually end up
 /// doing all the catalog and function lookups and subbing them in.
 impl Planner {
-    pub fn validate(&self, mut query: LogicalOperator) -> Result<LogicalOperator, PlannerError> {
+    pub fn validate(
+        &self,
+        mut query: LogicalOperator,
+        session: &Session,
+    ) -> Result<LogicalOperator, PlannerError> {
+        self.resolve_tables(&mut query, session)?;
         compile_functions(&mut query, &self.function_registry)?;
         check_predicates(&mut query)?;
         check_union_alls(&mut query)?;
         Ok(query)
+    }
+
+    fn resolve_tables(
+        &self,
+        operator: &mut LogicalOperator,
+        session: &Session,
+    ) -> Result<(), PlannerError> {
+        for child in operator.children_mut() {
+            self.resolve_tables(child, session)?;
+        }
+
+        if let LogicalOperator::TableReference(table_ref) = operator {
+            let current_db = session.current_database.read().unwrap();
+            let database = table_ref.database.as_ref().unwrap_or(&current_db);
+            let table_name = &table_ref.table;
+            let catalog = self.catalog.read().unwrap();
+
+            let table = catalog.table(database, table_name)?;
+            *operator = LogicalOperator::ResolvedTable(ResolvedTable { table })
+        }
+
+        Ok(())
     }
 }
 
@@ -196,7 +223,7 @@ fn check_union_alls(operator: &mut LogicalOperator) -> Result<(), PlannerError> 
 mod tests {
     use super::*;
     use ast::expr::{FunctionCall, NamedExpression};
-    use ast::rel::logical::Project;
+    use ast::rel::logical::{Project, TableReference};
     use data::{Datum, Session};
     use functions::Function;
 
@@ -217,7 +244,8 @@ mod tests {
 
     #[test]
     fn test_compile_function() -> Result<(), PlannerError> {
-        let planner = Planner::default();
+        let planner = Planner::new_for_test();
+        let session = Session::new(1);
         let raw_query = LogicalOperator::Project(Project {
             distinct: false,
             expressions: vec![NamedExpression {
@@ -266,9 +294,58 @@ mod tests {
             source: Box::new(LogicalOperator::Single),
         });
 
-        let operator = planner.validate(raw_query)?;
+        let operator = planner.validate(raw_query, &session)?;
 
         assert_eq!(operator, expected);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_resolve_table_qualified() -> Result<(), PlannerError> {
+        let planner = Planner::new_for_test();
+        let session = Session::new(1);
+        let raw_query = LogicalOperator::TableReference(TableReference {
+            database: Some("incresql".to_string()),
+            table: "databases".to_string(),
+        });
+
+        let operator = planner.validate(raw_query, &session)?;
+        let fields: Vec<_> = fields_for_operator(&operator).collect();
+
+        assert_eq!(
+            fields,
+            vec![Field {
+                qualifier: None,
+                alias: "name".to_string(),
+                data_type: DataType::Text
+            }]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_resolve_table_unqualified() -> Result<(), PlannerError> {
+        let planner = Planner::new_for_test();
+        let session = Session::new(1);
+        *session.current_database.write().unwrap() = "incresql".to_string();
+        let raw_query = LogicalOperator::TableReference(TableReference {
+            database: None,
+            table: "databases".to_string(),
+        });
+
+        let operator = planner.validate(raw_query, &session)?;
+        let fields: Vec<_> = fields_for_operator(&operator).collect();
+
+        assert_eq!(
+            fields,
+            vec![Field {
+                qualifier: None,
+                alias: "name".to_string(),
+                data_type: DataType::Text
+            }]
+        );
 
         Ok(())
     }

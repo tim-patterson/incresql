@@ -6,6 +6,7 @@ use rocksdb::compaction_filter::Decision;
 use rocksdb::{
     BlockBasedOptions, DBCompressionType, Env, MergeOperands, Options, SliceTransform, DB,
 };
+use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 
 /// The storage subsystem, used to manage low-level storage of tables and atomicity
@@ -14,6 +15,12 @@ use std::sync::Arc;
 /// no name, its just referenced via a u32
 pub struct Storage {
     db: Arc<DB>,
+}
+
+impl Debug for Storage {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Storage")
+    }
 }
 
 // STORAGE IMPLEMENTATION DETAILS

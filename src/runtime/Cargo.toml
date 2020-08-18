@@ -7,8 +7,10 @@ publish = false
 
 [dependencies]
 ast = { path = "../ast" }
+catalog = { path = "../catalog" }
 data = { path = "../data" }
 executor = { path = "../executor" }
 functions = { path = "../functions" }
 parser = { path = "../parser" }
 planner = { path = "../planner" }
+storage = { path = "../storage" }

@@ -22,6 +22,8 @@ impl Display for CatalogError {
     }
 }
 
+impl std::error::Error for CatalogError {}
+
 impl From<StorageError> for CatalogError {
     fn from(err: StorageError) -> Self {
         CatalogError::StorageError(err)
@@ -30,6 +32,7 @@ impl From<StorageError> for CatalogError {
 
 /// The catalog is responsible for the lifecycles and naming of all the
 /// database objects.
+#[derive(Debug)]
 pub struct Catalog {
     storage: Storage,
     // The lowest level of metadata stored by the catalog.
@@ -83,6 +86,11 @@ impl Catalog {
         };
         catalog.bootstrap()?;
         Ok(catalog)
+    }
+
+    /// Creates a new catalog backed by in-memory storage
+    pub fn new_for_test() -> Result<Self, CatalogError> {
+        Catalog::new(Storage::new_in_mem()?)
     }
 
     pub fn table(&self, database: &str, table: &str) -> Result<Table, CatalogError> {
@@ -196,8 +204,7 @@ mod tests {
 
     #[test]
     fn test_get_table() -> Result<(), CatalogError> {
-        let storage = Storage::new_in_mem()?;
-        let catalog = Catalog::new(storage)?;
+        let catalog = Catalog::new_for_test()?;
         let table = catalog.table("incresql", "databases")?;
 
         assert_eq!(table.columns(), catalog.databases_table.columns());

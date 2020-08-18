@@ -91,11 +91,10 @@ mod tests {
     use crate::{Planner, PlannerError};
     use ast::expr::{Expression, NamedExpression};
     use data::{DataType, Datum};
-    use functions::registry::Registry;
 
     #[test]
     fn test_plan_for_point_in_time() -> Result<(), PlannerError> {
-        let planner = Planner::new(Registry::new(false));
+        let planner = Planner::new_for_test();
         let session = Session::new(1);
         let raw_query = LogicalOperator::Project(Project {
             distinct: false,
