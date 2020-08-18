@@ -167,6 +167,9 @@ impl<'a> MysqlConnection<'a> {
         let capabilities = handshake_response.client_flags;
         self.capabilities = capabilities;
         *self.connection.session.user.write().unwrap() = handshake_response.username;
+        if !handshake_response.database.is_empty() {
+            *self.connection.session.current_database.write().unwrap() = handshake_response.database;
+        }
 
         // Ask for user's password
         self.send_packet(write_auth_switch_request_packet)?;
