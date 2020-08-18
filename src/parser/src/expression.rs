@@ -117,6 +117,17 @@ fn column_reference(input: &str) -> ParserResult<Expression> {
                 Expression::ColumnReference(ColumnReference {
                     qualifier: Some(qualifier),
                     alias,
+                    star: false,
+                })
+            },
+        ),
+        map(
+            tuple((identifier_str, tag("."), tag("*"))),
+            |(qualifier, _, _)| {
+                Expression::ColumnReference(ColumnReference {
+                    qualifier: Some(qualifier),
+                    alias: "*".to_string(),
+                    star: true,
                 })
             },
         ),
@@ -124,6 +135,14 @@ fn column_reference(input: &str) -> ParserResult<Expression> {
             Expression::ColumnReference(ColumnReference {
                 qualifier: None,
                 alias,
+                star: false,
+            })
+        }),
+        map(tag("*"), |_| {
+            Expression::ColumnReference(ColumnReference {
+                qualifier: None,
+                alias: "*".to_string(),
+                star: true,
             })
         }),
     ))(input)
@@ -239,7 +258,8 @@ mod tests {
             expression("foo").unwrap().1,
             Expression::ColumnReference(ColumnReference {
                 qualifier: None,
-                alias: "foo".to_string()
+                alias: "foo".to_string(),
+                star: false
             })
         );
 
@@ -247,7 +267,8 @@ mod tests {
             expression("foo.bar").unwrap().1,
             Expression::ColumnReference(ColumnReference {
                 qualifier: Some("foo".to_string()),
-                alias: "bar".to_string()
+                alias: "bar".to_string(),
+                star: false
             })
         );
 
@@ -255,7 +276,8 @@ mod tests {
             expression("`foo`").unwrap().1,
             Expression::ColumnReference(ColumnReference {
                 qualifier: None,
-                alias: "foo".to_string()
+                alias: "foo".to_string(),
+                star: false
             })
         );
 
@@ -263,7 +285,47 @@ mod tests {
             expression("`foo`.`bar`").unwrap().1,
             Expression::ColumnReference(ColumnReference {
                 qualifier: Some("foo".to_string()),
-                alias: "bar".to_string()
+                alias: "bar".to_string(),
+                star: false
+            })
+        );
+    }
+
+    #[test]
+    fn test_column_reference_star() {
+        assert_eq!(
+            expression("*").unwrap().1,
+            Expression::ColumnReference(ColumnReference {
+                qualifier: None,
+                alias: "*".to_string(),
+                star: true
+            })
+        );
+
+        assert_eq!(
+            expression("`*`").unwrap().1,
+            Expression::ColumnReference(ColumnReference {
+                qualifier: None,
+                alias: "*".to_string(),
+                star: false
+            })
+        );
+
+        assert_eq!(
+            expression("foo.*").unwrap().1,
+            Expression::ColumnReference(ColumnReference {
+                qualifier: Some("foo".to_string()),
+                alias: "*".to_string(),
+                star: true
+            })
+        );
+
+        assert_eq!(
+            expression("foo.`*`").unwrap().1,
+            Expression::ColumnReference(ColumnReference {
+                qualifier: Some("foo".to_string()),
+                alias: "*".to_string(),
+                star: false
             })
         );
     }

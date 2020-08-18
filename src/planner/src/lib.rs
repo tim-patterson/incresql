@@ -115,6 +115,7 @@ impl Display for FieldResolutionError {
                         ColumnReference {
                             qualifier: f.qualifier.clone(),
                             alias: f.alias.clone(),
+                            star: false,
                         }
                         .to_string()
                     })
@@ -129,6 +130,7 @@ impl Display for FieldResolutionError {
                         ColumnReference {
                             qualifier: f.qualifier.clone(),
                             alias: f.alias.clone(),
+                            star: false,
                         }
                         .to_string()
                     })

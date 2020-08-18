@@ -57,6 +57,10 @@ impl Eq for CompiledFunctionCall {}
 pub struct ColumnReference {
     pub qualifier: Option<String>,
     pub alias: String,
+    // Easier to just make this a bool rather than pattern match on
+    // an enum, an alias of "*" isn't enough as that *could* be a valid
+    // alias... (who on earth would do that tho!).
+    pub star: bool,
 }
 
 /// Column reference but is indexed via offset instead of having to do
