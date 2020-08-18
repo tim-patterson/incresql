@@ -1,8 +1,8 @@
 use crate::{Field, Planner, PlannerError};
 use ast::expr::Expression;
-use ast::rel::logical::{Filter, Limit, LogicalOperator, Project, UnionAll};
+use ast::rel::logical::{Filter, Limit, LogicalOperator, Project, ResolvedTable, UnionAll};
 use ast::rel::point_in_time::{self, PointInTimeOperator};
-use data::Session;
+use data::{LogicalTimestamp, Session};
 
 pub struct PointInTimePlan {
     pub fields: Vec<Field>,
@@ -74,7 +74,14 @@ fn build_operator(query: LogicalOperator) -> PointInTimeOperator {
                 sources: sources.into_iter().map(build_operator).collect(),
             })
         }
+        LogicalOperator::ResolvedTable(ResolvedTable { table }) => {
+            PointInTimeOperator::TableScan(point_in_time::TableScan {
+                table,
+                timestamp: LogicalTimestamp::now(),
+            })
+        }
         LogicalOperator::TableAlias(table_alias) => build_operator(*table_alias.source),
+        LogicalOperator::TableReference(_) => panic!(),
     }
 }
 

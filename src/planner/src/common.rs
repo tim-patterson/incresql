@@ -64,6 +64,14 @@ pub(crate) fn fields_for_operator(
             fields_for_operator(union_all.sources.first().unwrap())
         }
         LogicalOperator::Single => Box::from(empty()),
+        LogicalOperator::ResolvedTable(table) => {
+            Box::from(table.table.columns().iter().map(|(alias, datatype)| Field {
+                qualifier: None,
+                alias: alias.clone(),
+                data_type: *datatype,
+            }))
+        }
+        LogicalOperator::TableReference(_) => panic!(),
     }
 }
 
@@ -81,8 +89,10 @@ pub(crate) fn source_fields_for_operator(
         LogicalOperator::UnionAll(union_all) => {
             fields_for_operator(union_all.sources.first().unwrap())
         }
-        LogicalOperator::Values(_) => Box::from(empty()),
-        LogicalOperator::Single => Box::from(empty()),
+        LogicalOperator::Values(_)
+        | LogicalOperator::Single
+        | LogicalOperator::TableReference(_)
+        | LogicalOperator::ResolvedTable(_) => Box::from(empty()),
     }
 }
 

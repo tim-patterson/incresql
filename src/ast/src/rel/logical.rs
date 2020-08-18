@@ -1,6 +1,7 @@
 use crate::expr::{Expression, NamedExpression};
 use data::DataType;
 use std::iter::{empty, once};
+use storage::Table;
 
 /// Represents a query in the generic sense, generated from the parser, and validated and
 /// modified by the planner.
@@ -14,6 +15,8 @@ pub enum LogicalOperator {
     Values(Values),
     TableAlias(TableAlias),
     UnionAll(UnionAll),
+    TableReference(TableReference),
+    ResolvedTable(ResolvedTable),
 }
 
 impl Default for LogicalOperator {
@@ -62,6 +65,19 @@ pub struct UnionAll {
     pub sources: Vec<LogicalOperator>,
 }
 
+/// A "table" reference, ie "FROM foo",
+/// This table could be a table, a view or even a CTE
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct TableReference {
+    pub database: Option<String>,
+    pub table: String,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct ResolvedTable {
+    pub table: Table,
+}
+
 impl LogicalOperator {
     /// Iterates over the named(output) expressions *owned* by this operator.
     /// To iterate over the output fields instead use one of the fields methods in the planner
@@ -73,7 +89,9 @@ impl LogicalOperator {
             | LogicalOperator::Limit(_)
             | LogicalOperator::Values(_)
             | LogicalOperator::TableAlias(_)
-            | LogicalOperator::UnionAll(_) => Box::from(empty()),
+            | LogicalOperator::UnionAll(_)
+            | LogicalOperator::TableReference(_)
+            | LogicalOperator::ResolvedTable(_) => Box::from(empty()),
         }
     }
 
@@ -87,7 +105,9 @@ impl LogicalOperator {
             | LogicalOperator::Limit(_)
             | LogicalOperator::Values(_)
             | LogicalOperator::TableAlias(_)
-            | LogicalOperator::UnionAll(_) => Box::from(empty()),
+            | LogicalOperator::UnionAll(_)
+            | LogicalOperator::TableReference(_)
+            | LogicalOperator::ResolvedTable(_) => Box::from(empty()),
         }
     }
 
@@ -104,7 +124,9 @@ impl LogicalOperator {
             LogicalOperator::Single
             | LogicalOperator::Limit(_)
             | LogicalOperator::TableAlias(_)
-            | LogicalOperator::UnionAll(_) => Box::from(empty()),
+            | LogicalOperator::UnionAll(_)
+            | LogicalOperator::TableReference(_)
+            | LogicalOperator::ResolvedTable(_) => Box::from(empty()),
         }
     }
 
@@ -118,7 +140,10 @@ impl LogicalOperator {
                 Box::from(once(table_alias.source.as_mut()))
             }
             LogicalOperator::UnionAll(union_all) => Box::from(union_all.sources.iter_mut()),
-            LogicalOperator::Single | LogicalOperator::Values(_) => Box::from(empty()),
+            LogicalOperator::Single
+            | LogicalOperator::Values(_)
+            | LogicalOperator::TableReference(_)
+            | LogicalOperator::ResolvedTable(_) => Box::from(empty()),
         }
     }
 }
