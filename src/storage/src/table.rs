@@ -77,7 +77,10 @@ impl Table {
     {
         let mut writer = Writer::new();
         batch(&mut writer)?;
-        self.db.write(writer.write_batch)?;
+        let mut write_options = WriteOptions::new();
+        write_options.set_sync(true);
+        write_options.set_low_pri(true);
+        self.db.write_opt(writer.write_batch, &write_options)?;
         Ok(())
     }
 
