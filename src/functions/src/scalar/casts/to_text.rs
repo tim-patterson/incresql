@@ -108,7 +108,7 @@ mod tests {
                 &sig(DataType::Boolean),
                 &[Datum::from(true)]
             ),
-            Datum::ByteARef(b"TRUE")
+            Datum::from("TRUE")
         )
     }
 
@@ -116,7 +116,7 @@ mod tests {
     fn test_from_int() {
         assert_eq!(
             ToTextFromAny {}.execute(&Session::new(1), &sig(DataType::Integer), &[Datum::from(1)]),
-            Datum::from("1".to_string())
+            Datum::from("1")
         )
     }
 
@@ -128,7 +128,7 @@ mod tests {
                 &sig(DataType::BigInt),
                 &[Datum::from(1_i64)]
             ),
-            Datum::from("1".to_string())
+            Datum::from("1")
         )
     }
 
@@ -140,7 +140,7 @@ mod tests {
                 &sig(DataType::Decimal(10, 1)),
                 &[Datum::from(Decimal::new(10, 1))]
             ),
-            Datum::from("1.0".to_string())
+            Datum::from("1.0")
         );
 
         assert_eq!(
@@ -149,7 +149,7 @@ mod tests {
                 &sig(DataType::Decimal(10, 2)),
                 &[Datum::from(Decimal::new(10, 1))]
             ),
-            Datum::from("1.00".to_string())
+            Datum::from("1.00")
         )
     }
 
@@ -163,11 +163,7 @@ mod tests {
 
         // String Owned
         assert_eq!(
-            ToTextFromText {}.execute(
-                &Session::new(1),
-                &sig(DataType::Text),
-                &[Datum::from("1".to_string())]
-            ),
+            ToTextFromText {}.execute(&Session::new(1), &sig(DataType::Text), &[Datum::from("1")]),
             Datum::from("1")
         )
     }

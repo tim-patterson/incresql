@@ -39,7 +39,7 @@ mod tests {
 
         assert_eq!(
             TypeOf {}.execute(&Session::new(1), &sig, &[Datum::Null]),
-            Datum::from("NULL".to_string())
+            Datum::from("NULL")
         )
     }
 
@@ -53,7 +53,7 @@ mod tests {
 
         assert_eq!(
             TypeOf {}.execute(&Session::new(1), &sig, &[Datum::Null]),
-            Datum::from("DECIMAL(1,2)".to_string())
+            Datum::from("DECIMAL(1,2)")
         )
     }
 }

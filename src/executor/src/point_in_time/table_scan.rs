@@ -47,9 +47,21 @@ mod tests {
     use storage::Storage;
 
     #[test]
-    fn test_table_snan_executor() -> Result<(), ExecutionError> {
+    fn test_table_scan_executor() -> Result<(), ExecutionError> {
         let storage = Storage::new_in_mem()?;
-        let _catalog = Catalog::new(storage)?;
+        let catalog = Catalog::new(storage).unwrap();
+        let table = catalog.table("incresql", "databases").unwrap();
+
+        let mut executor = TableScanExecutor::new(table, LogicalTimestamp::MAX);
+        assert_eq!(
+            executor.next()?,
+            Some(([Datum::from("default")].as_ref(), 1))
+        );
+        assert_eq!(
+            executor.next()?,
+            Some(([Datum::from("incresql")].as_ref(), 1))
+        );
+        assert_eq!(executor.next()?, None);
         Ok(())
     }
 }

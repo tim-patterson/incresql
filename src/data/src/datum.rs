@@ -6,7 +6,7 @@ use std::fmt::{Debug, Display, Formatter};
 /// Datum - in memory representation of sql value.
 /// The same datum may be able to be interpreted as multiple different
 /// datatypes. Ie bytea can is used to back json and text.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum Datum<'a> {
     Null,
     Boolean(bool),
@@ -83,6 +83,13 @@ impl<'a> Datum<'a> {
         }
     }
 }
+
+impl PartialEq for Datum<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.sql_eq(other, true)
+    }
+}
+impl Eq for Datum<'_> {}
 
 // From builders to build datums from the native rust types
 impl Default for Datum<'_> {
@@ -279,23 +286,28 @@ mod tests {
     fn test_datum_ref_clone() {
         assert_eq!(Datum::from(1).ref_clone(), Datum::Integer(1));
 
-        assert_eq!(
-            Datum::ByteAOwned(Box::from(b"hello".as_ref())).ref_clone(),
-            Datum::ByteARef(b"hello")
-        );
+        if let Datum::ByteARef(b"hello") =
+            Datum::ByteAOwned(Box::from(b"hello".as_ref())).ref_clone()
+        {
+        } else {
+            panic!()
+        }
     }
 
     #[test]
     fn test_datum_as_static() {
-        assert_eq!(
-            Datum::ByteARef(b"Hello world").as_static(),
-            Datum::ByteAInline(11, *b"Hello world\0\0\0\0\0\0\0\0\0\0\0")
-        );
+        if let Datum::ByteAInline(11, b) = Datum::ByteARef(b"Hello world").as_static() {
+            assert_eq!(b, *b"Hello world\0\0\0\0\0\0\0\0\0\0\0")
+        } else {
+            panic!()
+        }
 
-        assert_eq!(
-            Datum::ByteARef(b"Hello world123456789123456789").as_static(),
-            Datum::ByteAOwned(Box::from(b"Hello world123456789123456789".as_ref()))
-        );
+        if let Datum::ByteAOwned(b) = Datum::ByteARef(b"Hello world123456789123456789").as_static()
+        {
+            assert_eq!(b, Box::from(b"Hello world123456789123456789".as_ref()))
+        } else {
+            panic!()
+        }
     }
 
     #[test]
