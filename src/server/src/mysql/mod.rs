@@ -81,9 +81,7 @@ impl<'a> MysqlConnection<'a> {
         let capabilities = self.capabilities;
         match self.connection.execute_statement(query) {
             Ok((fields, mut executor)) => {
-                if fields.is_empty() {
-                    self.send_packet(|buf| write_ok_packet(false, 0, capabilities, buf))?;
-                } else {
+                if !fields.is_empty() {
                     self.send_packet(|buf| {
                         write_resultset_packet(fields.len(), capabilities, buf)
                     })?;
@@ -99,41 +97,43 @@ impl<'a> MysqlConnection<'a> {
                         })?;
                     }
 
-                    let datatypes: Vec<_> = fields.iter().map(|f| f.data_type).collect();
-
                     if (capabilities & CAPABILITY_CLIENT_DEPRECATE_EOF) == 0 {
                         self.send_packet(|buf| write_eof_packet(capabilities, buf))?;
                     }
-
-                    loop {
-                        match executor.next() {
-                            Ok(Some((tuple, freq))) => {
+                }
+                let datatypes: Vec<_> = fields.iter().map(|f| f.data_type).collect();
+                loop {
+                    match executor.next() {
+                        Ok(Some((tuple, freq))) => {
+                            if !fields.is_empty() {
                                 for _ in 0..freq {
                                     self.send_packet(|buf| {
                                         write_tuple_packet(tuple, &datatypes, buf)
                                     })?;
                                 }
                             }
-                            Ok(None) => break,
-                            Err(err) => {
-                                let my_err = MyError {
-                                    msg: &err.to_string(),
-                                    sql_state: "HY000",
-                                    code: 1,
-                                };
-                                self.send_packet(|buf| {
-                                    write_err_packet_from_err(&my_err, capabilities, buf)
-                                })?;
-                                break;
-                            }
+                        }
+                        Ok(None) => break,
+                        Err(err) => {
+                            let my_err = MyError {
+                                msg: &err.to_string(),
+                                sql_state: "HY000",
+                                code: 1,
+                            };
+                            self.send_packet(|buf| {
+                                write_err_packet_from_err(&my_err, capabilities, buf)
+                            })?;
+                            break;
                         }
                     }
+                }
 
-                    if (capabilities & CAPABILITY_CLIENT_DEPRECATE_EOF) == 0 {
-                        self.send_packet(|buf| write_eof_packet(capabilities, buf))?;
-                    } else {
-                        self.send_packet(|buf| write_ok_packet(true, 0, capabilities, buf))?;
-                    }
+                if fields.is_empty() {
+                    self.send_packet(|buf| write_ok_packet(false, 0, capabilities, buf))?;
+                } else if (capabilities & CAPABILITY_CLIENT_DEPRECATE_EOF) == 0 {
+                    self.send_packet(|buf| write_eof_packet(capabilities, buf))?;
+                } else {
+                    self.send_packet(|buf| write_ok_packet(true, 0, capabilities, buf))?;
                 }
             }
             Err(QueryError::ParseError(parse_error)) => {

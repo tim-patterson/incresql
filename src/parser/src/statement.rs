@@ -1,10 +1,12 @@
 use crate::atoms::{identifier_str, kw};
 use crate::create::create;
 use crate::drop::drop_;
+use crate::insert::insert;
 use crate::select::select;
 use crate::show::show;
 use crate::whitespace::ws_0;
 use crate::ParserResult;
+use ast::rel::logical::LogicalOperator;
 use ast::rel::statement::{Explain, Statement};
 use nom::branch::alt;
 use nom::combinator::{cut, map};
@@ -12,7 +14,7 @@ use nom::sequence::preceded;
 
 pub fn statement(input: &str) -> ParserResult<Statement> {
     alt((
-        map(select, Statement::Query),
+        map(logical_operator, Statement::Query),
         show,
         explain,
         use_,
@@ -21,9 +23,15 @@ pub fn statement(input: &str) -> ParserResult<Statement> {
     ))(input)
 }
 
+/// The logical operator statements, these can be used both as a standalone
+/// statement and as input to the explain operator
+fn logical_operator(input: &str) -> ParserResult<LogicalOperator> {
+    alt((select, insert))(input)
+}
+
 fn explain(input: &str) -> ParserResult<Statement> {
     map(
-        preceded(kw("EXPLAIN"), cut(preceded(ws_0, select))),
+        preceded(kw("EXPLAIN"), cut(preceded(ws_0, logical_operator))),
         |query| Statement::Explain(Explain { operator: query }),
     )(input)
 }

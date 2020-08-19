@@ -9,6 +9,7 @@ mod atoms;
 mod create;
 mod drop;
 mod expression;
+mod insert;
 mod literals;
 mod select;
 mod show;

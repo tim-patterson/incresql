@@ -21,7 +21,6 @@ impl Planner {
     ) -> Result<PointInTimePlan, PlannerError> {
         let (fields, operator) = self.plan_common(query, session)?;
         let operator = build_operator(operator);
-
         Ok(PointInTimePlan { fields, operator })
     }
 }
