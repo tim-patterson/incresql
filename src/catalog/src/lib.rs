@@ -373,10 +373,7 @@ mod tests {
         catalog.create_table("default", "test", &columns)?;
 
         let table = catalog.table("default", "test")?;
-        assert_eq!(
-            table.columns(),
-            columns.as_slice()
-        );
+        assert_eq!(table.columns(), columns.as_slice());
         Ok(())
     }
 }

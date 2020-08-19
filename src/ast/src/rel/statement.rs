@@ -29,5 +29,5 @@ pub struct CreateDatabase {
 pub struct CreateTable {
     pub database: Option<String>,
     pub name: String,
-    pub columns: Vec<(String, DataType)>
+    pub columns: Vec<(String, DataType)>,
 }

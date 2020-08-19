@@ -144,6 +144,16 @@ pub fn as_clause(input: &str) -> ParserResult<Option<String>> {
     ))(input)
 }
 
+pub fn qualified_reference(input: &str) -> ParserResult<(Option<String>, String)> {
+    alt((
+        map(
+            tuple((identifier_str, tag("."), identifier_str)),
+            |(qualifier, _, alias)| (Some(qualifier), alias),
+        ),
+        map(identifier_str, |alias| (None, alias)),
+    ))(input)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -265,5 +275,18 @@ mod tests {
         assert_eq!(as_clause("as foo").unwrap().1, Some(String::from("foo")));
 
         assert_eq!(as_clause("as `foo`").unwrap().1, Some(String::from("foo")));
+    }
+
+    #[test]
+    fn test_qualified_reference() {
+        assert_eq!(
+            qualified_reference("foo").unwrap().1,
+            (None, "foo".to_string())
+        );
+
+        assert_eq!(
+            qualified_reference("foo.bar").unwrap().1,
+            (Some("foo".to_string()), "bar".to_string())
+        );
     }
 }
