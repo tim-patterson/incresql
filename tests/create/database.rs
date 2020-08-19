@@ -1,7 +1,7 @@
 use crate::runner::*;
 
 #[test]
-fn show_databases() {
+fn create_databases() {
     with_connection(|connection| {
         connection.query(r#"CREATE DATABASE foobar"#, "");
 
