@@ -79,9 +79,16 @@ impl Catalog {
         let mut key_buf = vec![];
         let mut value = vec![];
 
-        self.tables_table
+        let freq = self
+            .tables_table
             .system_point_lookup(&tables_pk, &mut key_buf, &mut value)?
-            .ok_or_else(|| CatalogError::TableNotFound(database.to_string(), table.to_string()))?;
+            .unwrap_or(0);
+        if freq == 0 {
+            return Err(CatalogError::TableNotFound(
+                database.to_string(),
+                table.to_string(),
+            ));
+        }
 
         let id = value[0].as_bigint().unwrap() as u32;
         let columns: Vec<_> = value[1]
@@ -155,6 +162,16 @@ impl Catalog {
         let pk: Vec<_> = columns.iter().map(|_| SortOrder::Asc).collect();
 
         self.create_table_impl(database_name, table_name, id, columns, &pk, false)
+    }
+
+    /// Drops a table
+    pub fn drop_table(
+        &mut self,
+        database_name: &str,
+        table_name: &str,
+    ) -> Result<(), CatalogError> {
+        self.check_table_exists(database_name, table_name)?;
+        self.drop_table_impl(database_name, table_name)
     }
 
     /// Creates a database, doesn't do any checks to see if the database already exists etc.
@@ -326,6 +343,36 @@ impl Catalog {
         })?;
         Ok(())
     }
+
+    /// Drops a table but doesn't do any of the pre checks
+    fn drop_table_impl(
+        &mut self,
+        database_name: &str,
+        table_name: &str,
+    ) -> Result<(), CatalogError> {
+        let now = LogicalTimestamp::now();
+        let table_key = [Datum::from(database_name), Datum::from(table_name)];
+        let mut tables_iter =
+            self.tables_table
+                .range_scan(Some(&table_key), Some(&table_key), LogicalTimestamp::MAX);
+
+        let (table_tuple, table_freq) = tables_iter.next()?.unwrap();
+
+        let prefix_key = &table_tuple[2..3];
+        let mut prefix_iter = self.prefix_metadata_table.range_scan(
+            Some(&prefix_key),
+            Some(&prefix_key),
+            LogicalTimestamp::MAX,
+        );
+
+        let (prefix_tuple, prefix_freq) = prefix_iter.next()?.unwrap();
+
+        self.tables_table.atomic_write(|batch| {
+            batch.write_tuple(&self.tables_table, table_tuple, now, -table_freq)?;
+            batch.write_tuple(&self.prefix_metadata_table, prefix_tuple, now, -prefix_freq)
+        })?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -374,6 +421,9 @@ mod tests {
 
         let table = catalog.table("default", "test")?;
         assert_eq!(table.columns(), columns.as_slice());
+
+        catalog.drop_table("default", "test")?;
+        assert!(catalog.table("default", "test").is_err());
         Ok(())
     }
 }
