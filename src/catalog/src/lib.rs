@@ -2,10 +2,12 @@ mod bootstrap;
 use data::json::JsonBuilder;
 use data::{DataType, Datum, LogicalTimestamp, SortOrder, TupleIter};
 use std::convert::TryFrom;
-use storage::{Storage, StorageError, Table};
+use storage::{Storage, Table};
 
 mod error;
 pub use error::*;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 
 /// The catalog is responsible for the lifecycles and naming of all the
 /// database objects.
@@ -20,7 +22,7 @@ pub struct Catalog {
     // name:text(pk)
     databases_table: Table,
     // Table listing tables
-    // database_id:text(pk), table_name:text(pk), table_id:bigint, columns:json
+    // database_id:text(pk), table_name:text(pk), table_id:bigint, columns:json, system:bool
     tables_table: Table,
 }
 
@@ -52,6 +54,7 @@ impl Catalog {
                 ("name".to_string(), DataType::Text),
                 ("table_id".to_string(), DataType::BigInt),
                 ("columns".to_string(), DataType::Json),
+                ("system".to_string(), DataType::Boolean),
             ],
             vec![SortOrder::Asc, SortOrder::Asc],
         );
@@ -119,22 +122,13 @@ impl Catalog {
 
     /// Called to create a database
     pub fn create_database(&mut self, database_name: &str) -> Result<(), CatalogError> {
-        let pk = [Datum::from(database_name)];
-        {
-            let mut iter =
-                self.databases_table
-                    .range_scan(Some(&pk), Some(&pk), LogicalTimestamp::MAX);
-            if iter.next()?.is_some() {
-                return Err(CatalogError::DatabaseAlreadyExists(
-                    database_name.to_string(),
-                ));
-            }
-        }
+        self.check_db_not_exists(database_name)?;
         self.create_database_impl(database_name)
     }
 
     /// Called to drop a database
     pub fn drop_database(&mut self, database_name: &str) -> Result<(), CatalogError> {
+        self.check_db_exists(database_name)?;
         self.check_db_empty(database_name)?;
         // Write with freq -1
         self.databases_table.atomic_write(|batch| {
@@ -146,6 +140,21 @@ impl Catalog {
             )
         })?;
         Ok(())
+    }
+
+    /// Creates a new table
+    pub fn create_table(
+        &mut self,
+        database_name: &str,
+        table_name: &str,
+        columns: &[(&str, DataType)],
+    ) -> Result<(), CatalogError> {
+        self.check_db_exists(database_name)?;
+        self.check_table_not_exists(database_name, table_name)?;
+        let id = self.generate_table_id(table_name)?;
+        let pk: Vec<_> = columns.iter().map(|_| SortOrder::Asc).collect();
+
+        self.create_table_impl(database_name, table_name, id, columns, &pk, false)
     }
 
     /// Creates a database, doesn't do any checks to see if the database already exists etc.
@@ -174,6 +183,103 @@ impl Catalog {
         }
     }
 
+    /// Check for if a database with that name exists
+    fn check_db_exists(&mut self, database_name: &str) -> Result<(), CatalogError> {
+        if !self.db_exists(database_name)? {
+            Err(CatalogError::DatabaseNotFound(database_name.to_string()))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn check_db_not_exists(&mut self, database_name: &str) -> Result<(), CatalogError> {
+        if self.db_exists(database_name)? {
+            Err(CatalogError::DatabaseAlreadyExists(
+                database_name.to_string(),
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn db_exists(&mut self, database_name: &str) -> Result<bool, CatalogError> {
+        let db_datum = [Datum::from(database_name)];
+        let mut iter = self.databases_table.range_scan(
+            Some(&db_datum),
+            Some(&db_datum),
+            LogicalTimestamp::MAX,
+        );
+        Ok(iter.next()?.is_some())
+    }
+
+    /// Check for if a database with that name exists
+    fn check_table_exists(
+        &mut self,
+        database_name: &str,
+        table_name: &str,
+    ) -> Result<(), CatalogError> {
+        if !self.table_exists(database_name, table_name)? {
+            Err(CatalogError::TableNotFound(
+                database_name.to_string(),
+                table_name.to_string(),
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn check_table_not_exists(
+        &mut self,
+        database_name: &str,
+        table_name: &str,
+    ) -> Result<(), CatalogError> {
+        if self.table_exists(database_name, table_name)? {
+            Err(CatalogError::TableAlreadyExists(
+                database_name.to_string(),
+                table_name.to_string(),
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn table_exists(
+        &mut self,
+        database_name: &str,
+        table_name: &str,
+    ) -> Result<bool, CatalogError> {
+        let table_datum = [Datum::from(database_name), Datum::from(table_name)];
+        let mut iter = self.tables_table.range_scan(
+            Some(&table_datum),
+            Some(&table_datum),
+            LogicalTimestamp::MAX,
+        );
+        Ok(iter.next()?.is_some())
+    }
+
+    fn generate_table_id(&mut self, table_name: &str) -> Result<u32, CatalogError> {
+        let mut hasher = DefaultHasher::new();
+        table_name.hash(&mut hasher);
+        let mut id = hasher.finish() as u32;
+        // Make sure table_id is even
+        if id & 1 == 1 {
+            id -= 1;
+        }
+        loop {
+            let proposed = [Datum::from(id as i64)];
+            let mut iter = self.prefix_metadata_table.range_scan(
+                Some(&proposed),
+                Some(&proposed),
+                LogicalTimestamp::MAX,
+            );
+            if iter.next()?.is_none() {
+                return Ok(id);
+            } else {
+                id += 2;
+            }
+        }
+    }
+
     /// Creates a table but doesn't do any checks around the database, table, or id.
     fn create_table_impl(
         &mut self,
@@ -182,7 +288,8 @@ impl Catalog {
         table_id: u32,
         columns: &[(&str, DataType)],
         pks: &[SortOrder],
-    ) -> Result<(), StorageError> {
+        system: bool,
+    ) -> Result<(), CatalogError> {
         let timestamp = LogicalTimestamp::now();
 
         let columns_datum = Datum::from(JsonBuilder::default().array(|array| {
@@ -206,6 +313,7 @@ impl Catalog {
                 Datum::from(table_name),
                 Datum::from(table_id as i64),
                 columns_datum,
+                Datum::from(system),
             ];
             batch.write_tuple(&self.tables_table, &tuple, timestamp, 1)?;
 
@@ -215,7 +323,8 @@ impl Catalog {
                 pks,
             ];
             batch.write_tuple(&self.prefix_metadata_table, &tuple, timestamp, 1)
-        })
+        })?;
+        Ok(())
     }
 }
 
@@ -253,6 +362,21 @@ mod tests {
         catalog.drop_database("abc")?;
         let mut iter = dbs_table.full_scan(LogicalTimestamp::MAX);
         assert_eq!(iter.next()?, Some(([Datum::from("default")].as_ref(), 1)));
+        Ok(())
+    }
+
+    #[test]
+    fn test_create_table() -> Result<(), CatalogError> {
+        let mut catalog = Catalog::new_for_test()?;
+        let columns = vec![("a", DataType::Integer)];
+
+        catalog.create_table("default", "test", &columns)?;
+
+        let table = catalog.table("default", "test")?;
+        assert_eq!(
+            table.columns(),
+            [("a".to_string(), DataType::Integer)].as_ref()
+        );
         Ok(())
     }
 }

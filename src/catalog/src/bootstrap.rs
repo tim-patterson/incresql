@@ -31,6 +31,7 @@ impl Catalog {
                 ("pk_sort", DataType::Json),
             ],
             &[SortOrder::Asc],
+            true,
         )?;
         self.create_table_impl(
             "incresql",
@@ -38,6 +39,7 @@ impl Catalog {
             DATABASES_TABLE_ID,
             &[("name", DataType::Text)],
             &[SortOrder::Asc],
+            true,
         )?;
         self.create_table_impl(
             "incresql",
@@ -48,8 +50,10 @@ impl Catalog {
                 ("name", DataType::Text),
                 ("table_id", DataType::BigInt),
                 ("columns", DataType::Json),
+                ("system", DataType::Boolean),
             ],
             &[SortOrder::Asc, SortOrder::Asc],
+            true,
         )?;
         Ok(())
     }
