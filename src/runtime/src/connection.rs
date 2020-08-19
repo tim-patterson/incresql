@@ -63,6 +63,11 @@ impl Connection<'_> {
                 .runtime
                 .planner
                 .explain_logical(explain.operator, &self.session)?,
+            Statement::CreateDatabase(create_database) => {
+                let mut catalog = self.runtime.planner.catalog.write().unwrap();
+                catalog.create_database(&create_database.name)?;
+                return Ok((vec![], TupleIter::empty()));
+            }
         };
 
         let plan = self

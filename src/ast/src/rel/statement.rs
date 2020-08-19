@@ -7,6 +7,7 @@ pub enum Statement {
     ShowFunctions,
     ShowDatabases,
     ShowTables,
+    CreateDatabase(CreateDatabase),
     UseDatabase(String),
     Explain(Explain),
 }
@@ -14,4 +15,9 @@ pub enum Statement {
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct Explain {
     pub operator: LogicalOperator,
+}
+
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct CreateDatabase {
+    pub name: String,
 }
