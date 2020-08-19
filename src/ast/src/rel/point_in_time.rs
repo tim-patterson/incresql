@@ -11,6 +11,7 @@ pub enum PointInTimeOperator {
     Limit(Limit),
     UnionAll(UnionAll),
     TableScan(TableScan),
+    TableInsert(TableInsert),
 }
 
 impl Default for PointInTimeOperator {
@@ -54,4 +55,10 @@ pub struct UnionAll {
 pub struct TableScan {
     pub table: Table,
     pub timestamp: LogicalTimestamp,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct TableInsert {
+    pub table: Table,
+    pub source: Box<PointInTimeOperator>,
 }

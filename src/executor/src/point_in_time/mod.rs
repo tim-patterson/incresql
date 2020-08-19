@@ -2,6 +2,7 @@ use crate::point_in_time::filter::FilterExecutor;
 use crate::point_in_time::limit::LimitExecutor;
 use crate::point_in_time::project::ProjectExecutor;
 use crate::point_in_time::single::SingleExecutor;
+use crate::point_in_time::table_insert::TableInsertExecutor;
 use crate::point_in_time::table_scan::TableScanExecutor;
 use crate::point_in_time::union_all::UnionAllExecutor;
 use crate::point_in_time::values::ValuesExecutor;
@@ -14,6 +15,7 @@ mod filter;
 mod limit;
 mod project;
 mod single;
+mod table_insert;
 mod table_scan;
 mod union_all;
 mod values;
@@ -55,6 +57,10 @@ pub fn build_executor(
         PointInTimeOperator::TableScan(table_scan) => Box::from(TableScanExecutor::new(
             table_scan.table.clone(),
             table_scan.timestamp,
+        )),
+        PointInTimeOperator::TableInsert(table_insert) => Box::from(TableInsertExecutor::new(
+            build_executor(session, &table_insert.source),
+            table_insert.table.clone(),
         )),
     }
 }
