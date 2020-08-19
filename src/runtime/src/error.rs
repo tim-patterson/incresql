@@ -1,3 +1,4 @@
+use catalog::CatalogError;
 use executor::ExecutionError;
 use parser::ParseError;
 use planner::PlannerError;
@@ -7,6 +8,7 @@ pub enum QueryError {
     ParseError(ParseError),
     PlannerError(PlannerError),
     ExecutionError(ExecutionError),
+    CatalogError(CatalogError),
 }
 
 impl Display for QueryError {
@@ -15,6 +17,7 @@ impl Display for QueryError {
             QueryError::ParseError(err) => Display::fmt(err, f),
             QueryError::PlannerError(err) => Display::fmt(err, f),
             QueryError::ExecutionError(err) => Display::fmt(err, f),
+            QueryError::CatalogError(err) => Display::fmt(err, f),
         }
     }
 }
@@ -40,5 +43,11 @@ impl From<ExecutionError> for QueryError {
 impl From<PlannerError> for QueryError {
     fn from(planner_error: PlannerError) -> Self {
         QueryError::PlannerError(planner_error)
+    }
+}
+
+impl From<CatalogError> for QueryError {
+    fn from(catalog_error: CatalogError) -> Self {
+        QueryError::CatalogError(catalog_error)
     }
 }

@@ -2,33 +2,10 @@ mod bootstrap;
 use data::json::JsonBuilder;
 use data::{DataType, Datum, LogicalTimestamp, SortOrder};
 use std::convert::TryFrom;
-use std::fmt::{Display, Formatter};
 use storage::{Storage, StorageError, Table};
 
-#[derive(Debug)]
-pub enum CatalogError {
-    StorageError(StorageError),
-    TableNotFound(String, String),
-}
-
-impl Display for CatalogError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            CatalogError::StorageError(err) => Display::fmt(err, f),
-            CatalogError::TableNotFound(db, table) => {
-                f.write_fmt(format_args!("Table {}.{} not found", db, table))
-            }
-        }
-    }
-}
-
-impl std::error::Error for CatalogError {}
-
-impl From<StorageError> for CatalogError {
-    fn from(err: StorageError) -> Self {
-        CatalogError::StorageError(err)
-    }
-}
+mod error;
+pub use error::*;
 
 /// The catalog is responsible for the lifecycles and naming of all the
 /// database objects.
@@ -93,6 +70,7 @@ impl Catalog {
         Catalog::new(Storage::new_in_mem()?)
     }
 
+    /// Returns the table with the given name
     pub fn table(&self, database: &str, table: &str) -> Result<Table, CatalogError> {
         let tables_pk = [Datum::from(database), Datum::from(table)];
         let mut key_buf = vec![];
@@ -137,6 +115,24 @@ impl Catalog {
             .collect();
 
         Ok(self.storage.table(id, columns, pk))
+    }
+
+    /// Called to create a database
+    pub fn create_database(&mut self, database_name: &str) -> Result<(), CatalogError> {
+        let pk = [Datum::from(database_name)];
+        let mut key_buf = vec![];
+        let mut value = vec![];
+        if self
+            .databases_table
+            .system_point_lookup(&pk, &mut key_buf, &mut value)?
+            .is_some()
+        {
+            Err(CatalogError::DatabaseAlreadyExists(
+                database_name.to_string(),
+            ))
+        } else {
+            self.create_database_impl(database_name)
+        }
     }
 
     /// Creates a database, doesn't do any checks to see if the database already exists etc.
@@ -211,6 +207,23 @@ mod tests {
 
         let mut iter = table.full_scan(LogicalTimestamp::MAX);
         assert_eq!(iter.next()?, Some(([Datum::from("default")].as_ref(), 1)));
+        Ok(())
+    }
+
+    #[test]
+    fn test_create_database() -> Result<(), CatalogError> {
+        let mut catalog = Catalog::new_for_test()?;
+        let dbs_table = catalog.table("incresql", "databases")?;
+
+        catalog.create_database("abc")?;
+
+        let mut iter = dbs_table.full_scan(LogicalTimestamp::MAX);
+        assert_eq!(iter.next()?, Some(([Datum::from("abc")].as_ref(), 1)));
+
+        assert_eq!(
+            catalog.create_database("abc"),
+            Err(CatalogError::DatabaseAlreadyExists("abc".to_string()))
+        );
         Ok(())
     }
 }
