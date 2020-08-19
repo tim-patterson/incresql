@@ -42,7 +42,7 @@ Once this is done you can use the standard cargo commands to build/test/run.
   cargo run --release
 
   # Test Incresql
-  cargo test --all
+  cargo test --workspace --tests
 
   # Build Incresql
   cargo build --release

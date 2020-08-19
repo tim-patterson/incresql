@@ -42,6 +42,7 @@ pub enum PlannerError {
     CatalogError(CatalogError),
     PredicateNotBoolean(DataType, Expression),
     UnionAllMismatch(Vec<DataType>, Vec<DataType>, usize),
+    InsertMismatch(Vec<DataType>, Vec<DataType>),
 }
 
 impl From<FunctionResolutionError> for PlannerError {
@@ -93,6 +94,22 @@ impl Display for PlannerError {
                         other_str
                     ))
                 }
+            }
+            PlannerError::InsertMismatch(table, source) => {
+                let table_str = table
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let source_str = source
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                f.write_fmt(format_args!(
+                    "Insert mismatch, table expects row of:\n  {}\nsource is:\n  {}",
+                    table_str, source_str
+                ))
             }
         }
     }

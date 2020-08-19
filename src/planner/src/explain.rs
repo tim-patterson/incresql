@@ -1,4 +1,4 @@
-use crate::common::type_for_expression;
+use crate::common::{fields_for_operator, type_for_expression};
 use crate::{Planner, PlannerError};
 use ast::expr::{Expression, NamedExpression};
 use ast::rel::logical::{LogicalOperator, Values};
@@ -172,6 +172,27 @@ fn render_plan(
                     None,
                 ));
             }
+            padding.pop();
+        }
+        LogicalOperator::TableInsert(table_insert) => {
+            if let Some(name) = alias {
+                lines.push((format!("{}INSERT({})", padding, name), None, None));
+            } else {
+                lines.push((format!("{}INSERT", padding), None, None));
+            }
+            padding.push(" |");
+            lines.push((format!("{}cols:", padding), None, None));
+            for (idx, field) in fields_for_operator(&table_insert.table).enumerate() {
+                lines.push((
+                    format!("{}  {} <{}>", padding, field.alias, field.data_type),
+                    Some(idx),
+                    None,
+                ));
+            }
+            lines.push((format!("{}source:", padding), None, None));
+            padding.push("  ");
+            render_plan(&table_insert.source, lines, padding, None);
+            padding.pop();
             padding.pop();
         }
         LogicalOperator::TableReference(_) => panic!(),

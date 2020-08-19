@@ -23,6 +23,7 @@ impl Planner {
         compile_functions(&mut query, &self.function_registry)?;
         check_predicates(&mut query)?;
         check_union_alls(&mut query)?;
+        check_inserts(&mut query)?;
         Ok(query)
     }
 
@@ -272,6 +273,30 @@ fn check_union_alls(operator: &mut LogicalOperator) -> Result<(), PlannerError> 
     }
 
     Ok(())
+}
+
+/// Checks to make sure we're inserting rows with the right datatypes/length
+fn check_inserts(operator: &mut LogicalOperator) -> Result<(), PlannerError> {
+    for child in operator.children_mut() {
+        check_inserts(child)?;
+    }
+
+    if let LogicalOperator::TableInsert(table_insert) = operator {
+        let table_fields: Vec<_> = fields_for_operator(&table_insert.table)
+            .map(|f| f.data_type)
+            .collect();
+        let source_fields: Vec<_> = fields_for_operator(&table_insert.source)
+            .map(|f| f.data_type)
+            .collect();
+
+        if table_fields != source_fields {
+            Err(PlannerError::InsertMismatch(table_fields, source_fields))
+        } else {
+            Ok(())
+        }
+    } else {
+        Ok(())
+    }
 }
 
 #[cfg(test)]
