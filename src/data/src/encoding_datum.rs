@@ -9,36 +9,29 @@ impl Datum<'_> {
         // for writing debug tools, data recovery tools etc that can make sense of data in
         // rocksdb files without much context.
         match self {
+            // Note 0/255 is reserved here to allow easy range scans on prefixes
             Datum::Null => {
-                if sort_order.is_asc() {
-                    buffer.push(0)
-                } else {
-                    buffer.push(!0)
-                }
-            }
-            Datum::Boolean(false) => {
                 if sort_order.is_asc() {
                     buffer.push(1)
                 } else {
                     buffer.push(!1)
                 }
             }
-            Datum::Boolean(true) => {
+            Datum::Boolean(false) => {
                 if sort_order.is_asc() {
                     buffer.push(2)
                 } else {
                     buffer.push(!2)
                 }
             }
-            Datum::Integer(i) => {
+            Datum::Boolean(true) => {
                 if sort_order.is_asc() {
                     buffer.push(3)
                 } else {
                     buffer.push(!3)
                 }
-                i.write_sortable_bytes(sort_order, buffer);
             }
-            Datum::BigInt(i) => {
+            Datum::Integer(i) => {
                 if sort_order.is_asc() {
                     buffer.push(4)
                 } else {
@@ -46,19 +39,27 @@ impl Datum<'_> {
                 }
                 i.write_sortable_bytes(sort_order, buffer);
             }
-            Datum::Decimal(d) => {
+            Datum::BigInt(i) => {
                 if sort_order.is_asc() {
                     buffer.push(5)
                 } else {
                     buffer.push(!5)
                 }
-                d.write_sortable_bytes(sort_order, buffer);
+                i.write_sortable_bytes(sort_order, buffer);
             }
-            Datum::ByteAOwned(_) | Datum::ByteARef(_) | Datum::ByteAInline(..) => {
+            Datum::Decimal(d) => {
                 if sort_order.is_asc() {
                     buffer.push(6)
                 } else {
                     buffer.push(!6)
+                }
+                d.write_sortable_bytes(sort_order, buffer);
+            }
+            Datum::ByteAOwned(_) | Datum::ByteARef(_) | Datum::ByteAInline(..) => {
+                if sort_order.is_asc() {
+                    buffer.push(7)
+                } else {
+                    buffer.push(!7)
                 }
                 self.as_bytea()
                     .unwrap()
@@ -77,37 +78,37 @@ impl Datum<'_> {
         };
 
         match buffer[0] {
-            0 | 255 => {
+            1 | 254 => {
                 *self = Datum::Null;
                 rem
             }
-            1 | 254 => {
+            2 | 253 => {
                 *self = Datum::Boolean(false);
                 rem
             }
-            2 | 253 => {
+            3 | 252 => {
                 *self = Datum::Boolean(true);
                 rem
             }
-            3 | 252 => {
+            4 | 251 => {
                 let mut i = 0_i32;
                 let rem = i.read_sortable_bytes(sort_order, rem);
                 *self = Datum::Integer(i);
                 rem
             }
-            4 | 251 => {
+            5 | 250 => {
                 let mut i = 0_i64;
                 let rem = i.read_sortable_bytes(sort_order, rem);
                 *self = Datum::BigInt(i);
                 rem
             }
-            5 | 250 => {
+            6 | 249 => {
                 let mut d = Decimal::zero();
                 let rem = d.read_sortable_bytes(sort_order, rem);
                 *self = Datum::Decimal(d);
                 rem
             }
-            6 | 249 => {
+            7 | 248 => {
                 // TODO there's no need to allocate here,
                 // we can pass in a single buffer that can be used for all strings/bytea's.
                 // However that wont quite work due to the backing array being deallocated on a

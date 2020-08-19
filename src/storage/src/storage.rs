@@ -152,6 +152,8 @@ fn frequency_merge_impl<'a, I: Iterator<Item = &'a [u8]> + 'a>(
 /// Used in conjunction with the frequency_merge filter to remove 0'd out freq's from the log
 /// section during a compaction.  We'll also use the filter during reads to prevent reading in these
 /// records then for consistency.
+// TODO We might not want to use this as we may end up with 0's in our index section but no log
+// with which to vacuum them with.
 fn compaction_filter(_level: u32, key: &[u8], value: &[u8]) -> Decision {
     // fourth byte is even for index, odd for logs
     if key[3] & 1 == 1 {
