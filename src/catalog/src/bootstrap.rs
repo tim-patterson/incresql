@@ -26,30 +26,34 @@ impl Catalog {
             "prefix_tables",
             PREFIX_METADATA_TABLE_ID,
             &[
-                ("table_id", DataType::BigInt),
-                ("column_len", DataType::Integer),
-                ("pk_sort", DataType::Json),
+                ("table_id".to_string(), DataType::BigInt),
+                ("column_len".to_string(), DataType::Integer),
+                ("pk_sort".to_string(), DataType::Json),
             ],
             &[SortOrder::Asc],
+            true,
         )?;
         self.create_table_impl(
             "incresql",
             "databases",
             DATABASES_TABLE_ID,
-            &[("name", DataType::Text)],
+            &[("name".to_string(), DataType::Text)],
             &[SortOrder::Asc],
+            true,
         )?;
         self.create_table_impl(
             "incresql",
             "tables",
             TABLES_TABLE_ID,
             &[
-                ("database_name", DataType::Text),
-                ("name", DataType::Text),
-                ("table_id", DataType::BigInt),
-                ("columns", DataType::Json),
+                ("database_name".to_string(), DataType::Text),
+                ("name".to_string(), DataType::Text),
+                ("table_id".to_string(), DataType::BigInt),
+                ("columns".to_string(), DataType::Json),
+                ("system".to_string(), DataType::Boolean),
             ],
             &[SortOrder::Asc, SortOrder::Asc],
+            true,
         )?;
         Ok(())
     }
