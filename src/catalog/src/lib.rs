@@ -120,19 +120,17 @@ impl Catalog {
     /// Called to create a database
     pub fn create_database(&mut self, database_name: &str) -> Result<(), CatalogError> {
         let pk = [Datum::from(database_name)];
-        let mut key_buf = vec![];
-        let mut value = vec![];
-        if self
-            .databases_table
-            .system_point_lookup(&pk, &mut key_buf, &mut value)?
-            .is_some()
         {
-            Err(CatalogError::DatabaseAlreadyExists(
-                database_name.to_string(),
-            ))
-        } else {
-            self.create_database_impl(database_name)
+            let mut iter =
+                self.databases_table
+                    .range_scan(Some(&pk), Some(&pk), LogicalTimestamp::MAX);
+            if iter.next()?.is_some() {
+                return Err(CatalogError::DatabaseAlreadyExists(
+                    database_name.to_string(),
+                ));
+            }
         }
+        self.create_database_impl(database_name)
     }
 
     /// Called to drop a database
@@ -166,7 +164,9 @@ impl Catalog {
     /// Check database empty.
     fn check_db_empty(&mut self, database_name: &str) -> Result<(), CatalogError> {
         let db_datum = [Datum::from(database_name)];
-        let mut iter = self.tables_table.range_scan(Some(&db_datum), Some(&db_datum), LogicalTimestamp::MAX);
+        let mut iter =
+            self.tables_table
+                .range_scan(Some(&db_datum), Some(&db_datum), LogicalTimestamp::MAX);
         if iter.next()?.is_some() {
             Err(CatalogError::DatabaseNotEmpty(database_name.to_string()))
         } else {

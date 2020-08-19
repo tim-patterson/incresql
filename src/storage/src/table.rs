@@ -122,7 +122,6 @@ impl Table {
         self.range_scan(None, None, timestamp)
     }
 
-
     /// Range scan of the table, all returned record timestamps are guaranteed to be *less*
     /// than the passed in timestamp.
     /// The ranges here are inclusive(but based on the prefixes) so...
@@ -131,7 +130,12 @@ impl Table {
     /// The from:to must be ordered as per the pk ordering.
     /// ie if the first col is sorted desc then the correct call here would be
     /// from: 5 to: 1.
-    pub fn range_scan(&self, from: Option<&[Datum]>, to: Option<&[Datum]>, timestamp: LogicalTimestamp) -> impl TupleIter<StorageError> + '_ {
+    pub fn range_scan(
+        &self,
+        from: Option<&[Datum]>,
+        to: Option<&[Datum]>,
+        timestamp: LogicalTimestamp,
+    ) -> impl TupleIter<StorageError> + '_ {
         let mut iter_options = ReadOptions::default();
         iter_options.set_prefix_same_as_start(true);
 
@@ -372,7 +376,6 @@ fn write_index_header_key(table: &Table, tuple: &[Datum], key_buf: &mut Vec<u8>)
     write_range_key(table, tuple, key_buf, false);
 }
 
-
 /// Used to write to create the from/to byte keys to feed into our iterator
 fn write_range_key(table: &Table, tuple: &[Datum], key_buf: &mut Vec<u8>, end: bool) {
     // Index header:
@@ -544,13 +547,10 @@ mod tests {
         assert_eq!(to, vec![false, false, false, false, false])
     }
 
-
     #[test]
     fn test_range_scan_full_key_forward() -> Result<(), StorageError> {
         let storage = Storage::new_in_mem()?;
-        let columns = vec![
-            ("col1".to_string(), DataType::Integer),
-        ];
+        let columns = vec![("col1".to_string(), DataType::Integer)];
         let table = storage.table(1234, columns, vec![SortOrder::Asc]);
 
         table.atomic_write(|writer| {
@@ -574,7 +574,11 @@ mod tests {
         assert_eq!(iter.next()?, None);
 
         // Both populated
-        let mut iter = table.range_scan(Some(&[Datum::from(2)]), Some(&[Datum::from(3)]), LogicalTimestamp::MAX);
+        let mut iter = table.range_scan(
+            Some(&[Datum::from(2)]),
+            Some(&[Datum::from(3)]),
+            LogicalTimestamp::MAX,
+        );
         assert_eq!(iter.next()?, Some(([Datum::from(2)].as_ref(), 1)));
         assert_eq!(iter.next()?, Some(([Datum::from(3)].as_ref(), 1)));
         assert_eq!(iter.next()?, None);
@@ -585,9 +589,7 @@ mod tests {
     #[test]
     fn test_range_scan_full_key_reverse() -> Result<(), StorageError> {
         let storage = Storage::new_in_mem()?;
-        let columns = vec![
-            ("col1".to_string(), DataType::Integer),
-        ];
+        let columns = vec![("col1".to_string(), DataType::Integer)];
         let table = storage.table(1234, columns, vec![SortOrder::Desc]);
 
         table.atomic_write(|writer| {
@@ -611,7 +613,11 @@ mod tests {
         assert_eq!(iter.next()?, None);
 
         // Both populated
-        let mut iter = table.range_scan(Some(&[Datum::from(3)]), Some(&[Datum::from(2)]), LogicalTimestamp::MAX);
+        let mut iter = table.range_scan(
+            Some(&[Datum::from(3)]),
+            Some(&[Datum::from(2)]),
+            LogicalTimestamp::MAX,
+        );
         assert_eq!(iter.next()?, Some(([Datum::from(3)].as_ref(), 1)));
         assert_eq!(iter.next()?, Some(([Datum::from(2)].as_ref(), 1)));
         assert_eq!(iter.next()?, None);
