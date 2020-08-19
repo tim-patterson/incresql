@@ -119,12 +119,44 @@ impl Table {
     /// Full scan of the table, all returned record timestamps are guaranteed to be *less*
     /// than the passed in timestamp
     pub fn full_scan(&self, timestamp: LogicalTimestamp) -> impl TupleIter<StorageError> + '_ {
+        self.range_scan(None, None, timestamp)
+    }
+
+    /// Range scan of the table, all returned record timestamps are guaranteed to be *less*
+    /// than the passed in timestamp.
+    /// The ranges here are inclusive(but based on the prefixes) so...
+    /// from: 1, to: 1
+    /// will include anything prefixed with 1.
+    /// The from:to must be ordered as per the pk ordering.
+    /// ie if the first col is sorted desc then the correct call here would be
+    /// from: 5 to: 1.
+    pub fn range_scan(
+        &self,
+        from: Option<&[Datum]>,
+        to: Option<&[Datum]>,
+        timestamp: LogicalTimestamp,
+    ) -> impl TupleIter<StorageError> + '_ {
         let mut iter_options = ReadOptions::default();
         iter_options.set_prefix_same_as_start(true);
-        iter_options.set_iterate_upper_bound((self.id + 1).to_be_bytes());
+
+        if let Some(to_datum) = to {
+            let mut buf = vec![];
+            write_range_key(self, to_datum, &mut buf, true);
+            iter_options.set_iterate_upper_bound(buf);
+        } else {
+            iter_options.set_iterate_upper_bound((self.id + 1).to_be_bytes());
+        }
+
         let mut iter = self.db.raw_iterator_opt(iter_options);
+
         // Seek to start.
-        iter.seek(&self.id.to_be_bytes());
+        if let Some(from_datum) = from {
+            let mut buf = vec![];
+            write_range_key(self, from_datum, &mut buf, false);
+            iter.seek(&buf);
+        } else {
+            iter.seek(&self.id.to_be_bytes());
+        }
 
         IndexIter::new(iter, timestamp, self.columns.len())
     }
@@ -209,6 +241,14 @@ impl TupleIter<StorageError> for IndexIter<'_> {
                 // freq
                 let mut freq = 0_i64;
                 value_buf = freq.read_sortable_bytes(SortOrder::Asc, value_buf);
+
+                // We've found the correct record for the pk at this time, but its zero...
+                // Skip to the next
+                if freq == 0 {
+                    seek_next_header = true;
+                    continue;
+                }
+
                 self.freq = Some(freq);
 
                 // non-pk part of the tuple
@@ -331,6 +371,13 @@ impl Writer {
 }
 
 fn write_index_header_key(table: &Table, tuple: &[Datum], key_buf: &mut Vec<u8>) {
+    // It turns out the the index_header_key is the same as our starting range keys
+    assert!(tuple.len() >= table.pk.len());
+    write_range_key(table, tuple, key_buf, false);
+}
+
+/// Used to write to create the from/to byte keys to feed into our iterator
+fn write_range_key(table: &Table, tuple: &[Datum], key_buf: &mut Vec<u8>, end: bool) {
     // Index header:
     // key = <prefix as u32 be>:<tuple-pk as sorted>:<0(timestamp)>
     key_buf.clear();
@@ -339,11 +386,15 @@ fn write_index_header_key(table: &Table, tuple: &[Datum], key_buf: &mut Vec<u8>)
 
     // Tuple-PK
     (table.pk.len() as u64).write_sortable_bytes(SortOrder::Asc, key_buf);
+
     for (sort_order, datum) in table.pk.iter().zip(tuple) {
         datum.as_sortable_bytes(*sort_order, key_buf);
     }
-    // 0 Timestamp
-    key_buf.push(0);
+    if end {
+        key_buf.push(255);
+    } else {
+        key_buf.push(0);
+    }
 }
 
 fn write_index_header_value(
@@ -494,5 +545,83 @@ mod tests {
         let to: Vec<bool> = right_size_new_to(5);
 
         assert_eq!(to, vec![false, false, false, false, false])
+    }
+
+    #[test]
+    fn test_range_scan_full_key_forward() -> Result<(), StorageError> {
+        let storage = Storage::new_in_mem()?;
+        let columns = vec![("col1".to_string(), DataType::Integer)];
+        let table = storage.table(1234, columns, vec![SortOrder::Asc]);
+
+        table.atomic_write(|writer| {
+            writer.write_tuple(&table, &[Datum::from(1)], LogicalTimestamp::new(10), 1)?;
+            writer.write_tuple(&table, &[Datum::from(2)], LogicalTimestamp::new(10), 1)?;
+            writer.write_tuple(&table, &[Datum::from(3)], LogicalTimestamp::new(10), 1)?;
+            writer.write_tuple(&table, &[Datum::from(4)], LogicalTimestamp::new(10), 1)?;
+            Ok(())
+        })?;
+
+        // Empty to
+        let mut iter = table.range_scan(Some(&[Datum::from(3)]), None, LogicalTimestamp::MAX);
+        assert_eq!(iter.next()?, Some(([Datum::from(3)].as_ref(), 1)));
+        assert_eq!(iter.next()?, Some(([Datum::from(4)].as_ref(), 1)));
+        assert_eq!(iter.next()?, None);
+
+        // Empty from
+        let mut iter = table.range_scan(None, Some(&[Datum::from(2)]), LogicalTimestamp::MAX);
+        assert_eq!(iter.next()?, Some(([Datum::from(1)].as_ref(), 1)));
+        assert_eq!(iter.next()?, Some(([Datum::from(2)].as_ref(), 1)));
+        assert_eq!(iter.next()?, None);
+
+        // Both populated
+        let mut iter = table.range_scan(
+            Some(&[Datum::from(2)]),
+            Some(&[Datum::from(3)]),
+            LogicalTimestamp::MAX,
+        );
+        assert_eq!(iter.next()?, Some(([Datum::from(2)].as_ref(), 1)));
+        assert_eq!(iter.next()?, Some(([Datum::from(3)].as_ref(), 1)));
+        assert_eq!(iter.next()?, None);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_range_scan_full_key_reverse() -> Result<(), StorageError> {
+        let storage = Storage::new_in_mem()?;
+        let columns = vec![("col1".to_string(), DataType::Integer)];
+        let table = storage.table(1234, columns, vec![SortOrder::Desc]);
+
+        table.atomic_write(|writer| {
+            writer.write_tuple(&table, &[Datum::from(1)], LogicalTimestamp::new(10), 1)?;
+            writer.write_tuple(&table, &[Datum::from(2)], LogicalTimestamp::new(10), 1)?;
+            writer.write_tuple(&table, &[Datum::from(3)], LogicalTimestamp::new(10), 1)?;
+            writer.write_tuple(&table, &[Datum::from(4)], LogicalTimestamp::new(10), 1)?;
+            Ok(())
+        })?;
+
+        // Empty to
+        let mut iter = table.range_scan(Some(&[Datum::from(2)]), None, LogicalTimestamp::MAX);
+        assert_eq!(iter.next()?, Some(([Datum::from(2)].as_ref(), 1)));
+        assert_eq!(iter.next()?, Some(([Datum::from(1)].as_ref(), 1)));
+        assert_eq!(iter.next()?, None);
+
+        // Empty from
+        let mut iter = table.range_scan(None, Some(&[Datum::from(3)]), LogicalTimestamp::MAX);
+        assert_eq!(iter.next()?, Some(([Datum::from(4)].as_ref(), 1)));
+        assert_eq!(iter.next()?, Some(([Datum::from(3)].as_ref(), 1)));
+        assert_eq!(iter.next()?, None);
+
+        // Both populated
+        let mut iter = table.range_scan(
+            Some(&[Datum::from(3)]),
+            Some(&[Datum::from(2)]),
+            LogicalTimestamp::MAX,
+        );
+        assert_eq!(iter.next()?, Some(([Datum::from(3)].as_ref(), 1)));
+        assert_eq!(iter.next()?, Some(([Datum::from(2)].as_ref(), 1)));
+        assert_eq!(iter.next()?, None);
+
+        Ok(())
     }
 }

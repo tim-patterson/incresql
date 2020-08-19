@@ -1,6 +1,6 @@
 mod bootstrap;
 use data::json::JsonBuilder;
-use data::{DataType, Datum, LogicalTimestamp, SortOrder};
+use data::{DataType, Datum, LogicalTimestamp, SortOrder, TupleIter};
 use std::convert::TryFrom;
 use storage::{Storage, StorageError, Table};
 
@@ -120,19 +120,32 @@ impl Catalog {
     /// Called to create a database
     pub fn create_database(&mut self, database_name: &str) -> Result<(), CatalogError> {
         let pk = [Datum::from(database_name)];
-        let mut key_buf = vec![];
-        let mut value = vec![];
-        if self
-            .databases_table
-            .system_point_lookup(&pk, &mut key_buf, &mut value)?
-            .is_some()
         {
-            Err(CatalogError::DatabaseAlreadyExists(
-                database_name.to_string(),
-            ))
-        } else {
-            self.create_database_impl(database_name)
+            let mut iter =
+                self.databases_table
+                    .range_scan(Some(&pk), Some(&pk), LogicalTimestamp::MAX);
+            if iter.next()?.is_some() {
+                return Err(CatalogError::DatabaseAlreadyExists(
+                    database_name.to_string(),
+                ));
+            }
         }
+        self.create_database_impl(database_name)
+    }
+
+    /// Called to drop a database
+    pub fn drop_database(&mut self, database_name: &str) -> Result<(), CatalogError> {
+        self.check_db_empty(database_name)?;
+        // Write with freq -1
+        self.databases_table.atomic_write(|batch| {
+            batch.write_tuple(
+                &self.databases_table,
+                &[Datum::from(database_name)],
+                LogicalTimestamp::now(),
+                -1,
+            )
+        })?;
+        Ok(())
     }
 
     /// Creates a database, doesn't do any checks to see if the database already exists etc.
@@ -146,6 +159,19 @@ impl Catalog {
             )
         })?;
         Ok(())
+    }
+
+    /// Check database empty.
+    fn check_db_empty(&mut self, database_name: &str) -> Result<(), CatalogError> {
+        let db_datum = [Datum::from(database_name)];
+        let mut iter =
+            self.tables_table
+                .range_scan(Some(&db_datum), Some(&db_datum), LogicalTimestamp::MAX);
+        if iter.next()?.is_some() {
+            Err(CatalogError::DatabaseNotEmpty(database_name.to_string()))
+        } else {
+            Ok(())
+        }
     }
 
     /// Creates a table but doesn't do any checks around the database, table, or id.
@@ -196,7 +222,6 @@ impl Catalog {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use data::TupleIter;
 
     #[test]
     fn test_get_table() -> Result<(), CatalogError> {
@@ -224,6 +249,10 @@ mod tests {
             catalog.create_database("abc"),
             Err(CatalogError::DatabaseAlreadyExists("abc".to_string()))
         );
+
+        catalog.drop_database("abc")?;
+        let mut iter = dbs_table.full_scan(LogicalTimestamp::MAX);
+        assert_eq!(iter.next()?, Some(([Datum::from("default")].as_ref(), 1)));
         Ok(())
     }
 }

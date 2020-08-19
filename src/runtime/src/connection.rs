@@ -68,6 +68,11 @@ impl Connection<'_> {
                 catalog.create_database(&create_database.name)?;
                 return Ok((vec![], TupleIter::empty()));
             }
+            Statement::DropDatabase(database) => {
+                let mut catalog = self.runtime.planner.catalog.write().unwrap();
+                catalog.drop_database(&database)?;
+                return Ok((vec![], TupleIter::empty()));
+            }
         };
 
         let plan = self

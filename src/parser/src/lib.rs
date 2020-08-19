@@ -7,6 +7,7 @@ use std::error::Error;
 
 mod atoms;
 mod create;
+mod drop;
 mod expression;
 mod literals;
 mod select;

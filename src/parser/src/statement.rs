@@ -1,5 +1,6 @@
 use crate::atoms::{identifier_str, kw};
 use crate::create::create;
+use crate::drop::drop_;
 use crate::select::select;
 use crate::show::show;
 use crate::whitespace::ws_0;
@@ -10,7 +11,14 @@ use nom::combinator::{cut, map};
 use nom::sequence::preceded;
 
 pub fn statement(input: &str) -> ParserResult<Statement> {
-    alt((map(select, Statement::Query), show, explain, use_, create))(input)
+    alt((
+        map(select, Statement::Query),
+        show,
+        explain,
+        use_,
+        create,
+        drop_,
+    ))(input)
 }
 
 fn explain(input: &str) -> ParserResult<Statement> {

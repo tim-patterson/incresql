@@ -5,7 +5,7 @@ use ast::rel::statement::{CreateDatabase, Statement};
 use nom::combinator::{cut, map};
 use nom::sequence::{preceded, tuple};
 
-/// Parses a show statement
+/// Parses a create statement
 pub fn create(input: &str) -> ParserResult<Statement> {
     preceded(
         kw("CREATE"),

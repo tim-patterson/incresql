@@ -13,5 +13,12 @@ fn show_databases() {
         );
 
         connection.query(r#"use foobar"#, "");
+
+        connection.query(r#"DROP DATABASE foobar"#, "");
+
+        connection.query(
+            r#"SELECT * FROM incresql.databases where name = "foobar""#,
+            "",
+        );
     });
 }

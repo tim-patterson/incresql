@@ -8,6 +8,7 @@ pub enum Statement {
     ShowDatabases,
     ShowTables,
     CreateDatabase(CreateDatabase),
+    DropDatabase(String),
     UseDatabase(String),
     Explain(Explain),
 }
