@@ -1,4 +1,5 @@
 use crate::rel::logical::LogicalOperator;
+use data::DataType;
 
 /// The top level structure parsed, could be a query or DDL statement.
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -10,6 +11,7 @@ pub enum Statement {
     CreateDatabase(CreateDatabase),
     DropDatabase(String),
     UseDatabase(String),
+    CreateTable(CreateTable),
     Explain(Explain),
 }
 
@@ -21,4 +23,11 @@ pub struct Explain {
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct CreateDatabase {
     pub name: String,
+}
+
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct CreateTable {
+    pub database: Option<String>,
+    pub name: String,
+    pub columns: Vec<(String, DataType)>
 }

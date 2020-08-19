@@ -147,7 +147,7 @@ impl Catalog {
         &mut self,
         database_name: &str,
         table_name: &str,
-        columns: &[(&str, DataType)],
+        columns: &[(String, DataType)],
     ) -> Result<(), CatalogError> {
         self.check_db_exists(database_name)?;
         self.check_table_not_exists(database_name, table_name)?;
@@ -286,7 +286,7 @@ impl Catalog {
         database_name: &str,
         table_name: &str,
         table_id: u32,
-        columns: &[(&str, DataType)],
+        columns: &[(String, DataType)],
         pks: &[SortOrder],
         system: bool,
     ) -> Result<(), CatalogError> {
@@ -368,14 +368,14 @@ mod tests {
     #[test]
     fn test_create_table() -> Result<(), CatalogError> {
         let mut catalog = Catalog::new_for_test()?;
-        let columns = vec![("a", DataType::Integer)];
+        let columns = vec![("a".to_string(), DataType::Integer)];
 
         catalog.create_table("default", "test", &columns)?;
 
         let table = catalog.table("default", "test")?;
         assert_eq!(
             table.columns(),
-            [("a".to_string(), DataType::Integer)].as_ref()
+            columns.as_slice()
         );
         Ok(())
     }
