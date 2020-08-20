@@ -1,3 +1,4 @@
+mod aggregate;
 pub mod registry;
 mod scalar;
 use crate::registry::Registry;
@@ -101,11 +102,7 @@ pub trait AggregateFunction: Debug + Sync + 'static {
     );
 
     /// Render the final result from the state
-    fn finalize<'a>(
-        &self,
-        _signature: &FunctionSignature,
-        state: &'a mut Datum<'static>,
-    ) -> Datum<'a> {
+    fn finalize<'a>(&self, _signature: &FunctionSignature, state: &'a Datum<'a>) -> Datum<'a> {
         state.ref_clone()
     }
 
@@ -119,5 +116,6 @@ pub trait AggregateFunction: Debug + Sync + 'static {
 }
 
 fn register_builtins(registry: &mut Registry) {
-    scalar::register_builtins(registry)
+    aggregate::register_builtins(registry);
+    scalar::register_builtins(registry);
 }

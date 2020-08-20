@@ -13,7 +13,7 @@ impl Function for ToIntFromBoolean {
         _signature: &FunctionSignature,
         args: &'a [Datum<'a>],
     ) -> Datum<'a> {
-        if let Some(a) = args[0].as_boolean() {
+        if let Some(a) = args[0].as_maybe_boolean() {
             Datum::Integer(if a { 1 } else { 0 })
         } else {
             Datum::Null
@@ -45,7 +45,7 @@ impl Function for ToIntFromBigInt {
         _signature: &FunctionSignature,
         args: &'a [Datum<'a>],
     ) -> Datum<'a> {
-        if let Some(a) = args[0].as_bigint() {
+        if let Some(a) = args[0].as_maybe_bigint() {
             Datum::from(a as i32)
         } else {
             Datum::Null
@@ -63,7 +63,7 @@ impl Function for ToIntFromDecimal {
         _signature: &FunctionSignature,
         args: &'a [Datum<'a>],
     ) -> Datum<'a> {
-        if let Some(a) = args[0].as_decimal() {
+        if let Some(a) = args[0].as_maybe_decimal() {
             a.to_i32().map(Datum::from).unwrap_or(Datum::Null)
         } else {
             Datum::Null
@@ -81,7 +81,7 @@ impl Function for ToIntFromText {
         _signature: &FunctionSignature,
         args: &'a [Datum<'a>],
     ) -> Datum<'a> {
-        if let Some(a) = args[0].as_text() {
+        if let Some(a) = args[0].as_maybe_text() {
             a.parse::<i32>()
                 .ok()
                 .map(Datum::from)

@@ -26,7 +26,7 @@ impl Function for ToTextFromBoolean {
         _signature: &FunctionSignature,
         args: &'a [Datum<'a>],
     ) -> Datum<'a> {
-        if let Some(b) = args[0].as_boolean() {
+        if let Some(b) = args[0].as_maybe_boolean() {
             if b {
                 Datum::from("TRUE")
             } else {

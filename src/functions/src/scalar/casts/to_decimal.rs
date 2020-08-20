@@ -14,7 +14,7 @@ impl Function for ToDecimalFromBoolean {
         _signature: &FunctionSignature,
         args: &'a [Datum<'a>],
     ) -> Datum<'a> {
-        if let Some(a) = args[0].as_boolean() {
+        if let Some(a) = args[0].as_maybe_boolean() {
             Datum::from(if a {
                 Decimal::new(1, 0)
             } else {
@@ -36,7 +36,7 @@ impl Function for ToDecimalFromInt {
         _signature: &FunctionSignature,
         args: &'a [Datum<'a>],
     ) -> Datum<'a> {
-        if let Some(a) = args[0].as_integer() {
+        if let Some(a) = args[0].as_maybe_integer() {
             Datum::from(Decimal::from(a))
         } else {
             Datum::Null
@@ -54,7 +54,7 @@ impl Function for ToDecimalFromBigInt {
         _signature: &FunctionSignature,
         args: &'a [Datum<'a>],
     ) -> Datum<'a> {
-        if let Some(a) = args[0].as_bigint() {
+        if let Some(a) = args[0].as_maybe_bigint() {
             Datum::from(Decimal::from(a))
         } else {
             Datum::Null
@@ -72,7 +72,7 @@ impl Function for ToDecimalFromDecimal {
         signature: &FunctionSignature,
         args: &'a [Datum<'a>],
     ) -> Datum<'a> {
-        if let Some(mut d) = args[0].as_decimal() {
+        if let Some(mut d) = args[0].as_maybe_decimal() {
             if let DataType::Decimal(_p, s) = signature.ret {
                 // We'll rescale to match the cast, (down scaling only, no point upscaling as it just potentially loses
                 // data
@@ -99,7 +99,7 @@ impl Function for ToDecimalFromText {
         signature: &FunctionSignature,
         args: &'a [Datum<'a>],
     ) -> Datum<'a> {
-        if let Some(a) = args[0].as_text() {
+        if let Some(a) = args[0].as_maybe_text() {
             if let (Ok(mut d), DataType::Decimal(_p, s)) = (Decimal::from_str(a), signature.ret) {
                 // We'll rescale to match the cast, (down scaling only, no point upscaling as it just potentially loses
                 // data

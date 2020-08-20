@@ -12,7 +12,7 @@ impl Function for DivideInteger {
         _signature: &FunctionSignature,
         args: &'a [Datum<'a>],
     ) -> Datum<'a> {
-        if let (Some(a), Some(b)) = (args[0].as_integer(), args[1].as_integer()) {
+        if let (Some(a), Some(b)) = (args[0].as_maybe_integer(), args[1].as_maybe_integer()) {
             Datum::from(a / b)
         } else {
             Datum::Null
@@ -30,7 +30,7 @@ impl Function for DivideBigint {
         _signature: &FunctionSignature,
         args: &'a [Datum<'a>],
     ) -> Datum<'a> {
-        if let (Some(a), Some(b)) = (args[0].as_bigint(), args[1].as_bigint()) {
+        if let (Some(a), Some(b)) = (args[0].as_maybe_bigint(), args[1].as_maybe_bigint()) {
             Datum::from(a / b)
         } else {
             Datum::Null
@@ -48,7 +48,7 @@ impl Function for DivideDecimal {
         _signature: &FunctionSignature,
         args: &'a [Datum<'a>],
     ) -> Datum<'a> {
-        if let (Some(a), Some(b)) = (args[0].as_decimal(), args[1].as_decimal()) {
+        if let (Some(a), Some(b)) = (args[0].as_maybe_decimal(), args[1].as_maybe_decimal()) {
             let mut d = a / b;
             if d.scale() > DECIMAL_MAX_SCALE as u32 {
                 d.rescale(DECIMAL_MAX_SCALE as u32);

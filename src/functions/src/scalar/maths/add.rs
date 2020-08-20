@@ -13,7 +13,7 @@ impl Function for AddInteger {
         _signature: &FunctionSignature,
         args: &'a [Datum<'a>],
     ) -> Datum<'a> {
-        if let (Some(a), Some(b)) = (args[0].as_integer(), args[1].as_integer()) {
+        if let (Some(a), Some(b)) = (args[0].as_maybe_integer(), args[1].as_maybe_integer()) {
             Datum::from(a + b)
         } else {
             Datum::Null
@@ -31,7 +31,7 @@ impl Function for AddBigint {
         _signature: &FunctionSignature,
         args: &'a [Datum<'a>],
     ) -> Datum<'a> {
-        if let (Some(a), Some(b)) = (args[0].as_bigint(), args[1].as_bigint()) {
+        if let (Some(a), Some(b)) = (args[0].as_maybe_bigint(), args[1].as_maybe_bigint()) {
             Datum::from(a + b)
         } else {
             Datum::Null
@@ -49,7 +49,7 @@ impl Function for AddDecimal {
         _signature: &FunctionSignature,
         args: &'a [Datum<'a>],
     ) -> Datum<'a> {
-        if let (Some(a), Some(b)) = (args[0].as_decimal(), args[1].as_decimal()) {
+        if let (Some(a), Some(b)) = (args[0].as_maybe_decimal(), args[1].as_maybe_decimal()) {
             Datum::from(a + b)
         } else {
             Datum::Null

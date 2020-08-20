@@ -26,7 +26,7 @@ impl Function for ToBooleanFromText {
         _signature: &FunctionSignature,
         args: &'a [Datum<'a>],
     ) -> Datum<'a> {
-        if let Some(a) = args[0].as_text() {
+        if let Some(a) = args[0].as_maybe_text() {
             if a.eq_ignore_ascii_case("true") {
                 Datum::from(true)
             } else if a.eq_ignore_ascii_case("false") {
