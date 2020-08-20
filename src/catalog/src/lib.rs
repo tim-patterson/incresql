@@ -2,7 +2,7 @@ mod bootstrap;
 use data::json::JsonBuilder;
 use data::{DataType, Datum, LogicalTimestamp, SortOrder, TupleIter};
 use std::convert::TryFrom;
-use storage::{Storage, Table};
+use storage::{Storage, StorageError, Table};
 
 mod error;
 pub use error::*;
@@ -365,11 +365,22 @@ impl Catalog {
             LogicalTimestamp::MAX,
         );
 
+        let table_id = prefix_key[0].as_bigint().unwrap() as u32;
+
         let (prefix_tuple, prefix_freq) = prefix_iter.next()?.unwrap();
 
-        self.tables_table.atomic_write(|batch| {
+        // first drop the data, then the meta data
+        // TODO we should be able to genericise write batch and write batch WI so we can choose
+        // to opt into/outof read after write vs higher perf(and delete range support!)
+        self.tables_table
+            .atomic_write_without_index::<_, StorageError>(|write_batch| {
+                write_batch.delete_range(table_id.to_be_bytes(), (table_id + 2).to_be_bytes());
+                Ok(())
+            })?;
+        self.tables_table.atomic_write::<_, StorageError>(|batch| {
             batch.write_tuple(&self.tables_table, table_tuple, now, -table_freq)?;
-            batch.write_tuple(&self.prefix_metadata_table, prefix_tuple, now, -prefix_freq)
+            batch.write_tuple(&self.prefix_metadata_table, prefix_tuple, now, -prefix_freq)?;
+            Ok(())
         })?;
         Ok(())
     }

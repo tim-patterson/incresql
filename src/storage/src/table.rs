@@ -2,7 +2,7 @@ use crate::StorageError;
 use data::encoding_core::SortableEncoding;
 use data::{DataType, Datum, LogicalTimestamp, SortOrder, TupleIter};
 use rocksdb::prelude::*;
-use rocksdb::{DBRawIterator, WriteBatchWithIndex};
+use rocksdb::{DBRawIterator, WriteBatch, WriteBatchWithIndex};
 use std::convert::TryInto;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
@@ -64,23 +64,42 @@ impl Table {
     pub fn force_rocks_compaction(&self) {
         // id + 2 as id->id+1 is the index portion of the table and id+1->id+2 is the log portion
         self.db.compact_range(
-            Some(self.id.to_le_bytes()),
-            Some((self.id + 2).to_le_bytes()),
+            Some(self.id.to_be_bytes()),
+            Some((self.id + 2).to_be_bytes()),
         );
     }
 
     /// Performs an atomic write, This semantically is done at the storage level so writes to any
     /// tables can appear in here
-    pub fn atomic_write<F>(&self, batch: F) -> Result<(), StorageError>
+    pub fn atomic_write<F, E: From<StorageError>>(&self, batch: F) -> Result<(), E>
     where
-        F: FnOnce(&mut Writer) -> Result<(), StorageError>,
+        F: FnOnce(&mut Writer) -> Result<(), E>,
     {
         let mut writer = Writer::new();
         batch(&mut writer)?;
         let mut write_options = WriteOptions::new();
         write_options.set_sync(true);
         write_options.set_low_pri(true);
-        self.db.write_opt(writer.write_batch, &write_options)?;
+        self.db
+            .write_opt(writer.write_batch, &write_options)
+            .map_err(StorageError::from)?;
+        Ok(())
+    }
+
+    /// Lower level atomic write without read after write support, used to work around some
+    /// unsupported rocks db functionality
+    pub fn atomic_write_without_index<F, E: From<StorageError>>(&self, batch: F) -> Result<(), E>
+    where
+        F: FnOnce(&mut WriteBatch) -> Result<(), E>,
+    {
+        let mut write_batch = WriteBatch::default();
+        batch(&mut write_batch)?;
+        let mut write_options = WriteOptions::new();
+        write_options.set_sync(true);
+        write_options.set_low_pri(true);
+        self.db
+            .write_opt(write_batch, &write_options)
+            .map_err(StorageError::from)?;
         Ok(())
     }
 
@@ -333,7 +352,6 @@ impl Writer {
                 self.key_buf.push(0);
             }
         }
-
         write_index_header_value(table, tuple, timestamp, freq, &mut self.value_buf);
 
         self.write_batch.put(&self.key_buf, &self.value_buf);
@@ -467,7 +485,7 @@ mod tests {
         ];
         let freq: i64 = 3;
 
-        table.atomic_write(|writer| {
+        table.atomic_write::<_, StorageError>(|writer| {
             writer.system_write_tuple(&table, &tuple1, freq);
             writer.system_write_tuple(&table, &tuple2, freq);
 
@@ -481,7 +499,7 @@ mod tests {
         assert_eq!(iter.next()?, None);
 
         // Delete a tuple and see if it takes
-        table.atomic_write(|writer| {
+        table.atomic_write::<_, StorageError>(|writer| {
             writer.system_delete_tuple(&table, &[Datum::from(123)]);
             Ok(())
         })?;
@@ -513,7 +531,7 @@ mod tests {
         let table = storage.table(1234, columns, vec![SortOrder::Asc]);
         let tuple = vec![Datum::from(123), Datum::from("abc".to_string())];
 
-        table.atomic_write(|writer| {
+        table.atomic_write::<_, StorageError>(|writer| {
             writer.write_tuple(&table, &tuple, LogicalTimestamp::new(10), 1)?;
             writer.write_tuple(&table, &tuple, LogicalTimestamp::new(20), 1)?;
             writer.write_tuple(&table, &tuple, LogicalTimestamp::new(20), 1)?;
@@ -553,7 +571,7 @@ mod tests {
         let columns = vec![("col1".to_string(), DataType::Integer)];
         let table = storage.table(1234, columns, vec![SortOrder::Asc]);
 
-        table.atomic_write(|writer| {
+        table.atomic_write::<_, StorageError>(|writer| {
             writer.write_tuple(&table, &[Datum::from(1)], LogicalTimestamp::new(10), 1)?;
             writer.write_tuple(&table, &[Datum::from(2)], LogicalTimestamp::new(10), 1)?;
             writer.write_tuple(&table, &[Datum::from(3)], LogicalTimestamp::new(10), 1)?;
@@ -592,7 +610,7 @@ mod tests {
         let columns = vec![("col1".to_string(), DataType::Integer)];
         let table = storage.table(1234, columns, vec![SortOrder::Desc]);
 
-        table.atomic_write(|writer| {
+        table.atomic_write::<_, StorageError>(|writer| {
             writer.write_tuple(&table, &[Datum::from(1)], LogicalTimestamp::new(10), 1)?;
             writer.write_tuple(&table, &[Datum::from(2)], LogicalTimestamp::new(10), 1)?;
             writer.write_tuple(&table, &[Datum::from(3)], LogicalTimestamp::new(10), 1)?;

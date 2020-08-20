@@ -63,7 +63,6 @@ pub(crate) fn fields_for_operator(
         LogicalOperator::UnionAll(union_all) => {
             fields_for_operator(union_all.sources.first().unwrap())
         }
-        LogicalOperator::Single => Box::from(empty()),
         LogicalOperator::ResolvedTable(table) => {
             Box::from(table.table.columns().iter().map(|(alias, datatype)| Field {
                 qualifier: None,
@@ -71,6 +70,7 @@ pub(crate) fn fields_for_operator(
                 data_type: *datatype,
             }))
         }
+        LogicalOperator::Single | LogicalOperator::TableInsert(_) => Box::from(empty()),
         LogicalOperator::TableReference(_) => panic!(),
     }
 }
@@ -102,7 +102,6 @@ pub(crate) fn fieldnames_for_operator(
         LogicalOperator::UnionAll(union_all) => {
             fieldnames_for_operator(union_all.sources.first().unwrap())
         }
-        LogicalOperator::Single => Box::from(empty()),
         LogicalOperator::ResolvedTable(table) => Box::from(
             table
                 .table
@@ -110,6 +109,7 @@ pub(crate) fn fieldnames_for_operator(
                 .iter()
                 .map(|(alias, _datatype)| (None, alias.as_str())),
         ),
+        LogicalOperator::Single | LogicalOperator::TableInsert(_) => Box::from(empty()),
         LogicalOperator::TableReference(_) => panic!(),
     }
 }
@@ -128,6 +128,7 @@ pub(crate) fn source_fields_for_operator(
         LogicalOperator::UnionAll(union_all) => {
             fields_for_operator(union_all.sources.first().unwrap())
         }
+        LogicalOperator::TableInsert(table_insert) => fields_for_operator(&table_insert.source),
         LogicalOperator::Values(_)
         | LogicalOperator::Single
         | LogicalOperator::TableReference(_)

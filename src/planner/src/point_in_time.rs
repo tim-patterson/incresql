@@ -1,6 +1,8 @@
 use crate::{Field, Planner, PlannerError};
 use ast::expr::Expression;
-use ast::rel::logical::{Filter, Limit, LogicalOperator, Project, ResolvedTable, UnionAll};
+use ast::rel::logical::{
+    Filter, Limit, LogicalOperator, Project, ResolvedTable, TableInsert, UnionAll,
+};
 use ast::rel::point_in_time::{self, PointInTimeOperator};
 use data::{LogicalTimestamp, Session};
 
@@ -19,7 +21,6 @@ impl Planner {
     ) -> Result<PointInTimePlan, PlannerError> {
         let (fields, operator) = self.plan_common(query, session)?;
         let operator = build_operator(operator);
-
         Ok(PointInTimePlan { fields, operator })
     }
 }
@@ -80,6 +81,19 @@ fn build_operator(query: LogicalOperator) -> PointInTimeOperator {
                 // Having a timestamp in the future gives us read after write within the same ms
                 // Rockdb already gives us atomic writes so I can't think of any downsides with this
                 timestamp: LogicalTimestamp::MAX,
+            })
+        }
+        LogicalOperator::TableInsert(TableInsert { table, source }) => {
+            let actual_table =
+                if let LogicalOperator::ResolvedTable(ResolvedTable { table }) = *table {
+                    table
+                } else {
+                    panic!("Can not insert into anything other than a resolved table")
+                };
+
+            PointInTimeOperator::TableInsert(point_in_time::TableInsert {
+                table: actual_table,
+                source: Box::new(build_operator(*source)),
             })
         }
         LogicalOperator::TableAlias(table_alias) => build_operator(*table_alias.source),

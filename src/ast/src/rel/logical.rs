@@ -17,6 +17,7 @@ pub enum LogicalOperator {
     UnionAll(UnionAll),
     TableReference(TableReference),
     ResolvedTable(ResolvedTable),
+    TableInsert(TableInsert),
 }
 
 impl Default for LogicalOperator {
@@ -78,6 +79,16 @@ pub struct ResolvedTable {
     pub table: Table,
 }
 
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct TableInsert {
+    // Table is a logical operator here which might seem a bit weird,
+    // but it allows all the table resolving code to be handled by all
+    // the existing code paths. Only TableReference and resolved table
+    // are valid here.
+    pub table: Box<LogicalOperator>,
+    pub source: Box<LogicalOperator>,
+}
+
 impl LogicalOperator {
     /// Iterates over the named(output) expressions *owned* by this operator.
     /// To iterate over the output fields instead use one of the fields methods in the planner
@@ -91,7 +102,8 @@ impl LogicalOperator {
             | LogicalOperator::TableAlias(_)
             | LogicalOperator::UnionAll(_)
             | LogicalOperator::TableReference(_)
-            | LogicalOperator::ResolvedTable(_) => Box::from(empty()),
+            | LogicalOperator::ResolvedTable(_)
+            | LogicalOperator::TableInsert(_) => Box::from(empty()),
         }
     }
 
@@ -107,7 +119,8 @@ impl LogicalOperator {
             | LogicalOperator::TableAlias(_)
             | LogicalOperator::UnionAll(_)
             | LogicalOperator::TableReference(_)
-            | LogicalOperator::ResolvedTable(_) => Box::from(empty()),
+            | LogicalOperator::ResolvedTable(_)
+            | LogicalOperator::TableInsert(_) => Box::from(empty()),
         }
     }
 
@@ -126,7 +139,8 @@ impl LogicalOperator {
             | LogicalOperator::TableAlias(_)
             | LogicalOperator::UnionAll(_)
             | LogicalOperator::TableReference(_)
-            | LogicalOperator::ResolvedTable(_) => Box::from(empty()),
+            | LogicalOperator::ResolvedTable(_)
+            | LogicalOperator::TableInsert(_) => Box::from(empty()),
         }
     }
 
@@ -139,6 +153,9 @@ impl LogicalOperator {
             LogicalOperator::TableAlias(table_alias) => {
                 Box::from(once(table_alias.source.as_mut()))
             }
+            LogicalOperator::TableInsert(table_insert) => Box::from(
+                once(table_insert.table.as_mut()).chain(once(table_insert.source.as_mut())),
+            ),
             LogicalOperator::UnionAll(union_all) => Box::from(union_all.sources.iter_mut()),
             LogicalOperator::Single
             | LogicalOperator::Values(_)
