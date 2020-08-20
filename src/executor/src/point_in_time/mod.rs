@@ -3,6 +3,7 @@ use crate::point_in_time::limit::LimitExecutor;
 use crate::point_in_time::negate_freq::NegateFreqExecutor;
 use crate::point_in_time::project::ProjectExecutor;
 use crate::point_in_time::single::SingleExecutor;
+use crate::point_in_time::sort::SortExecutor;
 use crate::point_in_time::table_insert::TableInsertExecutor;
 use crate::point_in_time::table_scan::TableScanExecutor;
 use crate::point_in_time::union_all::UnionAllExecutor;
@@ -17,6 +18,7 @@ mod limit;
 mod negate_freq;
 mod project;
 mod single;
+mod sort;
 mod table_insert;
 mod table_scan;
 mod union_all;
@@ -44,6 +46,11 @@ pub fn build_executor(
             build_executor(session, &limit.source),
             limit.offset,
             limit.limit,
+        )),
+        PointInTimeOperator::Sort(sort) => Box::from(SortExecutor::new(
+            Arc::clone(session),
+            build_executor(session, &sort.source),
+            sort.sort_expressions.clone(),
         )),
         PointInTimeOperator::Values(values) => Box::from(ValuesExecutor::new(
             Box::from(values.data.clone().into_iter()),

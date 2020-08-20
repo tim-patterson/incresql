@@ -1,5 +1,5 @@
 use data::rust_decimal::Decimal;
-use data::{DataType, Datum};
+use data::{DataType, Datum, SortOrder};
 use functions::{Function, FunctionSignature};
 use regex::Regex;
 use std::cmp::max;
@@ -75,6 +75,13 @@ pub struct CompiledColumnReference {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct NamedExpression {
     pub alias: Option<String>,
+    pub expression: Expression,
+}
+
+/// Sort expression, ie order by abs(foo) desc
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct SortExpression {
+    pub ordering: SortOrder,
     pub expression: Expression,
 }
 

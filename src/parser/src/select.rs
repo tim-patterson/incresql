@@ -1,10 +1,10 @@
 use crate::atoms::{as_clause, integer, kw, qualified_reference};
-use crate::expression::{expression, named_expression};
+use crate::expression::{expression, named_expression, sort_expression};
 use crate::whitespace::ws_0;
 use crate::ParserResult;
-use ast::expr::{Expression, NamedExpression};
+use ast::expr::{Expression, NamedExpression, SortExpression};
 use ast::rel::logical::{
-    Filter, Limit, LogicalOperator, Project, TableAlias, TableReference, UnionAll,
+    Filter, Limit, LogicalOperator, Project, Sort, TableAlias, TableReference, UnionAll,
 };
 use nom::branch::alt;
 use nom::bytes::complete::tag;
@@ -43,10 +43,11 @@ fn select_expr(input: &str) -> ParserResult<LogicalOperator> {
                 preceded(ws_0, comma_sep_named_expressions),
                 opt(preceded(ws_0, from_clause)),
                 opt(preceded(ws_0, where_clause)),
+                opt(preceded(ws_0, order_clause)),
                 opt(preceded(ws_0, limit_clause)),
             ))),
         ),
-        |(expressions, from_option, where_option, limit_option)| {
+        |(expressions, from_option, where_option, order_option, limit_option)| {
             let mut query = from_option.unwrap_or(LogicalOperator::Single);
 
             if let Some(predicate) = where_option {
@@ -61,6 +62,13 @@ fn select_expr(input: &str) -> ParserResult<LogicalOperator> {
                 expressions,
                 source: Box::from(query),
             });
+
+            if let Some(sort_expressions) = order_option {
+                query = LogicalOperator::Sort(Sort {
+                    sort_expressions,
+                    source: Box::new(query),
+                })
+            }
 
             if let Some((offset, limit)) = limit_option {
                 query = LogicalOperator::Limit(Limit {
@@ -113,6 +121,17 @@ pub(crate) fn where_clause(input: &str) -> ParserResult<Expression> {
     preceded(kw("WHERE"), cut(preceded(ws_0, expression)))(input)
 }
 
+/// Parse the order by clause of a query.
+pub(crate) fn order_clause(input: &str) -> ParserResult<Vec<SortExpression>> {
+    preceded(
+        tuple((kw("ORDER"), ws_0, kw("BY"))),
+        cut(preceded(
+            ws_0,
+            separated_list(tuple((ws_0, tag(","), ws_0)), sort_expression),
+        )),
+    )(input)
+}
+
 /// Limit clause, returns (offset, limit)
 pub(crate) fn limit_clause(input: &str) -> ParserResult<(i64, i64)> {
     // Theres 3 forms for limit
@@ -156,6 +175,7 @@ fn table_reference_with_alias(input: &str) -> ParserResult<LogicalOperator> {
 mod tests {
     use super::*;
     use ast::expr::Expression;
+    use data::SortOrder;
 
     #[test]
     fn test_select() {
@@ -254,6 +274,29 @@ mod tests {
                     predicate: Expression::from(true),
                     source: Box::new(LogicalOperator::Single)
                 }))
+            })
+        );
+    }
+
+    #[test]
+    fn test_order_by() {
+        let project = LogicalOperator::Project(Project {
+            distinct: false,
+            expressions: vec![NamedExpression {
+                expression: Expression::from(1),
+                alias: None,
+            }],
+            source: Box::new(LogicalOperator::Single),
+        });
+
+        assert_eq!(
+            select("SELECT 1 ORDER BY 1 desc").unwrap().1,
+            LogicalOperator::Sort(Sort {
+                sort_expressions: vec![SortExpression {
+                    ordering: SortOrder::Desc,
+                    expression: Expression::from(1)
+                }],
+                source: Box::new(project)
             })
         );
     }

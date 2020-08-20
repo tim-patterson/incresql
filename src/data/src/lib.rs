@@ -10,7 +10,9 @@ mod session;
 mod tuple_iter;
 pub use datatype::*;
 pub use datum::Datum;
+use serde::export::Formatter;
 pub use session::Session;
+use std::fmt::Display;
 pub use tuple_iter::TupleIter;
 
 #[macro_use]
@@ -30,6 +32,15 @@ impl SortOrder {
 
     pub fn is_desc(&self) -> bool {
         *self == SortOrder::Desc
+    }
+}
+
+impl Display for SortOrder {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SortOrder::Asc => f.write_str("ASC"),
+            SortOrder::Desc => f.write_str("DESC"),
+        }
     }
 }
 

@@ -2,13 +2,14 @@ use crate::atoms::{as_clause, identifier_str, kw};
 use crate::literals::{datatype, literal};
 use crate::whitespace::ws_0;
 use crate::ParserResult;
-use ast::expr::{Cast, ColumnReference, Expression, FunctionCall, NamedExpression};
+use ast::expr::{Cast, ColumnReference, Expression, FunctionCall, NamedExpression, SortExpression};
+use data::SortOrder;
 use nom::branch::{alt, Alt};
 use nom::bytes::complete::tag;
-use nom::combinator::{cut, map};
+use nom::combinator::{cut, map, value};
 use nom::error::VerboseError;
 use nom::multi::{many0, separated_list};
-use nom::sequence::{pair, preceded, tuple};
+use nom::sequence::{pair, preceded, separated_pair, tuple};
 
 /// Parses a bog standard expression, ie 1 + 2
 /// operators precedence according to https://dev.mysql.com/doc/refman/8.0/en/operator-precedence.html
@@ -21,6 +22,30 @@ pub fn named_expression(input: &str) -> ParserResult<NamedExpression> {
     map(pair(expression, as_clause), |(expression, alias)| {
         NamedExpression { expression, alias }
     })(input)
+}
+
+/// Parses a sort expression, ie 1 desc
+pub fn sort_expression(input: &str) -> ParserResult<SortExpression> {
+    alt((
+        map(
+            separated_pair(expression, ws_0, sort_order),
+            |(expression, ordering)| SortExpression {
+                ordering,
+                expression,
+            },
+        ),
+        map(expression, |expression| SortExpression {
+            ordering: SortOrder::Asc,
+            expression,
+        }),
+    ))(input)
+}
+
+fn sort_order(input: &str) -> ParserResult<SortOrder> {
+    alt((
+        value(SortOrder::Asc, kw("ASC")),
+        value(SortOrder::Desc, kw("DESC")),
+    ))(input)
 }
 
 /// Parse a comma separated list of expressions ie 1,2+2
@@ -327,6 +352,39 @@ mod tests {
                 alias: "*".to_string(),
                 star: false
             })
+        );
+    }
+
+    #[test]
+    fn test_sort_expr() {
+        let expr = Expression::ColumnReference(ColumnReference {
+            qualifier: None,
+            alias: "foo".to_string(),
+            star: false,
+        });
+
+        assert_eq!(
+            sort_expression("foo").unwrap().1,
+            SortExpression {
+                ordering: SortOrder::Asc,
+                expression: expr.clone()
+            }
+        );
+
+        assert_eq!(
+            sort_expression("foo Asc").unwrap().1,
+            SortExpression {
+                ordering: SortOrder::Asc,
+                expression: expr.clone()
+            }
+        );
+
+        assert_eq!(
+            sort_expression("foo Desc").unwrap().1,
+            SortExpression {
+                ordering: SortOrder::Desc,
+                expression: expr.clone()
+            }
         );
     }
 }
