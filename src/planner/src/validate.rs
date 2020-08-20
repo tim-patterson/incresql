@@ -5,7 +5,7 @@ use crate::{Field, FieldResolutionError, Planner, PlannerError};
 use ast::expr::{
     ColumnReference, CompiledColumnReference, CompiledFunctionCall, Expression, NamedExpression,
 };
-use ast::rel::logical::{LogicalOperator, ResolvedTable};
+use ast::rel::logical::{LogicalOperator, ResolvedTable, TableInsert};
 use data::{DataType, Datum, Session};
 use functions::registry::Registry;
 use functions::FunctionSignature;
@@ -19,6 +19,7 @@ impl Planner {
         session: &Session,
     ) -> Result<LogicalOperator, PlannerError> {
         self.resolve_tables(&mut query, session)?;
+        validate_values_types(&mut query)?;
         expand_stars(&mut query)?;
         compile_functions(&mut query, &self.function_registry)?;
         check_predicates(&mut query)?;
@@ -272,6 +273,40 @@ fn check_union_alls(operator: &mut LogicalOperator) -> Result<(), PlannerError> 
         }
     }
 
+    Ok(())
+}
+
+/// Walks "values" (ie insert .. values ()) and populates types in the header,
+/// has to happen fairly early on in the planning
+fn validate_values_types(query: &mut LogicalOperator) -> Result<(), PlannerError> {
+    for child in query.children_mut() {
+        validate_values_types(child)?;
+    }
+
+    if let LogicalOperator::TableInsert(TableInsert { table, source }) = query {
+        if let (LogicalOperator::Values(values), LogicalOperator::ResolvedTable(resolved_tables)) =
+            (source.as_mut(), table.as_mut())
+        {
+            values.fields = resolved_tables
+                .table
+                .columns()
+                .iter()
+                .map(|(alias, dt)| (*dt, alias.clone()))
+                .collect();
+
+            let table_types: Vec<_> = values
+                .fields
+                .iter()
+                .map(|(datatype, _)| *datatype)
+                .collect();
+            for row in &values.data {
+                let row_types = row.iter().map(type_for_expression).collect();
+                if row_types != table_types {
+                    return Err(PlannerError::InsertMismatch(table_types, row_types));
+                }
+            }
+        }
+    }
     Ok(())
 }
 

@@ -9,14 +9,16 @@ impl Planner {
         &self,
         mut query: LogicalOperator,
     ) -> Result<LogicalOperator, PlannerError> {
-        normalize_impl(&mut query);
+        normalize_column_aliases(&mut query);
         Ok(query)
     }
 }
 
-fn normalize_impl(query: &mut LogicalOperator) {
+/// This just created dummy _col1 style column aliases for expressions
+/// where they aren't specified in the queries
+fn normalize_column_aliases(query: &mut LogicalOperator) {
     for child in query.children_mut() {
-        normalize_impl(child);
+        normalize_column_aliases(child);
     }
 
     // Column Aliases
