@@ -21,7 +21,7 @@ materialized views.
 - [x] Mysql protocol Support
 - [x] Basic "point in time" query support, select/where/limit 
 - [x] Persistence/Table infra.
-- [ ] Inserts / Deletes for tables.
+- [x] Inserts / Deletes for tables.
 - [ ] Basic "point in time" order bys, group bys, joins
 - [ ] Data ingestion
 - [ ] Basic "point in time" window functions

@@ -30,3 +30,20 @@ fn test_insert_from_select() {
         );
     });
 }
+
+#[test]
+fn test_insert_from_values() {
+    with_connection(|connection| {
+        connection.query(r#"CREATE TABLE t1 (a INT, b TEXT)"#, "");
+
+        connection.query(r#"INSERT INTO t1 VALUES (1, "abc"), (2, "def")"#, "");
+
+        connection.query(
+            r#"SELECT * FROM t1"#,
+            "
+                |1|abc|
+                |2|def|
+            ",
+        );
+    });
+}
