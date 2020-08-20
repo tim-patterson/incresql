@@ -115,6 +115,7 @@ pub fn identifier_str(input: &str) -> ParserResult<String> {
                 not(peek(alt((
                     kw("FROM"),
                     kw("WHERE"),
+                    kw("ORDER"),
                     kw("UNION"),
                     kw("LIMIT"),
                 )))),
