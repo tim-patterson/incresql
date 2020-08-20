@@ -1,4 +1,4 @@
-use crate::expr::Expression;
+use crate::expr::{Expression, SortExpression};
 use data::{Datum, LogicalTimestamp};
 use storage::Table;
 
@@ -9,6 +9,7 @@ pub enum PointInTimeOperator {
     Values(Values),
     Filter(Filter),
     Limit(Limit),
+    Sort(Sort),
     UnionAll(UnionAll),
     TableScan(TableScan),
     TableInsert(TableInsert),
@@ -61,5 +62,11 @@ pub struct TableScan {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct TableInsert {
     pub table: Table,
+    pub source: Box<PointInTimeOperator>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Sort {
+    pub sort_expressions: Vec<SortExpression>,
     pub source: Box<PointInTimeOperator>,
 }
