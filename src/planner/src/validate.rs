@@ -232,6 +232,7 @@ fn compile_functions_in_expr(
         // These are already good and for the ref/function call probably shouldn't exist yet.
         Expression::Constant(..)
         | Expression::CompiledFunctionCall(_)
+        | Expression::CompiledAggregate(_)
         | Expression::CompiledColumnReference(_) => {}
     }
     Ok(())

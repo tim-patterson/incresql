@@ -1,6 +1,6 @@
 use data::rust_decimal::Decimal;
 use data::{DataType, Datum, SortOrder};
-use functions::{Function, FunctionSignature};
+use functions::{AggregateFunction, Function, FunctionSignature};
 use regex::Regex;
 use std::cmp::max;
 use std::fmt::{Display, Formatter};
@@ -11,6 +11,7 @@ pub enum Expression {
     FunctionCall(FunctionCall),
     Cast(Cast),
     CompiledFunctionCall(CompiledFunctionCall),
+    CompiledAggregate(CompiledAggregate),
     ColumnReference(ColumnReference),
     CompiledColumnReference(CompiledColumnReference),
 }
@@ -30,7 +31,7 @@ pub struct Cast {
     pub datatype: DataType,
 }
 
-/// Represents a function call once its been resolved and type
+/// Represents a scalar function call once its been resolved and type
 /// checked
 #[derive(Debug, Clone)]
 pub struct CompiledFunctionCall {
@@ -38,7 +39,7 @@ pub struct CompiledFunctionCall {
     // enum a bit hence the boxed slices instead of vec's
     pub function: &'static dyn Function,
     pub args: Box<[Expression]>,
-    // Used to store the evaluation results of the sub expressions
+    // Used to store the evaluation results of the sub expressions during execution
     pub expr_buffer: Box<[Datum<'static>]>,
     pub signature: Box<FunctionSignature<'static>>,
 }
@@ -50,6 +51,23 @@ impl PartialEq for CompiledFunctionCall {
 }
 
 impl Eq for CompiledFunctionCall {}
+
+/// Represents a aggregate function call once its been resolved and type
+/// checked
+#[derive(Debug, Clone)]
+pub struct CompiledAggregate {
+    pub function: &'static dyn AggregateFunction,
+    pub args: Box<[Expression]>,
+    pub signature: Box<FunctionSignature<'static>>,
+}
+
+impl PartialEq for CompiledAggregate {
+    fn eq(&self, other: &Self) -> bool {
+        self.args == other.args && self.signature == other.signature
+    }
+}
+
+impl Eq for CompiledAggregate {}
 
 /// A reference to a column in a source.
 /// ie SELECT foo FROM...
@@ -158,6 +176,19 @@ impl Display for Expression {
                 }
             }
             Expression::CompiledFunctionCall(function_call) => {
+                let args = function_call
+                    .args
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                if IDENTIFIER_OK.is_match(&function_call.signature.name) {
+                    f.write_fmt(format_args!("{}({})", function_call.signature.name, args))
+                } else {
+                    f.write_fmt(format_args!("`{}`({})", function_call.signature.name, args))
+                }
+            }
+            Expression::CompiledAggregate(function_call) => {
                 let args = function_call
                     .args
                     .iter()

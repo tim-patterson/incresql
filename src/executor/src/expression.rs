@@ -43,7 +43,10 @@ impl EvalScalar for Expression {
             }
             // These should be compiled away by this point
             Expression::FunctionCall(_) | Expression::Cast(_) | Expression::ColumnReference(_) => {
-                panic!()
+                panic!("Hit uncompiled expression during evaluation {:?}", self)
+            }
+            Expression::CompiledAggregate(_) => {
+                panic!("Hit aggregate function in scalar expression {:?}", self)
             }
         }
     }

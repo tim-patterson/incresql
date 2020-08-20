@@ -63,6 +63,12 @@ fn fold_constants_for_expr(expr: &mut Expression, session: &Session) {
                 *expr = Expression::Constant(constant, function_call.signature.ret);
             }
         }
+        Expression::CompiledAggregate(function_call) => {
+            // We'll fold up our inputs but we can't really fold across an aggregation
+            for arg in function_call.args.iter_mut() {
+                fold_constants_for_expr(arg, session);
+            }
+        }
         Expression::CompiledColumnReference(_column_reference) => {
             // TODO once we have the source expr's bit done we can come back here and optimize folding up constants from a subquery
         }

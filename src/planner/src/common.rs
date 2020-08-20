@@ -24,6 +24,7 @@ pub(crate) fn type_for_expression(expr: &Expression) -> DataType {
         Expression::Constant(_constant, datatype) => *datatype,
         Expression::Cast(cast) => cast.datatype,
         Expression::CompiledFunctionCall(function_call) => function_call.signature.ret,
+        Expression::CompiledAggregate(function_call) => function_call.signature.ret,
         Expression::CompiledColumnReference(column_reference) => column_reference.datatype,
 
         // These should be gone by now!
