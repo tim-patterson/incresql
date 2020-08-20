@@ -1,5 +1,5 @@
 use crate::registry::Registry;
-use crate::{Function, FunctionDefinition, FunctionSignature};
+use crate::{Function, FunctionDefinition, FunctionSignature, FunctionType};
 use data::rust_decimal::prelude::ToPrimitive;
 use data::{DataType, Datum, Session};
 
@@ -97,35 +97,35 @@ pub fn register_builtins(registry: &mut Registry) {
         "to_int",
         vec![DataType::Boolean],
         DataType::Integer,
-        &ToIntFromBoolean {},
+        FunctionType::Scalar(&ToIntFromBoolean {}),
     ));
 
     registry.register_function(FunctionDefinition::new(
         "to_int",
         vec![DataType::Integer],
         DataType::Integer,
-        &ToIntFromInt {},
+        FunctionType::Scalar(&ToIntFromInt {}),
     ));
 
     registry.register_function(FunctionDefinition::new(
         "to_int",
         vec![DataType::BigInt],
         DataType::Integer,
-        &ToIntFromBigInt {},
+        FunctionType::Scalar(&ToIntFromBigInt {}),
     ));
 
     registry.register_function(FunctionDefinition::new(
         "to_int",
         vec![DataType::Decimal(0, 0)],
         DataType::Integer,
-        &ToIntFromDecimal {},
+        FunctionType::Scalar(&ToIntFromDecimal {}),
     ));
 
     registry.register_function(FunctionDefinition::new(
         "to_int",
         vec![DataType::Text],
         DataType::Integer,
-        &ToIntFromText {},
+        FunctionType::Scalar(&ToIntFromText {}),
     ));
 }
 

@@ -1,5 +1,5 @@
 use crate::registry::Registry;
-use crate::{Function, FunctionDefinition, FunctionSignature};
+use crate::{Function, FunctionDefinition, FunctionSignature, FunctionType};
 use data::{DataType, Datum, Session};
 
 #[derive(Debug)]
@@ -45,14 +45,14 @@ pub fn register_builtins(registry: &mut Registry) {
         "to_bool",
         vec![DataType::Boolean],
         DataType::Boolean,
-        &ToBooleanFromBoolean {},
+        FunctionType::Scalar(&ToBooleanFromBoolean {}),
     ));
 
     registry.register_function(FunctionDefinition::new(
         "to_bool",
         vec![DataType::Text],
         DataType::Boolean,
-        &ToBooleanFromText {},
+        FunctionType::Scalar(&ToBooleanFromText {}),
     ));
 }
 

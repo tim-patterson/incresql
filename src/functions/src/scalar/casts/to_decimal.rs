@@ -1,5 +1,5 @@
 use crate::registry::Registry;
-use crate::{Function, FunctionDefinition, FunctionSignature};
+use crate::{Function, FunctionDefinition, FunctionSignature, FunctionType};
 use data::rust_decimal::Decimal;
 use data::{DataType, Datum, Session, DECIMAL_MAX_PRECISION, DECIMAL_MAX_SCALE};
 use std::str::FromStr;
@@ -121,21 +121,21 @@ pub fn register_builtins(registry: &mut Registry) {
         "to_decimal",
         vec![DataType::Boolean],
         DataType::Decimal(1, 0),
-        &ToDecimalFromBoolean {},
+        FunctionType::Scalar(&ToDecimalFromBoolean {}),
     ));
 
     registry.register_function(FunctionDefinition::new(
         "to_decimal",
         vec![DataType::Integer],
         DataType::Decimal(10, 0),
-        &ToDecimalFromInt {},
+        FunctionType::Scalar(&ToDecimalFromInt {}),
     ));
 
     registry.register_function(FunctionDefinition::new(
         "to_decimal",
         vec![DataType::BigInt],
         DataType::Decimal(20, 0),
-        &ToDecimalFromBigInt {},
+        FunctionType::Scalar(&ToDecimalFromBigInt {}),
     ));
 
     registry.register_function(FunctionDefinition::new_with_type_resolver(
@@ -144,14 +144,14 @@ pub fn register_builtins(registry: &mut Registry) {
         // Remembering this is just the default that can be overridden in casts, this value will only
         // be used if called as a function
         |args| args[0],
-        &ToDecimalFromDecimal {},
+        FunctionType::Scalar(&ToDecimalFromDecimal {}),
     ));
 
     registry.register_function(FunctionDefinition::new(
         "to_decimal",
         vec![DataType::Text],
         DataType::Decimal(DECIMAL_MAX_PRECISION, DECIMAL_MAX_SCALE),
-        &ToDecimalFromText {},
+        FunctionType::Scalar(&ToDecimalFromText {}),
     ));
 }
 

@@ -8,7 +8,7 @@ use ast::expr::{
 use ast::rel::logical::{LogicalOperator, ResolvedTable, TableInsert};
 use data::{DataType, Datum, Session};
 use functions::registry::Registry;
-use functions::FunctionSignature;
+use functions::{FunctionSignature, FunctionType};
 
 /// Validate the query, as part of the process of validating the query we will actually end up
 /// doing all the catalog and function lookups and subbing them in.
@@ -135,17 +135,21 @@ fn compile_functions_in_expr(
                 ret: DataType::Null,
             };
 
-            let (signature, function) = function_registry.resolve_scalar_function(&lookup_sig)?;
+            let (signature, function) = function_registry.resolve_function(&lookup_sig)?;
 
             let mut args = Vec::new();
             std::mem::swap(&mut args, &mut function_call.args);
 
-            *expression = Expression::CompiledFunctionCall(CompiledFunctionCall {
-                function,
-                args: Box::from(args),
-                expr_buffer: Box::from(vec![]),
-                signature: Box::new(signature),
-            })
+            if let FunctionType::Scalar(function) = function {
+                *expression = Expression::CompiledFunctionCall(CompiledFunctionCall {
+                    function,
+                    args: Box::from(args),
+                    expr_buffer: Box::from(vec![]),
+                    signature: Box::new(signature),
+                })
+            } else {
+                unimplemented!()
+            }
         }
         Expression::Cast(cast) => {
             compile_functions_in_expr(&mut cast.expr, source_fields, function_registry)?;
@@ -169,19 +173,22 @@ fn compile_functions_in_expr(
                 ret: cast.datatype,
             };
 
-            let (signature, function) = function_registry.resolve_scalar_function(&lookup_sig)?;
+            let (signature, function) = function_registry.resolve_function(&lookup_sig)?;
 
             // Just an "empty" value to swap
             let mut expr = Expression::Constant(Datum::Null, DataType::Null);
 
             std::mem::swap(&mut expr, &mut cast.expr);
-
-            *expression = Expression::CompiledFunctionCall(CompiledFunctionCall {
-                function,
-                args: Box::from(vec![expr]),
-                expr_buffer: Box::from(vec![]),
-                signature: Box::new(signature),
-            })
+            if let FunctionType::Scalar(function) = function {
+                *expression = Expression::CompiledFunctionCall(CompiledFunctionCall {
+                    function,
+                    args: Box::from(vec![expr]),
+                    expr_buffer: Box::from(vec![]),
+                    signature: Box::new(signature),
+                })
+            } else {
+                panic!("Cast needs to be a scalar function")
+            }
         }
         Expression::ColumnReference(column_reference) => {
             let indexed_source_fields = source_fields.iter().enumerate();

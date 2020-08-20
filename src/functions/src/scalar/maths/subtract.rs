@@ -1,5 +1,5 @@
 use crate::registry::Registry;
-use crate::{Function, FunctionDefinition, FunctionSignature};
+use crate::{Function, FunctionDefinition, FunctionSignature, FunctionType};
 use data::{DataType, Datum, Session, DECIMAL_MAX_PRECISION};
 use std::cmp::{max, min};
 
@@ -62,14 +62,14 @@ pub fn register_builtins(registry: &mut Registry) {
         "-",
         vec![DataType::Integer, DataType::Integer],
         DataType::Integer,
-        &SubtractInteger {},
+        FunctionType::Scalar(&SubtractInteger {}),
     ));
 
     registry.register_function(FunctionDefinition::new(
         "-",
         vec![DataType::BigInt, DataType::BigInt],
         DataType::BigInt,
-        &SubtractBigint {},
+        FunctionType::Scalar(&SubtractBigint {}),
     ));
 
     registry.register_function(FunctionDefinition::new_with_type_resolver(
@@ -82,7 +82,7 @@ pub fn register_builtins(registry: &mut Registry) {
                 panic!()
             }
         },
-        &SubtractDecimal {},
+        FunctionType::Scalar(&SubtractDecimal {}),
     ));
 }
 

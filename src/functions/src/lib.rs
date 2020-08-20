@@ -19,7 +19,13 @@ pub struct FunctionSignature<'a> {
 pub struct FunctionDefinition {
     pub signature: FunctionSignature<'static>,
     pub custom_return_type_resolver: Option<fn(&[DataType]) -> DataType>,
-    pub function: &'static dyn Function,
+    pub function: FunctionType,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub enum FunctionType {
+    Scalar(&'static dyn Function),
+    Aggregate(&'static dyn AggregateFunction),
 }
 
 impl Debug for FunctionDefinition {
@@ -35,7 +41,7 @@ impl FunctionDefinition {
         name: &'static str,
         args: Vec<DataType>,
         ret: DataType,
-        function: &'static dyn Function,
+        function: FunctionType,
     ) -> Self {
         FunctionDefinition {
             signature: FunctionSignature { name, args, ret },
@@ -48,7 +54,7 @@ impl FunctionDefinition {
         name: &'static str,
         args: Vec<DataType>,
         return_type_resolver: fn(&[DataType]) -> DataType,
-        function: &'static dyn Function,
+        function: FunctionType,
     ) -> Self {
         let ret = return_type_resolver(&args);
         FunctionDefinition {
@@ -67,6 +73,49 @@ pub trait Function: Debug + Sync + 'static {
         signature: &FunctionSignature,
         args: &'a [Datum<'a>],
     ) -> Datum<'a>;
+}
+
+/// A function implementation for aggregate functions.
+pub trait AggregateFunction: Debug + Sync + 'static {
+    /// Returns a new "empty"/initial state
+    fn initialize(&self) -> Datum<'static> {
+        Datum::Null
+    }
+
+    /// Applies the new input to the state, for retractable
+    /// aggregates the freq is simply negative
+    fn apply(
+        &self,
+        signature: &FunctionSignature,
+        args: &[Datum],
+        freq: i64,
+        state: &mut Datum<'static>,
+    );
+
+    /// Merges two states together.
+    fn merge(
+        &self,
+        signature: &FunctionSignature,
+        input_state: &Datum<'static>,
+        state: &mut Datum<'static>,
+    );
+
+    /// Render the final result from the state
+    fn finalize<'a>(
+        &self,
+        _signature: &FunctionSignature,
+        state: &'a mut Datum<'static>,
+    ) -> Datum<'a> {
+        state.ref_clone()
+    }
+
+    /// Can we undo records from this aggregate. Postgres calls these
+    /// moving-aggregates, as well as supporting streaming group bys
+    /// with allot less state it also makes window functions fast and
+    /// efficient
+    fn supports_retract(&self) -> bool {
+        false
+    }
 }
 
 fn register_builtins(registry: &mut Registry) {

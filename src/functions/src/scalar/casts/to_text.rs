@@ -1,5 +1,5 @@
 use crate::registry::Registry;
-use crate::{Function, FunctionDefinition, FunctionSignature};
+use crate::{Function, FunctionDefinition, FunctionSignature, FunctionType};
 use data::{DataType, Datum, Session};
 
 #[derive(Debug)]
@@ -61,21 +61,21 @@ pub fn register_builtins(registry: &mut Registry) {
         "to_text",
         vec![DataType::Boolean],
         DataType::Text,
-        &ToTextFromBoolean {},
+        FunctionType::Scalar(&ToTextFromBoolean {}),
     ));
 
     registry.register_function(FunctionDefinition::new(
         "to_text",
         vec![DataType::Text],
         DataType::Text,
-        &ToTextFromText {},
+        FunctionType::Scalar(&ToTextFromText {}),
     ));
 
     registry.register_function(FunctionDefinition::new(
         "to_text",
         vec![DataType::Null],
         DataType::Text,
-        &ToTextFromAny {},
+        FunctionType::Scalar(&ToTextFromAny {}),
     ));
 }
 

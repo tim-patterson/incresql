@@ -1,5 +1,5 @@
 use crate::registry::Registry;
-use crate::{Function, FunctionDefinition, FunctionSignature};
+use crate::{Function, FunctionDefinition, FunctionSignature, FunctionType};
 use data::{DataType, Datum, Session, DECIMAL_MAX_PRECISION, DECIMAL_MAX_SCALE};
 
 #[derive(Debug)]
@@ -65,21 +65,21 @@ pub fn register_builtins(registry: &mut Registry) {
         "/",
         vec![DataType::Integer, DataType::Integer],
         DataType::Integer,
-        &DivideInteger {},
+        FunctionType::Scalar(&DivideInteger {}),
     ));
 
     registry.register_function(FunctionDefinition::new(
         "/",
         vec![DataType::BigInt, DataType::BigInt],
         DataType::BigInt,
-        &DivideBigint {},
+        FunctionType::Scalar(&DivideBigint {}),
     ));
 
     registry.register_function(FunctionDefinition::new(
         "/",
         vec![DataType::Decimal(0, 0), DataType::Decimal(0, 0)],
         DataType::Decimal(DECIMAL_MAX_PRECISION, DECIMAL_MAX_SCALE),
-        &DivideDecimal {},
+        FunctionType::Scalar(&DivideDecimal {}),
     ));
 }
 

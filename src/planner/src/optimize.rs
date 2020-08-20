@@ -85,7 +85,7 @@ mod tests {
     use ast::expr::{CompiledFunctionCall, Expression, NamedExpression};
     use ast::rel::logical::Project;
     use data::DataType;
-    use functions::FunctionSignature;
+    use functions::{FunctionSignature, FunctionType};
 
     #[test]
     fn test_constant_fold() -> Result<(), PlannerError> {
@@ -96,9 +96,13 @@ mod tests {
             args: vec![DataType::Integer, DataType::Integer],
             ret: DataType::Integer,
         };
-        let (_, add_function) = planner
-            .function_registry
-            .resolve_scalar_function(&add_signature)?;
+        let (_, add_function_type) = planner.function_registry.resolve_function(&add_signature)?;
+
+        let add_function = if let FunctionType::Scalar(f) = add_function_type {
+            f
+        } else {
+            panic!()
+        };
 
         // 1 + (2 + 3)
         let operator = LogicalOperator::Project(Project {
