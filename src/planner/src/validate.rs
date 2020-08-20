@@ -452,7 +452,6 @@ mod tests {
 
         let operator = planner.validate(raw_query, &session)?;
         let fields: Vec<_> = fields_for_operator(&operator).collect();
-
         assert_eq!(
             fields,
             vec![Field {
