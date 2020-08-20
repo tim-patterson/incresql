@@ -2,7 +2,7 @@ use crate::StorageError;
 use data::encoding_core::SortableEncoding;
 use data::{DataType, Datum, LogicalTimestamp, SortOrder, TupleIter};
 use rocksdb::prelude::*;
-use rocksdb::{DBRawIterator, WriteBatchWithIndex};
+use rocksdb::{DBRawIterator, WriteBatch, WriteBatchWithIndex};
 use std::convert::TryInto;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
@@ -82,6 +82,23 @@ impl Table {
         write_options.set_low_pri(true);
         self.db
             .write_opt(writer.write_batch, &write_options)
+            .map_err(StorageError::from)?;
+        Ok(())
+    }
+
+    /// Lower level atomic write without read after write support, used to work around some
+    /// unsupported rocks db functionality
+    pub fn atomic_write_without_index<F, E: From<StorageError>>(&self, batch: F) -> Result<(), E>
+    where
+        F: FnOnce(&mut WriteBatch) -> Result<(), E>,
+    {
+        let mut write_batch = WriteBatch::default();
+        batch(&mut write_batch)?;
+        let mut write_options = WriteOptions::new();
+        write_options.set_sync(true);
+        write_options.set_low_pri(true);
+        self.db
+            .write_opt(write_batch, &write_options)
             .map_err(StorageError::from)?;
         Ok(())
     }
@@ -286,7 +303,7 @@ impl TupleIter<StorageError> for IndexIter<'_> {
 /// Abstraction through which all writes happens, allows some degree of
 /// read after write functionality which is not offered by rocksdb.
 pub struct Writer {
-    pub write_batch: WriteBatchWithIndex,
+    write_batch: WriteBatchWithIndex,
     key_buf: Vec<u8>,
     value_buf: Vec<u8>,
 }
@@ -335,7 +352,6 @@ impl Writer {
                 self.key_buf.push(0);
             }
         }
-
         write_index_header_value(table, tuple, timestamp, freq, &mut self.value_buf);
 
         self.write_batch.put(&self.key_buf, &self.value_buf);
