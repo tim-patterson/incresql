@@ -124,6 +124,28 @@ fn render_plan(
             padding.pop();
             padding.pop();
         }
+        LogicalOperator::Sort(sort) => {
+            if let Some(name) = alias {
+                lines.push((format!("{}SORT({})", padding, name), None, None));
+            } else {
+                lines.push((format!("{}SORT", padding), None, None));
+            }
+            padding.push(" |");
+            lines.push((format!("{}exprs:", padding), None, None));
+            for se in &sort.sort_expressions {
+                lines.push((
+                    format!("{}  {}", padding, se.ordering),
+                    None,
+                    Some(se.expression.to_string()),
+                ));
+            }
+
+            lines.push((format!("{}source:", padding), None, None));
+            padding.push("  ");
+            render_plan(&sort.source, lines, padding, None);
+            padding.pop();
+            padding.pop();
+        }
         LogicalOperator::Values(values) => {
             if let Some(name) = alias {
                 lines.push((format!("{}VALUES({})", padding, name), None, None));

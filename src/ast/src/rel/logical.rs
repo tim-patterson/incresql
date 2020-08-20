@@ -1,4 +1,4 @@
-use crate::expr::{Expression, NamedExpression};
+use crate::expr::{Expression, NamedExpression, SortExpression};
 use data::DataType;
 use std::iter::{empty, once};
 use storage::Table;
@@ -11,6 +11,7 @@ pub enum LogicalOperator {
     Single, // No from clause, ie select 1 + 1
     Project(Project),
     Filter(Filter),
+    Sort(Sort),
     Limit(Limit),
     Values(Values),
     TableAlias(TableAlias),
@@ -44,6 +45,12 @@ pub struct Filter {
 pub struct Limit {
     pub offset: i64,
     pub limit: i64,
+    pub source: Box<LogicalOperator>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Sort {
+    pub sort_expressions: Vec<SortExpression>,
     pub source: Box<LogicalOperator>,
 }
 
@@ -99,6 +106,7 @@ impl LogicalOperator {
             LogicalOperator::Single
             | LogicalOperator::Filter(_)
             | LogicalOperator::Limit(_)
+            | LogicalOperator::Sort(_)
             | LogicalOperator::Values(_)
             | LogicalOperator::TableAlias(_)
             | LogicalOperator::UnionAll(_)
@@ -117,6 +125,7 @@ impl LogicalOperator {
             LogicalOperator::Single
             | LogicalOperator::Filter(_)
             | LogicalOperator::Limit(_)
+            | LogicalOperator::Sort(_)
             | LogicalOperator::Values(_)
             | LogicalOperator::TableAlias(_)
             | LogicalOperator::UnionAll(_)
@@ -137,6 +146,11 @@ impl LogicalOperator {
             LogicalOperator::Values(values) => {
                 Box::from(values.data.iter_mut().flat_map(|row| row.iter_mut()))
             }
+            LogicalOperator::Sort(sort) => Box::from(
+                sort.sort_expressions
+                    .iter_mut()
+                    .map(|se| &mut se.expression),
+            ),
             LogicalOperator::Single
             | LogicalOperator::Limit(_)
             | LogicalOperator::TableAlias(_)
@@ -154,6 +168,7 @@ impl LogicalOperator {
             LogicalOperator::Project(project) => Box::from(once(project.source.as_mut())),
             LogicalOperator::Filter(filter) => Box::from(once(filter.source.as_mut())),
             LogicalOperator::Limit(limit) => Box::from(once(limit.source.as_mut())),
+            LogicalOperator::Sort(sort) => Box::from(once(sort.source.as_mut())),
             LogicalOperator::TableAlias(table_alias) => {
                 Box::from(once(table_alias.source.as_mut()))
             }

@@ -1,7 +1,7 @@
 use crate::{Field, Planner, PlannerError};
 use ast::expr::Expression;
 use ast::rel::logical::{
-    Filter, Limit, LogicalOperator, Project, ResolvedTable, TableInsert, UnionAll,
+    Filter, Limit, LogicalOperator, Project, ResolvedTable, Sort, TableInsert, UnionAll,
 };
 use ast::rel::point_in_time::{self, PointInTimeOperator};
 use data::{LogicalTimestamp, Session};
@@ -52,6 +52,13 @@ fn build_operator(query: LogicalOperator) -> PointInTimeOperator {
         }) => PointInTimeOperator::Limit(point_in_time::Limit {
             offset,
             limit,
+            source: Box::new(build_operator(*source)),
+        }),
+        LogicalOperator::Sort(Sort {
+            sort_expressions,
+            source,
+        }) => PointInTimeOperator::Sort(point_in_time::Sort {
+            sort_expressions,
             source: Box::new(build_operator(*source)),
         }),
         LogicalOperator::Values(values) => {

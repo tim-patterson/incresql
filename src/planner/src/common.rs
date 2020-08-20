@@ -47,6 +47,7 @@ pub(crate) fn fields_for_operator(
         }
         LogicalOperator::Filter(filter) => fields_for_operator(&filter.source),
         LogicalOperator::Limit(limit) => fields_for_operator(&limit.source),
+        LogicalOperator::Sort(sort) => fields_for_operator(&sort.source),
         LogicalOperator::Values(values) => {
             Box::from(values.fields.iter().map(|(data_type, alias)| Field {
                 qualifier: None,
@@ -90,6 +91,7 @@ pub(crate) fn fieldnames_for_operator(
         ),
         LogicalOperator::Filter(filter) => fieldnames_for_operator(&filter.source),
         LogicalOperator::Limit(limit) => fieldnames_for_operator(&limit.source),
+        LogicalOperator::Sort(sort) => fieldnames_for_operator(&sort.source),
         LogicalOperator::Values(values) => Box::from(
             values
                 .fields
@@ -126,6 +128,7 @@ pub(crate) fn source_fields_for_operator(
         LogicalOperator::Project(project) => fields_for_operator(&project.source),
         LogicalOperator::Filter(filter) => fields_for_operator(&filter.source),
         LogicalOperator::Limit(limit) => fields_for_operator(&limit.source),
+        LogicalOperator::Sort(sort) => fields_for_operator(&sort.source),
         LogicalOperator::TableAlias(table_alias) => fields_for_operator(&table_alias.source),
         LogicalOperator::UnionAll(union_all) => {
             fields_for_operator(union_all.sources.first().unwrap())
