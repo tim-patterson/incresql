@@ -12,6 +12,7 @@ pub enum PointInTimeOperator {
     UnionAll(UnionAll),
     TableScan(TableScan),
     TableInsert(TableInsert),
+    NegateFreq(Box<PointInTimeOperator>),
 }
 
 impl Default for PointInTimeOperator {
