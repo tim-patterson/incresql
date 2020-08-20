@@ -195,6 +195,19 @@ fn render_plan(
             padding.pop();
             padding.pop();
         }
+        LogicalOperator::NegateFreq(source) => {
+            if let Some(name) = alias {
+                lines.push((format!("{}NEGATE({})", padding, name), None, None));
+            } else {
+                lines.push((format!("{}NEGATE", padding), None, None));
+            }
+            padding.push(" |");
+            lines.push((format!("{}source:", padding), None, None));
+            padding.push("  ");
+            render_plan(source, lines, padding, None);
+            padding.pop();
+            padding.pop();
+        }
         LogicalOperator::TableReference(_) => panic!(),
         LogicalOperator::TableAlias(table_alias) => {
             // We don't render a table alias, we simply pass down the alias to annotate the operator

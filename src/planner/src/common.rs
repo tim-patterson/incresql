@@ -70,6 +70,7 @@ pub(crate) fn fields_for_operator(
                 data_type: *datatype,
             }))
         }
+        LogicalOperator::NegateFreq(source) => fields_for_operator(source),
         LogicalOperator::Single | LogicalOperator::TableInsert(_) => Box::from(empty()),
         LogicalOperator::TableReference(_) => panic!(),
     }
@@ -109,6 +110,7 @@ pub(crate) fn fieldnames_for_operator(
                 .iter()
                 .map(|(alias, _datatype)| (None, alias.as_str())),
         ),
+        LogicalOperator::NegateFreq(source) => fieldnames_for_operator(source),
         LogicalOperator::Single | LogicalOperator::TableInsert(_) => Box::from(empty()),
         LogicalOperator::TableReference(_) => panic!(),
     }
@@ -129,6 +131,7 @@ pub(crate) fn source_fields_for_operator(
             fields_for_operator(union_all.sources.first().unwrap())
         }
         LogicalOperator::TableInsert(table_insert) => fields_for_operator(&table_insert.source),
+        LogicalOperator::NegateFreq(source) => fields_for_operator(source),
         LogicalOperator::Values(_)
         | LogicalOperator::Single
         | LogicalOperator::TableReference(_)

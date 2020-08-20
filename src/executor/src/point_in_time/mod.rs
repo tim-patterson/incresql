@@ -1,5 +1,6 @@
 use crate::point_in_time::filter::FilterExecutor;
 use crate::point_in_time::limit::LimitExecutor;
+use crate::point_in_time::negate_freq::NegateFreqExecutor;
 use crate::point_in_time::project::ProjectExecutor;
 use crate::point_in_time::single::SingleExecutor;
 use crate::point_in_time::table_insert::TableInsertExecutor;
@@ -13,6 +14,7 @@ use std::sync::Arc;
 
 mod filter;
 mod limit;
+mod negate_freq;
 mod project;
 mod single;
 mod table_insert;
@@ -62,6 +64,9 @@ pub fn build_executor(
             build_executor(session, &table_insert.source),
             table_insert.table.clone(),
         )),
+        PointInTimeOperator::NegateFreq(source) => {
+            Box::from(NegateFreqExecutor::new(build_executor(session, &source)))
+        }
     }
 }
 

@@ -96,6 +96,9 @@ fn build_operator(query: LogicalOperator) -> PointInTimeOperator {
                 source: Box::new(build_operator(*source)),
             })
         }
+        LogicalOperator::NegateFreq(source) => {
+            PointInTimeOperator::NegateFreq(Box::new(build_operator(*source)))
+        }
         LogicalOperator::TableAlias(table_alias) => build_operator(*table_alias.source),
         LogicalOperator::TableReference(_) => panic!(),
     }

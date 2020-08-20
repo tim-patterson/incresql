@@ -1,5 +1,6 @@
 use crate::atoms::{identifier_str, kw};
 use crate::create::create;
+use crate::delete::delete;
 use crate::drop::drop_;
 use crate::insert::insert;
 use crate::select::select;
@@ -26,7 +27,7 @@ pub fn statement(input: &str) -> ParserResult<Statement> {
 /// The logical operator statements, these can be used both as a standalone
 /// statement and as input to the explain operator
 fn logical_operator(input: &str) -> ParserResult<LogicalOperator> {
-    alt((select, insert))(input)
+    alt((select, insert, delete))(input)
 }
 
 fn explain(input: &str) -> ParserResult<Statement> {

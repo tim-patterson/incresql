@@ -18,6 +18,7 @@ pub enum LogicalOperator {
     TableReference(TableReference),
     ResolvedTable(ResolvedTable),
     TableInsert(TableInsert),
+    NegateFreq(Box<LogicalOperator>),
 }
 
 impl Default for LogicalOperator {
@@ -103,7 +104,8 @@ impl LogicalOperator {
             | LogicalOperator::UnionAll(_)
             | LogicalOperator::TableReference(_)
             | LogicalOperator::ResolvedTable(_)
-            | LogicalOperator::TableInsert(_) => Box::from(empty()),
+            | LogicalOperator::TableInsert(_)
+            | LogicalOperator::NegateFreq(_) => Box::from(empty()),
         }
     }
 
@@ -120,7 +122,8 @@ impl LogicalOperator {
             | LogicalOperator::UnionAll(_)
             | LogicalOperator::TableReference(_)
             | LogicalOperator::ResolvedTable(_)
-            | LogicalOperator::TableInsert(_) => Box::from(empty()),
+            | LogicalOperator::TableInsert(_)
+            | LogicalOperator::NegateFreq(_) => Box::from(empty()),
         }
     }
 
@@ -140,7 +143,8 @@ impl LogicalOperator {
             | LogicalOperator::UnionAll(_)
             | LogicalOperator::TableReference(_)
             | LogicalOperator::ResolvedTable(_)
-            | LogicalOperator::TableInsert(_) => Box::from(empty()),
+            | LogicalOperator::TableInsert(_)
+            | LogicalOperator::NegateFreq(_) => Box::from(empty()),
         }
     }
 
@@ -157,6 +161,7 @@ impl LogicalOperator {
                 once(table_insert.table.as_mut()).chain(once(table_insert.source.as_mut())),
             ),
             LogicalOperator::UnionAll(union_all) => Box::from(union_all.sources.iter_mut()),
+            LogicalOperator::NegateFreq(source) => Box::from(once(source.as_mut())),
             LogicalOperator::Single
             | LogicalOperator::Values(_)
             | LogicalOperator::TableReference(_)
