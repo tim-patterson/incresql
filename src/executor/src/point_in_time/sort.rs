@@ -83,6 +83,9 @@ impl TupleIter<ExecutionError> for SortExecutor {
             }
             self.freq.read_sortable_bytes(SortOrder::Asc, slice);
         } else {
+            // Free up all our memory here.
+            self.sort_buffer = vec![];
+            self.sort_indexes = vec![].into_iter();
             self.state = State::Done
         }
 
