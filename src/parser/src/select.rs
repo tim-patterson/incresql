@@ -1,4 +1,4 @@
-use crate::atoms::{as_clause, identifier_str, integer, kw};
+use crate::atoms::{as_clause, integer, kw, qualified_reference};
 use crate::expression::{expression, named_expression};
 use crate::whitespace::ws_0;
 use crate::ParserResult;
@@ -104,17 +104,17 @@ fn unaliased_from_item(input: &str) -> ParserResult<LogicalOperator> {
     alt((
         // sub query
         delimited(pair(tag("("), ws_0), select, pair(ws_0, tag(")"))),
-        table_reference,
+        table_reference_with_alias,
     ))(input)
 }
 
 /// Parse the where clause of a query.
-fn where_clause(input: &str) -> ParserResult<Expression> {
+pub(crate) fn where_clause(input: &str) -> ParserResult<Expression> {
     preceded(kw("WHERE"), cut(preceded(ws_0, expression)))(input)
 }
 
 /// Limit clause, returns (offset, limit)
-fn limit_clause(input: &str) -> ParserResult<(i64, i64)> {
+pub(crate) fn limit_clause(input: &str) -> ParserResult<(i64, i64)> {
     // Theres 3 forms for limit
     // LIMIT offset, limit
     // LIMIT limit
@@ -139,34 +139,17 @@ fn limit_clause(input: &str) -> ParserResult<(i64, i64)> {
 }
 
 /// Parse as a table AND wrap in a Table Alias
-fn table_reference(input: &str) -> ParserResult<LogicalOperator> {
-    alt((
-        map(
-            tuple((identifier_str, tag("."), identifier_str)),
-            |(database, _, table)| {
-                let tbl = LogicalOperator::TableReference(TableReference {
-                    database: Some(database),
-                    table: table.clone(),
-                });
-
-                LogicalOperator::TableAlias(TableAlias {
-                    alias: table,
-                    source: Box::new(tbl),
-                })
-            },
-        ),
-        map(identifier_str, |table| {
-            let tbl = LogicalOperator::TableReference(TableReference {
-                database: None,
-                table: table.clone(),
-            });
-
-            LogicalOperator::TableAlias(TableAlias {
-                alias: table,
-                source: Box::new(tbl),
-            })
-        }),
-    ))(input)
+fn table_reference_with_alias(input: &str) -> ParserResult<LogicalOperator> {
+    map(qualified_reference, |(database, table)| {
+        let table_source = LogicalOperator::TableReference(TableReference {
+            database,
+            table: table.clone(),
+        });
+        LogicalOperator::TableAlias(TableAlias {
+            alias: table,
+            source: Box::new(table_source),
+        })
+    })(input)
 }
 
 #[cfg(test)]
@@ -340,7 +323,7 @@ mod tests {
     #[test]
     fn test_table_reference() {
         assert_eq!(
-            table_reference("foo").unwrap().1,
+            table_reference_with_alias("foo").unwrap().1,
             LogicalOperator::TableAlias(TableAlias {
                 alias: "foo".to_string(),
                 source: Box::new(LogicalOperator::TableReference(TableReference {
@@ -351,7 +334,7 @@ mod tests {
         );
 
         assert_eq!(
-            table_reference("foo.bar").unwrap().1,
+            table_reference_with_alias("foo.bar").unwrap().1,
             LogicalOperator::TableAlias(TableAlias {
                 alias: "bar".to_string(),
                 source: Box::new(LogicalOperator::TableReference(TableReference {
