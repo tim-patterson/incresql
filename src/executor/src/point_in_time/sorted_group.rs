@@ -1,6 +1,8 @@
 use crate::aggregate_expression::{AggregateExpression, EvalAggregateRow};
 use crate::point_in_time::BoxedExecutor;
+use crate::utils::{right_size_new, transmute_muf_buf};
 use crate::ExecutionError;
+use ast::expr::Expression;
 use data::{Datum, PeekableIter, Session, TupleIter};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -18,25 +20,28 @@ pub struct SortedGroupExecutor {
     key_size: usize,
     expressions: Vec<AggregateExpression>,
     current_state: Vec<Datum<'static>>,
-    current_hash: u64,
+    output_tuple: Vec<Datum<'static>>,
+    is_done: bool,
 }
 
 impl SortedGroupExecutor {
-    #[allow(dead_code)]
     pub fn new(
         source: BoxedExecutor,
         session: Arc<Session>,
         key_size: usize,
-        expressions: Vec<AggregateExpression>,
+        expressions: Vec<Expression>,
     ) -> Self {
+        let expressions: Vec<_> = expressions.iter().map(AggregateExpression::from).collect();
         let current_state = expressions.initialize();
+        let output_tuple = right_size_new(&expressions);
         SortedGroupExecutor {
             source: PeekableIter::from(source),
             session,
             key_size,
             expressions,
             current_state,
-            current_hash: 0,
+            output_tuple,
+            is_done: false,
         }
     }
 }
@@ -45,27 +50,135 @@ impl TupleIter for SortedGroupExecutor {
     type E = ExecutionError;
 
     fn advance(&mut self) -> Result<(), ExecutionError> {
-        while let Some((tuple, freq)) = self.source.next()? {
+        // When we enter advance we'll pull off one record, apply/hash it
+        // and then iter until we run off the end
+        /// Hash the key for a tuple
+        fn hash_tuple(tuple: &[Datum], key_len: usize) -> u64 {
             let mut hasher = DefaultHasher::new();
-            tuple[0..self.key_size].hash(&mut hasher);
-            let key_hash = hasher.finish();
+            tuple[0..key_len].hash(&mut hasher);
+            hasher.finish()
+        }
 
-            if key_hash != self.current_hash {
-                // TODO copy old state out somehow?
-
-                self.expressions.reset(&mut self.current_state);
-            }
+        let group_hash = if let Some((tuple, freq)) = self.source.next()? {
+            self.expressions.reset(&mut self.current_state);
             self.expressions
                 .apply(&self.session, tuple, freq, &mut self.current_state);
+            hash_tuple(tuple, self.key_size)
+        } else {
+            self.is_done = true;
+            return Ok(());
+        };
+
+        loop {
+            if let Some((tuple, freq)) = self.source.peek()? {
+                let hash = hash_tuple(tuple, self.key_size);
+                if hash != group_hash {
+                    // We've stepped into the next tuple, finalize the row and break
+                    self.expressions.finalize(
+                        &self.session,
+                        &self.current_state,
+                        transmute_muf_buf(&mut self.output_tuple),
+                    );
+                    break;
+                }
+                self.expressions
+                    .apply(&self.session, tuple, freq, &mut self.current_state);
+                // "advance" the inter
+                self.source.lock_in();
+            } else {
+                // No next record to peek at, we need to act like we've stepped into a
+                // new key and write out our current state
+                self.expressions.finalize(
+                    &self.session,
+                    &self.current_state,
+                    transmute_muf_buf(&mut self.output_tuple),
+                );
+                break;
+            }
         }
         Ok(())
     }
 
     fn get(&self) -> Option<(&[Datum], i64)> {
-        unimplemented!()
+        if self.is_done {
+            None
+        } else {
+            Some((&self.output_tuple, 1))
+        }
     }
 
     fn column_count(&self) -> usize {
         self.expressions.len()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::point_in_time::values::ValuesExecutor;
+    use ast::expr::{CompiledAggregate, CompiledColumnReference, Expression};
+    use data::DataType;
+    use functions::registry::Registry;
+    use functions::FunctionSignature;
+
+    #[test]
+    fn test_sorted_group_executor() -> Result<(), ExecutionError> {
+        let session = Arc::new(Session::new(1));
+        let values = vec![
+            vec![Datum::from("a"), Datum::from(1)],
+            vec![Datum::from("a"), Datum::from(2)],
+            vec![Datum::from("b"), Datum::from(3)],
+            vec![Datum::from("b"), Datum::from(4)],
+            vec![Datum::from("c"), Datum::from(5)],
+        ];
+
+        let source = Box::from(ValuesExecutor::new(Box::from(values.into_iter()), 1));
+
+        // Lookup sum function
+        let (sig, sum_function) = Registry::default()
+            .resolve_function(&FunctionSignature {
+                name: "sum",
+                args: vec![DataType::Integer],
+                ret: DataType::Null,
+            })
+            .unwrap();
+
+        // Select col1, sum(col2)
+        let expressions = vec![
+            Expression::CompiledColumnReference(CompiledColumnReference {
+                offset: 0,
+                datatype: DataType::Text,
+            }),
+            Expression::CompiledAggregate(CompiledAggregate {
+                function: sum_function.as_aggregate(),
+                args: vec![Expression::CompiledColumnReference(
+                    CompiledColumnReference {
+                        offset: 1,
+                        datatype: DataType::Integer,
+                    },
+                )]
+                .into_boxed_slice(),
+                expr_buffer: vec![].into_boxed_slice(),
+                signature: Box::new(sig),
+            }),
+        ];
+
+        let mut executor = SortedGroupExecutor::new(source, session, 1, expressions);
+
+        assert_eq!(
+            executor.next()?,
+            Some(([Datum::from("a"), Datum::from(3)].as_ref(), 1))
+        );
+        assert_eq!(
+            executor.next()?,
+            Some(([Datum::from("b"), Datum::from(7)].as_ref(), 1))
+        );
+        assert_eq!(
+            executor.next()?,
+            Some(([Datum::from("c"), Datum::from(5)].as_ref(), 1))
+        );
+        assert_eq!(executor.next()?, None);
+
+        Ok(())
     }
 }

@@ -67,8 +67,17 @@ impl<I: TupleIter + ?Sized> PeekableIter<I> {
     pub fn peek(&mut self) -> Result<Option<(&[Datum], i64)>, I::E> {
         if !self.advanced {
             self.inner.advance()?;
+            self.advanced = true;
         }
         Ok(self.inner.get())
+    }
+
+    /// If we've peeked at a value and want to act like we'd
+    /// actually called next, instead of calling next you can
+    /// call this instead and not have to worry about consuming
+    /// the output
+    pub fn lock_in(&mut self) {
+        self.advanced = false;
     }
 
     pub fn column_count(&self) -> usize {

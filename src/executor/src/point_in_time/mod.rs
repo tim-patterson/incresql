@@ -4,6 +4,7 @@ use crate::point_in_time::negate_freq::NegateFreqExecutor;
 use crate::point_in_time::project::ProjectExecutor;
 use crate::point_in_time::single::SingleExecutor;
 use crate::point_in_time::sort::SortExecutor;
+use crate::point_in_time::sorted_group::SortedGroupExecutor;
 use crate::point_in_time::table_insert::TableInsertExecutor;
 use crate::point_in_time::table_scan::TableScanExecutor;
 use crate::point_in_time::union_all::UnionAllExecutor;
@@ -72,6 +73,12 @@ pub fn build_executor(session: &Arc<Session>, plan: &PointInTimeOperator) -> Box
         PointInTimeOperator::NegateFreq(source) => {
             Box::from(NegateFreqExecutor::new(build_executor(session, &source)))
         }
+        PointInTimeOperator::SortedGroup(sorted_group) => Box::from(SortedGroupExecutor::new(
+            build_executor(session, &sorted_group.source),
+            Arc::clone(&session),
+            sorted_group.key_len,
+            sorted_group.expressions.clone(),
+        )),
     }
 }
 

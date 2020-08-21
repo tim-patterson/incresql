@@ -130,8 +130,11 @@ impl AggregateExpression {
                         &mut function_call.expr_buffer,
                     )
                 };
+                let mut offset = 0_usize;
                 for (idx, expr) in function_call.args.iter_mut().enumerate() {
-                    buf[idx] = expr.finalize(session, state);
+                    let state_len = expr.state_len();
+                    buf[idx] = expr.finalize(session, &state[offset..]);
+                    offset += state_len;
                 }
 
                 function_call.function.execute(
@@ -249,8 +252,11 @@ impl EvalAggregateRow for [AggregateExpression] {
         state: &'a [Datum<'a>],
         target: &mut [Datum<'a>],
     ) {
+        let mut offset = 0_usize;
         for (idx, expr) in self.iter_mut().enumerate() {
-            target[idx] = expr.finalize(session, state);
+            let state_len = expr.state_len();
+            target[idx] = expr.finalize(session, &state[offset..]);
+            offset += state_len;
         }
     }
 }
@@ -360,21 +366,29 @@ mod tests {
             offset: 0,
             datatype: DataType::Integer,
         });
-        let expression2 = Expression::from(1234);
+        let expression2 = Expression::CompiledColumnReference(CompiledColumnReference {
+            offset: 1,
+            datatype: DataType::Integer,
+        });
+        let expression3 = Expression::from(1234);
         let session = Session::new(1);
 
         let mut agg_expressions = vec![
             AggregateExpression::from(&expression1),
             AggregateExpression::from(&expression2),
+            AggregateExpression::from(&expression3),
         ];
 
         let mut state = agg_expressions.initialize();
-        agg_expressions.apply(&session, &[Datum::from(1)], 1, &mut state);
-        agg_expressions.apply(&session, &[Datum::Null], 2, &mut state);
+        agg_expressions.apply(&session, &[Datum::from(1), Datum::Null], 1, &mut state);
+        agg_expressions.apply(&session, &[Datum::Null, Datum::from(5)], 2, &mut state);
 
         let mut target = right_size_new(&agg_expressions);
         agg_expressions.finalize(&session, &state, &mut target);
 
-        assert_eq!(target, vec![Datum::from(1), Datum::from(1234)]);
+        assert_eq!(
+            target,
+            vec![Datum::from(1), Datum::from(5), Datum::from(1234)]
+        );
     }
 }
