@@ -1,11 +1,13 @@
 use crate::common::{
-    fieldnames_for_operator, fields_for_operator, source_fields_for_operator, type_for_expression,
+    contains_aggregate, fieldnames_for_operator, fields_for_operator, source_fields_for_operator,
+    type_for_expression,
 };
 use crate::{Field, FieldResolutionError, Planner, PlannerError};
 use ast::expr::{
-    ColumnReference, CompiledColumnReference, CompiledFunctionCall, Expression, NamedExpression,
+    ColumnReference, CompiledAggregate, CompiledColumnReference, CompiledFunctionCall, Expression,
+    NamedExpression,
 };
-use ast::rel::logical::{LogicalOperator, ResolvedTable, TableInsert};
+use ast::rel::logical::{GroupBy, LogicalOperator, ResolvedTable, TableInsert};
 use data::{DataType, Datum, Session};
 use functions::registry::Registry;
 use functions::{FunctionSignature, FunctionType};
@@ -22,6 +24,7 @@ impl Planner {
         validate_values_types(&mut query)?;
         expand_stars(&mut query)?;
         compile_functions(&mut query, &self.function_registry)?;
+        project_to_groupby(&mut query);
         check_predicates(&mut query)?;
         check_union_alls(&mut query)?;
         check_inserts(&mut query)?;
@@ -140,16 +143,24 @@ fn compile_functions_in_expr(
             let mut args = Vec::new();
             std::mem::swap(&mut args, &mut function_call.args);
 
-            if let FunctionType::Scalar(function) = function {
-                *expression = Expression::CompiledFunctionCall(CompiledFunctionCall {
-                    function,
-                    args: Box::from(args),
-                    expr_buffer: Box::from(vec![]),
-                    signature: Box::new(signature),
-                })
-            } else {
-                unimplemented!()
-            }
+            *expression = match function {
+                FunctionType::Scalar(function) => {
+                    Expression::CompiledFunctionCall(CompiledFunctionCall {
+                        function,
+                        args: Box::from(args),
+                        expr_buffer: Box::from(vec![]),
+                        signature: Box::new(signature),
+                    })
+                }
+                FunctionType::Aggregate(function) => {
+                    Expression::CompiledAggregate(CompiledAggregate {
+                        function,
+                        args: Box::from(args),
+                        expr_buffer: Box::from(vec![]),
+                        signature: Box::new(signature),
+                    })
+                }
+            };
         }
         Expression::Cast(cast) => {
             compile_functions_in_expr(&mut cast.expr, source_fields, function_registry)?;
@@ -339,6 +350,31 @@ fn check_inserts(operator: &mut LogicalOperator) -> Result<(), PlannerError> {
         }
     } else {
         Ok(())
+    }
+}
+
+/// Detects projects using aggregate functions and turns them into a group by.
+fn project_to_groupby(operator: &mut LogicalOperator) {
+    for child in operator.children_mut() {
+        project_to_groupby(child);
+    }
+    if let LogicalOperator::Project(project) = operator {
+        if project
+            .expressions
+            .iter()
+            .any(|ne| contains_aggregate(&ne.expression))
+        {
+            let mut expressions = vec![];
+            let mut source = Box::from(LogicalOperator::Single);
+            std::mem::swap(&mut expressions, &mut project.expressions);
+            std::mem::swap(&mut source, &mut project.source);
+
+            *operator = LogicalOperator::GroupBy(GroupBy {
+                expressions,
+                key_expressions: vec![],
+                source,
+            })
+        }
     }
 }
 

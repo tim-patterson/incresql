@@ -33,10 +33,10 @@ impl Server {
                         if let Err(err) = catch_unwind(AssertUnwindSafe(|| {
                             let mut mysql_connection = MysqlConnection::new(stream, connection);
                             if let Err(err) = mysql_connection.connect() {
-                                println!("IO Error for {}\n {:?}", connection_id, err);
+                                eprintln!("IO Error for {}\n {:?}", connection_id, err);
                             }
                         })) {
-                            println!("Thread panic for connection {}\n {:?}", connection_id, err);
+                            eprintln!("Thread panic for connection {}\n {:?}", connection_id, err);
                         }
                     });
                 })

@@ -34,6 +34,15 @@ pub(crate) fn type_for_expression(expr: &Expression) -> DataType {
     }
 }
 
+/// Returns true if the expression contains an aggregate anywhere in its expressions.
+pub(crate) fn contains_aggregate(expr: &Expression) -> bool {
+    if let Expression::CompiledAggregate(_) = expr {
+        true
+    } else {
+        expr.children().any(contains_aggregate)
+    }
+}
+
 /// Returns the fields for an operator, will panic if called before query is normalized
 pub(crate) fn fields_for_operator(
     operator: &LogicalOperator,

@@ -112,6 +112,19 @@ pub struct SortExpression {
 
 impl Expression {
     // Iterates over all child expressions.
+    pub fn children(&self) -> Box<dyn Iterator<Item = &Expression> + '_> {
+        match self {
+            Expression::FunctionCall(function_call) => Box::from(function_call.args.iter()),
+            Expression::CompiledFunctionCall(function_call) => Box::from(function_call.args.iter()),
+            Expression::CompiledAggregate(function_call) => Box::from(function_call.args.iter()),
+            Expression::Cast(cast) => Box::from(once(&*cast.expr)),
+            Expression::CompiledColumnReference(_)
+            | Expression::Constant(_, _)
+            | Expression::ColumnReference(_) => Box::from(empty()),
+        }
+    }
+
+    // Iterates over all child expressions.
     pub fn children_mut(&mut self) -> Box<dyn Iterator<Item = &mut Expression> + '_> {
         match self {
             Expression::FunctionCall(function_call) => Box::from(function_call.args.iter_mut()),
