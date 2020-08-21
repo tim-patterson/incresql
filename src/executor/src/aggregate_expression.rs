@@ -1,6 +1,6 @@
 use crate::scalar_expression::EvalScalarRow;
 use crate::utils::{right_size_new, right_size_new_to};
-use ast::expr::{CompiledAggregate, Expression};
+use ast::expr::{CompiledAggregate, CompiledColumnReference, Expression};
 use data::{DataType, Datum, Session};
 use functions::{Function, FunctionSignature};
 
@@ -25,6 +25,12 @@ use functions::{Function, FunctionSignature};
 pub enum AggregateExpression {
     // A top level constant
     Constant(Datum<'static>, DataType),
+    // Not really an aggregate but we must be able to support aggregate
+    // expressions that directly reference the grouping keys (unless we
+    // decompose the expressions). If non-aggregate expressions aren't part
+    // of the grouping key then the results returned may be surprising (the
+    // same as mysql).
+    ColumnReference(CompiledColumnReference),
     // A top level scalar function of aggregates(and constants
     //      and other scalar functions of aggregates)
     ScalarFunctionCall(ScalarFunctionCall),
@@ -33,19 +39,14 @@ pub enum AggregateExpression {
 }
 
 impl AggregateExpression {
-    /// Initialize the aggregation state.
-    pub fn initialize(&self) -> Vec<Datum<'static>> {
-        let mut state = right_size_new_to(self.state_len());
-        self.reset(&mut state);
-        state
-    }
-
     pub fn state_len(&self) -> usize {
         match self {
             AggregateExpression::ScalarFunctionCall(funct) => {
                 funct.args.iter().map(Self::state_len).sum::<usize>()
             }
-            AggregateExpression::CompiledAggregate(_) => 1,
+            AggregateExpression::CompiledAggregate(_) | AggregateExpression::ColumnReference(_) => {
+                1
+            }
             AggregateExpression::Constant(_, _) => 0,
         }
     }
@@ -65,6 +66,9 @@ impl AggregateExpression {
                 state[0] = funct.function.initialize();
             }
             AggregateExpression::Constant(_, _) => {}
+            AggregateExpression::ColumnReference(_) => {
+                state[0] = Datum::Null;
+            }
         }
     }
 
@@ -101,6 +105,12 @@ impl AggregateExpression {
                     .function
                     .apply(&function_call.signature, &buf, freq, &mut state[0])
             }
+            AggregateExpression::ColumnReference(column_ref) => {
+                // Grabs a copy of the column ref unless we've already set it
+                if state[0].is_null() {
+                    state[0] = row[column_ref.offset].as_static()
+                }
+            }
             AggregateExpression::Constant(_, _) => {}
         }
     }
@@ -133,6 +143,7 @@ impl AggregateExpression {
             AggregateExpression::CompiledAggregate(function_call) => function_call
                 .function
                 .finalize(&function_call.signature, &state[0]),
+            AggregateExpression::ColumnReference(_) => state[0].ref_clone(),
         }
     }
 }
@@ -141,11 +152,11 @@ impl AggregateExpression {
 /// aggregate sub expressions
 #[derive(Debug, Clone)]
 pub struct ScalarFunctionCall {
-    pub function: &'static dyn Function,
-    pub args: Box<[AggregateExpression]>,
+    function: &'static dyn Function,
+    args: Box<[AggregateExpression]>,
     // Used to store the evaluation results of the sub expressions during execution
-    pub expr_buffer: Box<[Datum<'static>]>,
-    pub signature: Box<FunctionSignature<'static>>,
+    expr_buffer: Box<[Datum<'static>]>,
+    signature: Box<FunctionSignature<'static>>,
 }
 
 impl PartialEq for ScalarFunctionCall {
@@ -178,13 +189,68 @@ impl From<&Expression> for AggregateExpression {
                     signature: function.signature.clone(),
                 })
             }
-            Expression::CompiledColumnReference(_) => {
-                panic!("Hit unaggregated compiled column in aggregate expr")
+            Expression::CompiledColumnReference(column_ref) => {
+                AggregateExpression::ColumnReference(column_ref.clone())
             }
 
             Expression::FunctionCall(_) | Expression::ColumnReference(_) | Expression::Cast(_) => {
                 panic!("Hit uncompiled expressions when converting to aggregation")
             }
+        }
+    }
+}
+
+/// A trait to make it easier to deal with a whole row of aggregate expressions
+/// all at once.
+pub trait EvalAggregateRow {
+    fn initialize(&self) -> Vec<Datum<'static>> {
+        let mut state = right_size_new_to(self.state_len());
+        self.reset(&mut state);
+        state
+    }
+
+    fn state_len(&self) -> usize;
+    fn reset(&self, state: &mut [Datum<'static>]);
+    fn apply(&mut self, session: &Session, row: &[Datum], freq: i64, state: &mut [Datum<'static>]);
+    fn finalize<'a>(
+        &'a mut self,
+        session: &Session,
+        state: &'a [Datum<'a>],
+        target: &mut [Datum<'a>],
+    );
+}
+
+impl EvalAggregateRow for [AggregateExpression] {
+    fn state_len(&self) -> usize {
+        self.iter()
+            .map(AggregateExpression::state_len)
+            .sum::<usize>()
+    }
+
+    fn reset(&self, state: &mut [Datum<'static>]) {
+        let mut offset = 0_usize;
+        for expr in self.iter() {
+            expr.reset(&mut state[offset..]);
+            offset += expr.state_len();
+        }
+    }
+
+    fn apply(&mut self, session: &Session, row: &[Datum], freq: i64, state: &mut [Datum<'static>]) {
+        let mut offset = 0_usize;
+        for expr in self.iter_mut() {
+            expr.apply(&session, row, freq, &mut state[offset..]);
+            offset += expr.state_len();
+        }
+    }
+
+    fn finalize<'a>(
+        &'a mut self,
+        session: &Session,
+        state: &'a [Datum<'a>],
+        target: &mut [Datum<'a>],
+    ) {
+        for (idx, expr) in self.iter_mut().enumerate() {
+            target[idx] = expr.finalize(session, state);
         }
     }
 }
@@ -205,6 +271,26 @@ mod tests {
         let result = agg_expression.finalize(&session, &[]);
 
         assert_eq!(result, Datum::from(1234));
+    }
+
+    #[test]
+    fn test_eval_column_ref() {
+        let expression = Expression::CompiledColumnReference(CompiledColumnReference {
+            offset: 0,
+            datatype: DataType::Integer,
+        });
+        let session = Session::new(1);
+
+        let mut agg_expression = AggregateExpression::from(&expression);
+
+        let mut state = right_size_new_to(agg_expression.state_len());
+        agg_expression.reset(&mut state);
+        agg_expression.apply(&session, &[Datum::from(1)], 1, &mut state);
+        agg_expression.apply(&session, &[Datum::Null], 2, &mut state);
+
+        let result = agg_expression.finalize(&session, &state);
+
+        assert_eq!(result, Datum::from(1));
     }
 
     #[test]
@@ -231,7 +317,8 @@ mod tests {
 
         let mut agg_expression = AggregateExpression::from(&expression);
 
-        let mut state = agg_expression.initialize();
+        let mut state = right_size_new_to(agg_expression.state_len());
+        agg_expression.reset(&mut state);
         agg_expression.apply(&session, &[Datum::from(1)], 1, &mut state);
         agg_expression.apply(&session, &[Datum::from(3)], 2, &mut state);
 
@@ -265,5 +352,29 @@ mod tests {
         let result = agg_expression.finalize(&session, &[]);
 
         assert_eq!(result, Datum::from(4));
+    }
+
+    #[test]
+    fn test_eval_row() {
+        let expression1 = Expression::CompiledColumnReference(CompiledColumnReference {
+            offset: 0,
+            datatype: DataType::Integer,
+        });
+        let expression2 = Expression::from(1234);
+        let session = Session::new(1);
+
+        let mut agg_expressions = vec![
+            AggregateExpression::from(&expression1),
+            AggregateExpression::from(&expression2),
+        ];
+
+        let mut state = agg_expressions.initialize();
+        agg_expressions.apply(&session, &[Datum::from(1)], 1, &mut state);
+        agg_expressions.apply(&session, &[Datum::Null], 2, &mut state);
+
+        let mut target = right_size_new(&agg_expressions);
+        agg_expressions.finalize(&session, &state, &mut target);
+
+        assert_eq!(target, vec![Datum::from(1), Datum::from(1234)]);
     }
 }

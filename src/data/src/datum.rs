@@ -2,6 +2,7 @@ use crate::json::Json;
 use crate::{DataType, DECIMAL_MAX_SCALE};
 use rust_decimal::Decimal;
 use std::fmt::{Debug, Display, Formatter};
+use std::hash::{Hash, Hasher};
 
 /// Datum - in memory representation of sql value.
 /// The same datum may be able to be interpreted as multiple different
@@ -314,6 +315,22 @@ impl<'a> Datum<'a> {
 
     pub fn as_boolean(&self) -> bool {
         self.as_maybe_boolean().unwrap()
+    }
+}
+
+/// Hash implementation on datum. Allows us to use hashmaps etc.
+impl Hash for Datum<'_> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            Datum::Null => state.write_u8(0),
+            Datum::Boolean(b) => b.hash(state),
+            Datum::Integer(i) => i.hash(state),
+            Datum::BigInt(i) => i.hash(state),
+            Datum::Decimal(d) => d.hash(state),
+            Datum::ByteAOwned(_) | Datum::ByteAInline(_, _) | Datum::ByteARef(_) => {
+                self.as_bytea().hash(state)
+            }
+        }
     }
 }
 

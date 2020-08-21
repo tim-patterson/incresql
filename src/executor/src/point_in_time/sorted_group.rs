@@ -1,7 +1,10 @@
-use crate::aggregate_expression::AggregateExpression;
+use crate::aggregate_expression::{AggregateExpression, EvalAggregateRow};
 use crate::point_in_time::BoxedExecutor;
 use crate::ExecutionError;
-use data::{Datum, TupleIter};
+use data::{Datum, Session, TupleIter};
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+use std::sync::Arc;
 
 /// A Group by executor that only works if the tuples fed to it
 /// arrive sorted by the grouping key.
@@ -11,26 +14,48 @@ use data::{Datum, TupleIter};
 /// grouping keys.
 pub struct SortedGroupExecutor {
     source: BoxedExecutor,
+    session: Arc<Session>,
     key_size: usize,
     expressions: Vec<AggregateExpression>,
+    current_state: Vec<Datum<'static>>,
+    current_hash: u64,
 }
 
 impl SortedGroupExecutor {
+    #[allow(dead_code)]
     pub fn new(
         source: BoxedExecutor,
+        session: Arc<Session>,
         key_size: usize,
         expressions: Vec<AggregateExpression>,
     ) -> Self {
+        let current_state = expressions.initialize();
         SortedGroupExecutor {
             source,
+            session,
             key_size,
             expressions,
+            current_state,
+            current_hash: 0,
         }
     }
 }
 
 impl TupleIter<ExecutionError> for SortedGroupExecutor {
     fn advance(&mut self) -> Result<(), ExecutionError> {
+        while let Some((tuple, freq)) = self.source.next()? {
+            let mut hasher = DefaultHasher::new();
+            tuple[0..self.key_size].hash(&mut hasher);
+            let key_hash = hasher.finish();
+
+            if key_hash != self.current_hash {
+                // TODO copy old state out somehow?
+
+                self.expressions.reset(&mut self.current_state);
+            }
+            self.expressions
+                .apply(&self.session, tuple, freq, &mut self.current_state);
+        }
         Ok(())
     }
 
