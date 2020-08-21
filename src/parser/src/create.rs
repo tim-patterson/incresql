@@ -2,7 +2,7 @@ use crate::atoms::{identifier_str, kw, qualified_reference};
 use crate::literals::datatype;
 use crate::whitespace::ws_0;
 use crate::ParserResult;
-use ast::rel::statement::{CreateDatabase, CreateTable, Statement};
+use ast::statement::{CreateDatabase, CreateTable, Statement};
 use data::DataType;
 use nom::branch::alt;
 use nom::bytes::complete::tag;

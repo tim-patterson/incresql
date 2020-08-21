@@ -1,7 +1,7 @@
 use crate::{QueryError, Runtime};
 use ast::expr::Expression;
 use ast::rel::logical::{LogicalOperator, Values};
-use ast::rel::statement::Statement;
+use ast::statement::Statement;
 use data::{empty_tuple_iter, DataType, Session};
 use executor::point_in_time::{build_executor, BoxedExecutor};
 use parser::parse;

@@ -8,7 +8,7 @@ use crate::show::show;
 use crate::whitespace::ws_0;
 use crate::ParserResult;
 use ast::rel::logical::LogicalOperator;
-use ast::rel::statement::{Explain, Statement};
+use ast::statement::{Explain, Statement};
 use nom::branch::alt;
 use nom::combinator::{cut, map};
 use nom::sequence::preceded;
