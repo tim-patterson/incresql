@@ -4,6 +4,7 @@ use functions::{AggregateFunction, Function, FunctionSignature};
 use regex::Regex;
 use std::cmp::max;
 use std::fmt::{Display, Formatter};
+use std::iter::{empty, once};
 
 /// The expression ast.
 /// For scalar expressions we support evaluating the ast directly,
@@ -107,6 +108,25 @@ pub struct NamedExpression {
 pub struct SortExpression {
     pub ordering: SortOrder,
     pub expression: Expression,
+}
+
+impl Expression {
+    // Iterates over all child expressions.
+    pub fn children_mut(&mut self) -> Box<dyn Iterator<Item = &mut Expression> + '_> {
+        match self {
+            Expression::FunctionCall(function_call) => Box::from(function_call.args.iter_mut()),
+            Expression::CompiledFunctionCall(function_call) => {
+                Box::from(function_call.args.iter_mut())
+            }
+            Expression::CompiledAggregate(function_call) => {
+                Box::from(function_call.args.iter_mut())
+            }
+            Expression::Cast(cast) => Box::from(once(&mut *cast.expr)),
+            Expression::CompiledColumnReference(_)
+            | Expression::Constant(_, _)
+            | Expression::ColumnReference(_) => Box::from(empty()),
+        }
+    }
 }
 
 // Convenience helpers to construct expression literals

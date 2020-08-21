@@ -10,6 +10,7 @@ pub enum LogicalOperator {
     // These may appear anywhere in a logical operator at anytime
     Single, // No from clause, ie select 1 + 1
     Project(Project),
+    GroupBy(GroupBy),
     Filter(Filter),
     Sort(Sort),
     Limit(Limit),
@@ -32,6 +33,13 @@ impl Default for LogicalOperator {
 pub struct Project {
     pub distinct: bool, // Comes from parser, planner will rewrite to a group by
     pub expressions: Vec<NamedExpression>,
+    pub source: Box<LogicalOperator>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct GroupBy {
+    pub expressions: Vec<NamedExpression>,
+    pub key_expressions: Vec<Expression>,
     pub source: Box<LogicalOperator>,
 }
 
@@ -103,6 +111,7 @@ impl LogicalOperator {
     pub fn named_expressions(&self) -> Box<dyn Iterator<Item = &NamedExpression> + '_> {
         match self {
             LogicalOperator::Project(project) => Box::from(project.expressions.iter()),
+            LogicalOperator::GroupBy(group_by) => Box::from(group_by.expressions.iter()),
             LogicalOperator::Single
             | LogicalOperator::Filter(_)
             | LogicalOperator::Limit(_)
@@ -122,6 +131,7 @@ impl LogicalOperator {
     pub fn named_expressions_mut(&mut self) -> Box<dyn Iterator<Item = &mut NamedExpression> + '_> {
         match self {
             LogicalOperator::Project(project) => Box::from(project.expressions.iter_mut()),
+            LogicalOperator::GroupBy(group_by) => Box::from(group_by.expressions.iter_mut()),
             LogicalOperator::Single
             | LogicalOperator::Filter(_)
             | LogicalOperator::Limit(_)
@@ -142,6 +152,13 @@ impl LogicalOperator {
             LogicalOperator::Project(project) => {
                 Box::from(project.expressions.iter_mut().map(|ne| &mut ne.expression))
             }
+            LogicalOperator::GroupBy(group_by) => Box::from(
+                group_by
+                    .expressions
+                    .iter_mut()
+                    .map(|ne| &mut ne.expression)
+                    .chain(group_by.key_expressions.iter_mut()),
+            ),
             LogicalOperator::Filter(filter) => Box::from(once(&mut filter.predicate)),
             LogicalOperator::Values(values) => {
                 Box::from(values.data.iter_mut().flat_map(|row| row.iter_mut()))
@@ -166,6 +183,7 @@ impl LogicalOperator {
     pub fn children_mut(&mut self) -> Box<dyn Iterator<Item = &mut LogicalOperator> + '_> {
         match self {
             LogicalOperator::Project(project) => Box::from(once(project.source.as_mut())),
+            LogicalOperator::GroupBy(group_by) => Box::from(once(group_by.source.as_mut())),
             LogicalOperator::Filter(filter) => Box::from(once(filter.source.as_mut())),
             LogicalOperator::Limit(limit) => Box::from(once(limit.source.as_mut())),
             LogicalOperator::Sort(sort) => Box::from(once(sort.source.as_mut())),

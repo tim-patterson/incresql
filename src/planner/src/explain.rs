@@ -91,6 +91,25 @@ fn render_plan(
             padding.pop();
             padding.pop();
         }
+        LogicalOperator::GroupBy(group_by) => {
+            if let Some(name) = alias {
+                lines.push((format!("{}GROUP({})", padding, name), None, None));
+            } else {
+                lines.push((format!("{}GROUP", padding), None, None));
+            }
+            padding.push(" |");
+            lines.push((format!("{}exprs:", padding), None, None));
+            render_named_expressions(&group_by.expressions, &mut 0, lines, padding);
+            lines.push((format!("{}group keys:", padding), None, None));
+            for expr in &group_by.key_expressions {
+                lines.push(("".to_string(), None, Some(expr.to_string())));
+            }
+            lines.push((format!("{}source:", padding), None, None));
+            padding.push("  ");
+            render_plan(&group_by.source, lines, padding, None);
+            padding.pop();
+            padding.pop();
+        }
         LogicalOperator::Filter(filter) => {
             if let Some(name) = alias {
                 lines.push((format!("{}FILTER({})", padding, name), None, None));
