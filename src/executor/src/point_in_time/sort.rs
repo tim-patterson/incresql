@@ -1,5 +1,5 @@
-use crate::expression::EvalScalar;
 use crate::point_in_time::BoxedExecutor;
+use crate::scalar_expression::EvalScalar;
 use crate::utils::right_size_new_to;
 use crate::ExecutionError;
 use ast::expr::SortExpression;

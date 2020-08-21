@@ -1,5 +1,5 @@
-use crate::expression::EvalScalarRow;
 use crate::point_in_time::BoxedExecutor;
+use crate::scalar_expression::EvalScalarRow;
 use crate::utils::*;
 use crate::ExecutionError;
 use ast::expr::Expression;

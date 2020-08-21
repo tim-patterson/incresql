@@ -19,6 +19,7 @@ mod negate_freq;
 mod project;
 mod single;
 mod sort;
+mod sorted_group;
 mod table_insert;
 mod table_scan;
 mod union_all;

@@ -2,8 +2,9 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 use storage::StorageError;
 
-mod expression;
+mod aggregate_expression;
 pub mod point_in_time;
+mod scalar_expression;
 mod utils;
 
 #[derive(Debug)]

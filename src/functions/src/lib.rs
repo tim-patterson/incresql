@@ -29,6 +29,25 @@ pub enum FunctionType {
     Aggregate(&'static dyn AggregateFunction),
 }
 
+impl FunctionType {
+    /// Helper for tests, unwraps the scalar function inside
+    pub fn as_scalar(&self) -> &'static dyn Function {
+        if let FunctionType::Scalar(f) = self {
+            *f
+        } else {
+            panic!()
+        }
+    }
+    /// Helper for tests, unwraps the aggregate function inside
+    pub fn as_aggregate(&self) -> &'static dyn AggregateFunction {
+        if let FunctionType::Aggregate(f) = self {
+            *f
+        } else {
+            panic!()
+        }
+    }
+}
+
 impl Debug for FunctionDefinition {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str("FunctionDefinition[")?;

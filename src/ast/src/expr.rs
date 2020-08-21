@@ -5,6 +5,10 @@ use regex::Regex;
 use std::cmp::max;
 use std::fmt::{Display, Formatter};
 
+/// The expression ast.
+/// For scalar expressions we support evaluating the ast directly,
+/// but for aggregate expressions you'll first need to transform
+/// into an AggregateExpression (from the executor crate).
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Expression {
     Constant(Datum<'static>, DataType),
@@ -58,6 +62,8 @@ impl Eq for CompiledFunctionCall {}
 pub struct CompiledAggregate {
     pub function: &'static dyn AggregateFunction,
     pub args: Box<[Expression]>,
+    // Used to store the evaluation results of the sub expressions during execution
+    pub expr_buffer: Box<[Datum<'static>]>,
     pub signature: Box<FunctionSignature<'static>>,
 }
 

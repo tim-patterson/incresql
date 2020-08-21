@@ -1,5 +1,5 @@
-use crate::expression::EvalScalar;
 use crate::point_in_time::BoxedExecutor;
+use crate::scalar_expression::EvalScalar;
 use crate::ExecutionError;
 use ast::expr::Expression;
 use data::{Datum, Session, TupleIter};
