@@ -15,7 +15,9 @@ impl NegateFreqExecutor {
     }
 }
 
-impl TupleIter<ExecutionError> for NegateFreqExecutor {
+impl TupleIter for NegateFreqExecutor {
+    type E = ExecutionError;
+
     fn advance(&mut self) -> Result<(), ExecutionError> {
         self.source.advance()
     }

@@ -64,7 +64,9 @@ impl SortExecutor {
     }
 }
 
-impl TupleIter<ExecutionError> for SortExecutor {
+impl TupleIter for SortExecutor {
+    type E = ExecutionError;
+
     fn advance(&mut self) -> Result<(), ExecutionError> {
         if self.state == State::Ready {
             self.ingest()?;

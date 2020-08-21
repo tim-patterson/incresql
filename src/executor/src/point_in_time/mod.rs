@@ -25,12 +25,9 @@ mod table_scan;
 mod union_all;
 mod values;
 
-pub type BoxedExecutor = Box<dyn TupleIter<ExecutionError>>;
+pub type BoxedExecutor = Box<dyn TupleIter<E = ExecutionError>>;
 
-pub fn build_executor(
-    session: &Arc<Session>,
-    plan: &PointInTimeOperator,
-) -> Box<dyn TupleIter<ExecutionError>> {
+pub fn build_executor(session: &Arc<Session>, plan: &PointInTimeOperator) -> BoxedExecutor {
     match plan {
         PointInTimeOperator::Single => Box::from(SingleExecutor::new()),
         PointInTimeOperator::Project(project) => Box::from(ProjectExecutor::new(

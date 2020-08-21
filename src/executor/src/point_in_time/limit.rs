@@ -21,7 +21,8 @@ impl LimitExecutor {
     }
 }
 
-impl TupleIter<ExecutionError> for LimitExecutor {
+impl TupleIter for LimitExecutor {
+    type E = ExecutionError;
     fn advance(&mut self) -> Result<(), ExecutionError> {
         while self.offset_remaining > 0 {
             if let Some((_tuple, freq)) = self.source.next()? {

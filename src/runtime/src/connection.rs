@@ -2,7 +2,7 @@ use crate::{QueryError, Runtime};
 use ast::expr::Expression;
 use ast::rel::logical::{LogicalOperator, Values};
 use ast::rel::statement::Statement;
-use data::{DataType, Session, TupleIter};
+use data::{empty_tuple_iter, DataType, Session};
 use executor::point_in_time::{build_executor, BoxedExecutor};
 use parser::parse;
 use planner::Field;
@@ -56,7 +56,7 @@ impl Connection<'_> {
             }
             Statement::UseDatabase(database) => {
                 *self.session.current_database.write().unwrap() = database;
-                return Ok((vec![], TupleIter::empty()));
+                return Ok((vec![], empty_tuple_iter()));
             }
             Statement::Query(logical_operator) => logical_operator,
             Statement::Explain(explain) => self
@@ -66,12 +66,12 @@ impl Connection<'_> {
             Statement::CreateDatabase(create_database) => {
                 let mut catalog = self.runtime.planner.catalog.write().unwrap();
                 catalog.create_database(&create_database.name)?;
-                return Ok((vec![], TupleIter::empty()));
+                return Ok((vec![], empty_tuple_iter()));
             }
             Statement::DropDatabase(database) => {
                 let mut catalog = self.runtime.planner.catalog.write().unwrap();
                 catalog.drop_database(&database)?;
-                return Ok((vec![], TupleIter::empty()));
+                return Ok((vec![], empty_tuple_iter()));
             }
             Statement::CreateTable(create_table) => {
                 let mut catalog = self.runtime.planner.catalog.write().unwrap();
@@ -80,7 +80,7 @@ impl Connection<'_> {
                     .unwrap_or_else(|| self.session.current_database.read().unwrap().to_string());
 
                 catalog.create_table(&database, &create_table.name, &create_table.columns)?;
-                return Ok((vec![], TupleIter::empty()));
+                return Ok((vec![], empty_tuple_iter()));
             }
             Statement::DropTable(drop_table) => {
                 let mut catalog = self.runtime.planner.catalog.write().unwrap();
@@ -89,7 +89,7 @@ impl Connection<'_> {
                     .unwrap_or_else(|| self.session.current_database.read().unwrap().to_string());
 
                 catalog.drop_table(&database, &drop_table.name)?;
-                return Ok((vec![], TupleIter::empty()));
+                return Ok((vec![], empty_tuple_iter()));
             }
         };
 

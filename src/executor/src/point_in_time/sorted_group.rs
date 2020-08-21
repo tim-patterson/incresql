@@ -1,7 +1,7 @@
 use crate::aggregate_expression::{AggregateExpression, EvalAggregateRow};
 use crate::point_in_time::BoxedExecutor;
 use crate::ExecutionError;
-use data::{Datum, Session, TupleIter};
+use data::{Datum, PeekableIter, Session, TupleIter};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
@@ -13,7 +13,7 @@ use std::sync::Arc;
 /// so we'll expect that the incoming tuples are prefixed with the
 /// grouping keys.
 pub struct SortedGroupExecutor {
-    source: BoxedExecutor,
+    source: PeekableIter<dyn TupleIter<E = ExecutionError>>,
     session: Arc<Session>,
     key_size: usize,
     expressions: Vec<AggregateExpression>,
@@ -31,7 +31,7 @@ impl SortedGroupExecutor {
     ) -> Self {
         let current_state = expressions.initialize();
         SortedGroupExecutor {
-            source,
+            source: PeekableIter::from(source),
             session,
             key_size,
             expressions,
@@ -41,7 +41,9 @@ impl SortedGroupExecutor {
     }
 }
 
-impl TupleIter<ExecutionError> for SortedGroupExecutor {
+impl TupleIter for SortedGroupExecutor {
+    type E = ExecutionError;
+
     fn advance(&mut self) -> Result<(), ExecutionError> {
         while let Some((tuple, freq)) = self.source.next()? {
             let mut hasher = DefaultHasher::new();
