@@ -9,10 +9,6 @@ struct IntSum {}
 
 /// Sum across ints
 impl AggregateFunction for IntSum {
-    fn initialize(&self) -> Datum<'static> {
-        Datum::from(0)
-    }
-
     fn apply<'a>(
         &self,
         _signature: &FunctionSignature<'a>,
@@ -21,6 +17,9 @@ impl AggregateFunction for IntSum {
         state: &mut Datum<'static>,
     ) {
         if let Some(i) = args[0].as_maybe_integer() {
+            if state.is_null() {
+                *state = Datum::Integer(0);
+            }
             *state.as_integer_mut() += freq as i32 * i;
         }
     }
@@ -31,7 +30,13 @@ impl AggregateFunction for IntSum {
         input_state: &Datum<'static>,
         state: &mut Datum<'static>,
     ) {
-        *state.as_integer_mut() += input_state.as_integer()
+        if let Some(i) = input_state.as_maybe_integer() {
+            if state.is_null() {
+                *state = input_state.as_static()
+            } else {
+                *state.as_integer_mut() += i
+            }
+        }
     }
 
     fn supports_retract(&self) -> bool {
@@ -44,10 +49,6 @@ struct BigintSum {}
 
 /// Sum across ints
 impl AggregateFunction for BigintSum {
-    fn initialize(&self) -> Datum<'static> {
-        Datum::from(0 as i64)
-    }
-
     fn apply<'a>(
         &self,
         _signature: &FunctionSignature<'a>,
@@ -56,6 +57,9 @@ impl AggregateFunction for BigintSum {
         state: &mut Datum<'static>,
     ) {
         if let Some(i) = args[0].as_maybe_bigint() {
+            if state.is_null() {
+                *state = Datum::BigInt(0);
+            }
             *state.as_bigint_mut() += freq * i;
         }
     }
@@ -66,7 +70,13 @@ impl AggregateFunction for BigintSum {
         input_state: &Datum<'static>,
         state: &mut Datum<'static>,
     ) {
-        *state.as_bigint_mut() += input_state.as_bigint()
+        if let Some(i) = input_state.as_maybe_bigint() {
+            if state.is_null() {
+                *state = input_state.as_static()
+            } else {
+                *state.as_bigint_mut() += i
+            }
+        }
     }
 
     fn supports_retract(&self) -> bool {
@@ -78,10 +88,6 @@ impl AggregateFunction for BigintSum {
 struct DecimalSum {}
 
 impl AggregateFunction for DecimalSum {
-    fn initialize(&self) -> Datum<'static> {
-        Datum::Decimal(Decimal::zero())
-    }
-
     fn apply<'a>(
         &self,
         _signature: &FunctionSignature<'a>,
@@ -90,6 +96,9 @@ impl AggregateFunction for DecimalSum {
         state: &mut Datum<'static>,
     ) {
         if let Some(d) = args[0].as_maybe_decimal() {
+            if state.is_null() {
+                *state = Datum::from(Decimal::zero());
+            }
             *state.as_decimal_mut() += d * Decimal::new(freq, 0);
         }
     }
@@ -100,7 +109,13 @@ impl AggregateFunction for DecimalSum {
         input_state: &Datum<'static>,
         state: &mut Datum<'static>,
     ) {
-        *state.as_decimal_mut() += input_state.as_decimal()
+        if let Some(d) = input_state.as_maybe_decimal() {
+            if state.is_null() {
+                *state = input_state.as_static()
+            } else {
+                *state.as_decimal_mut() += d
+            }
+        }
     }
 
     fn supports_retract(&self) -> bool {

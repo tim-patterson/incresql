@@ -21,7 +21,14 @@ pub struct SortedGroupExecutor {
     expressions: Vec<AggregateExpression>,
     current_state: Vec<Datum<'static>>,
     output_tuple: Vec<Datum<'static>>,
-    is_done: bool,
+    state: State,
+}
+
+#[derive(Eq, PartialEq)]
+enum State {
+    Initial,
+    Processing,
+    Done,
 }
 
 impl SortedGroupExecutor {
@@ -41,7 +48,7 @@ impl SortedGroupExecutor {
             expressions,
             current_state,
             output_tuple,
-            is_done: false,
+            state: State::Initial,
         }
     }
 }
@@ -59,21 +66,53 @@ impl TupleIter for SortedGroupExecutor {
             hasher.finish()
         }
 
-        let group_hash = if let Some((tuple, freq)) = self.source.next()? {
+        // Special case where key size is 0
+        if self.key_size == 0 && self.state == State::Initial {
             self.expressions.reset(&mut self.current_state);
-            self.expressions
-                .apply(&self.session, tuple, freq, &mut self.current_state);
-            hash_tuple(tuple, self.key_size)
+            while let Some((tuple, freq)) = self.source.next()? {
+                self.expressions
+                    .apply(&self.session, tuple, freq, &mut self.current_state);
+            }
+            self.expressions.finalize(
+                &self.session,
+                &self.current_state,
+                transmute_muf_buf(&mut self.output_tuple),
+            );
+            self.state = State::Processing;
+        } else if self.key_size == 0 && self.state == State::Processing {
+            self.state = State::Done;
         } else {
-            self.is_done = true;
-            return Ok(());
-        };
+            // Standard grouping logic
 
-        loop {
-            if let Some((tuple, freq)) = self.source.peek()? {
-                let hash = hash_tuple(tuple, self.key_size);
-                if hash != group_hash {
-                    // We've stepped into the next tuple, finalize the row and break
+            let group_hash = if let Some((tuple, freq)) = self.source.next()? {
+                self.expressions.reset(&mut self.current_state);
+                self.expressions
+                    .apply(&self.session, tuple, freq, &mut self.current_state);
+                hash_tuple(tuple, self.key_size)
+            } else {
+                self.state = State::Done;
+                return Ok(());
+            };
+
+            loop {
+                if let Some((tuple, freq)) = self.source.peek()? {
+                    let hash = hash_tuple(tuple, self.key_size);
+                    if hash != group_hash {
+                        // We've stepped into the next tuple, finalize the row and break
+                        self.expressions.finalize(
+                            &self.session,
+                            &self.current_state,
+                            transmute_muf_buf(&mut self.output_tuple),
+                        );
+                        break;
+                    }
+                    self.expressions
+                        .apply(&self.session, tuple, freq, &mut self.current_state);
+                    // "advance" the inter
+                    self.source.lock_in();
+                } else {
+                    // No next record to peek at, we need to act like we've stepped into a
+                    // new key and write out our current state
                     self.expressions.finalize(
                         &self.session,
                         &self.current_state,
@@ -81,26 +120,13 @@ impl TupleIter for SortedGroupExecutor {
                     );
                     break;
                 }
-                self.expressions
-                    .apply(&self.session, tuple, freq, &mut self.current_state);
-                // "advance" the inter
-                self.source.lock_in();
-            } else {
-                // No next record to peek at, we need to act like we've stepped into a
-                // new key and write out our current state
-                self.expressions.finalize(
-                    &self.session,
-                    &self.current_state,
-                    transmute_muf_buf(&mut self.output_tuple),
-                );
-                break;
             }
         }
         Ok(())
     }
 
     fn get(&self) -> Option<(&[Datum], i64)> {
-        if self.is_done {
+        if self.state == State::Done {
             None
         } else {
             Some((&self.output_tuple, 1))
@@ -176,6 +202,42 @@ mod tests {
         assert_eq!(
             executor.next()?,
             Some(([Datum::from("c"), Datum::from(5)].as_ref(), 1))
+        );
+        assert_eq!(executor.next()?, None);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_sorted_group_executor_no_rows() -> Result<(), ExecutionError> {
+        // When key size is zero we must return a row even if there's no input.
+        // ie select count() from foo where false;
+        let session = Arc::new(Session::new(1));
+        let values = vec![];
+        let source = Box::from(ValuesExecutor::new(Box::from(values.into_iter()), 1));
+
+        // Lookup count function
+        let (sig, count_function) = Registry::default()
+            .resolve_function(&FunctionSignature {
+                name: "count",
+                args: vec![],
+                ret: DataType::Null,
+            })
+            .unwrap();
+
+        // Select count()
+        let expressions = vec![Expression::CompiledAggregate(CompiledAggregate {
+            function: count_function.as_aggregate(),
+            args: vec![].into_boxed_slice(),
+            expr_buffer: vec![].into_boxed_slice(),
+            signature: Box::new(sig),
+        })];
+
+        let mut executor = SortedGroupExecutor::new(source, session, 0, expressions);
+
+        assert_eq!(
+            executor.next()?,
+            Some(([Datum::from(0 as i64)].as_ref(), 1))
         );
         assert_eq!(executor.next()?, None);
 

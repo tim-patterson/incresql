@@ -16,5 +16,13 @@ fn test_auto_convert_project() {
             | |   |  name <TEXT>|0||
         ",
         );
+
+        // Test zero rows
+        connection.query(
+            r#"select count() from incresql.databases where false"#,
+            "
+            |0|
+        ",
+        );
     });
 }
