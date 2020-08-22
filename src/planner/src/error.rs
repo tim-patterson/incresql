@@ -14,6 +14,8 @@ pub enum PlannerError {
     PredicateNotBoolean(DataType, Expression),
     UnionAllMismatch(Vec<DataType>, Vec<DataType>, usize),
     InsertMismatch(Vec<DataType>, Vec<DataType>),
+    // function name, location name(ie where clause, sort expression)
+    AggregateNotAllowed(&'static str, &'static str),
 }
 
 impl From<FunctionResolutionError> for PlannerError {
@@ -81,6 +83,9 @@ impl Display for PlannerError {
                     "Insert mismatch, table expects row of:\n  {}\nsource is:\n  {}",
                     table_str, source_str
                 ))
+            }
+            PlannerError::AggregateNotAllowed(function_name, location) => {
+                f.write_fmt(format_args!("Aggregate function {} found in {},\nAggregate functions can only be used in select clauses", function_name, location))
             }
         }
     }

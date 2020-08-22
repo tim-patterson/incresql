@@ -16,3 +16,11 @@ be things like predicate pushdowns and constant foldings
 
 3. *Execution Planning* - In this phase we take the plan and perform any execution specific optimizations and convert
 from the logical operator tree to the physical.
+
+### Ast Invariants
+The validation phase makes a few promises about the ast coming out of it.
+
+1. Expressions will be compiled. This mean's that later phases shouldn't need to handle `Expression::FunctionCall`,
+`Expression::Cast` or `Expression::ColumnReference`.
+
+2. Only GroupBy nodes will contain `Expression::CompiledAggregate`'s

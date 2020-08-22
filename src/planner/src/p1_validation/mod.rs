@@ -1,6 +1,7 @@
 use crate::{Planner, PlannerError};
 use ast::rel::logical::LogicalOperator;
 use data::Session;
+mod check_aggregates_usage;
 mod check_inserts;
 mod check_predicates;
 mod check_unions;
@@ -35,6 +36,7 @@ impl Planner {
         // return etc.
         convert_project_to_groupby::project_to_groupby(&mut query);
         // Type checks etc
+        check_aggregates_usage::check_for_aggregates(&mut query)?;
         check_predicates::check_predicates(&mut query)?;
         check_inserts::check_inserts(&mut query)?;
         check_unions::check_unions(&mut query)?;
