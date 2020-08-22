@@ -9,7 +9,6 @@ impl Planner {
         query: LogicalOperator,
         session: &Session,
     ) -> Result<(Vec<Field>, LogicalOperator), PlannerError> {
-        let query = self.normalize(query)?;
         let query = self.validate(query, session)?;
         let query = self.optimize(query, session)?;
         let fields = fields_for_operator(&query).collect();

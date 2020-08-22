@@ -1,22 +1,9 @@
-use crate::{Planner, PlannerError};
 use ast::expr::{ColumnReference, Expression};
 use ast::rel::logical::LogicalOperator;
 
-impl Planner {
-    /// Normalize the query, adding in missing aliases etc so the rest of the planning doesn't need
-    /// to work around all of that
-    pub(crate) fn normalize(
-        &self,
-        mut query: LogicalOperator,
-    ) -> Result<LogicalOperator, PlannerError> {
-        normalize_column_aliases(&mut query);
-        Ok(query)
-    }
-}
-
 /// This just created dummy _col1 style column aliases for expressions
 /// where they aren't specified in the queries
-fn normalize_column_aliases(query: &mut LogicalOperator) {
+pub(super) fn normalize_column_aliases(query: &mut LogicalOperator) {
     for child in query.children_mut() {
         normalize_column_aliases(child);
     }
@@ -43,9 +30,8 @@ mod tests {
     use data::{DataType, Datum};
 
     #[test]
-    fn test_normalize_column_aliases() -> Result<(), PlannerError> {
-        let planner = Planner::new_for_test();
-        let operator = LogicalOperator::Project(Project {
+    fn test_normalize_column_aliases() {
+        let mut operator = LogicalOperator::Project(Project {
             distinct: false,
             expressions: vec![
                 NamedExpression {
@@ -73,22 +59,20 @@ mod tests {
             })),
         });
 
-        let mut normalized = planner.normalize(operator)?;
-        let top_aliases: Vec<_> = normalized
+        normalize_column_aliases(&mut operator);
+        let top_aliases: Vec<_> = operator
             .named_expressions_mut()
             .map(|ne| ne.alias.as_ref().unwrap())
             .collect();
 
         assert_eq!(top_aliases, vec!["1", "_col2"]);
 
-        let lower_operator = normalized.children_mut().next().unwrap();
+        let lower_operator = operator.children_mut().next().unwrap();
         let lower_aliases: Vec<_> = lower_operator
             .named_expressions_mut()
             .map(|ne| ne.alias.as_ref().unwrap())
             .collect();
 
         assert_eq!(lower_aliases, vec!["_col1", "_col2"]);
-
-        Ok(())
     }
 }
