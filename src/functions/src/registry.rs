@@ -63,7 +63,7 @@ impl Registry {
     ) -> Result<(FunctionSignature<'static>, FunctionType), FunctionResolutionError> {
         if let Some(candidates) = self.functions.get(function_signature.name) {
             // Filter candidates
-            let mut candidate_list: Vec<_> = candidates
+            let candidate_list: Vec<_> = candidates
                 .iter()
                 .filter(|candidate| {
                     if candidate.signature.args.len() == function_signature.args.len() {
@@ -88,7 +88,7 @@ impl Registry {
                 })
                 .collect();
 
-            if let Some(candidate) = candidate_list.pop() {
+            if let Some(candidate) = candidate_list.first() {
                 // Calculate return type,
                 // There's 3 paths here.
                 // 1. A return type is specified in the function signature, used for cast(foo as decimal(2,3)),

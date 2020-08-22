@@ -1,10 +1,10 @@
 use crate::atoms::{as_clause, integer, kw, qualified_reference};
-use crate::expression::{expression, named_expression, sort_expression};
+use crate::expression::{comma_sep_expressions, expression, named_expression, sort_expression};
 use crate::whitespace::ws_0;
 use crate::ParserResult;
 use ast::expr::{Expression, NamedExpression, SortExpression};
 use ast::rel::logical::{
-    Filter, Limit, LogicalOperator, Project, Sort, TableAlias, TableReference, UnionAll,
+    Filter, GroupBy, Limit, LogicalOperator, Project, Sort, TableAlias, TableReference, UnionAll,
 };
 use nom::branch::alt;
 use nom::bytes::complete::tag;
@@ -43,11 +43,12 @@ fn select_expr(input: &str) -> ParserResult<LogicalOperator> {
                 preceded(ws_0, comma_sep_named_expressions),
                 opt(preceded(ws_0, from_clause)),
                 opt(preceded(ws_0, where_clause)),
+                opt(preceded(ws_0, group_by_clause)),
                 opt(preceded(ws_0, order_clause)),
                 opt(preceded(ws_0, limit_clause)),
             ))),
         ),
-        |(expressions, from_option, where_option, order_option, limit_option)| {
+        |(expressions, from_option, where_option, group_option, order_option, limit_option)| {
             let mut query = from_option.unwrap_or(LogicalOperator::Single);
 
             if let Some(predicate) = where_option {
@@ -57,11 +58,19 @@ fn select_expr(input: &str) -> ParserResult<LogicalOperator> {
                 });
             }
 
-            query = LogicalOperator::Project(Project {
-                distinct: false,
-                expressions,
-                source: Box::from(query),
-            });
+            query = if let Some(group_keys) = group_option {
+                LogicalOperator::GroupBy(GroupBy {
+                    expressions,
+                    key_expressions: group_keys,
+                    source: Box::from(query),
+                })
+            } else {
+                LogicalOperator::Project(Project {
+                    distinct: false,
+                    expressions,
+                    source: Box::from(query),
+                })
+            };
 
             if let Some(sort_expressions) = order_option {
                 query = LogicalOperator::Sort(Sort {
@@ -121,6 +130,17 @@ pub(crate) fn where_clause(input: &str) -> ParserResult<Expression> {
     preceded(kw("WHERE"), cut(preceded(ws_0, expression)))(input)
 }
 
+/// Parse the group by clause of a query.
+pub(crate) fn group_by_clause(input: &str) -> ParserResult<Vec<Expression>> {
+    preceded(
+        kw("GROUP"),
+        cut(preceded(
+            tuple((ws_0, kw("BY"), ws_0)),
+            comma_sep_expressions,
+        )),
+    )(input)
+}
+
 /// Parse the order by clause of a query.
 pub(crate) fn order_clause(input: &str) -> ParserResult<Vec<SortExpression>> {
     preceded(
@@ -174,7 +194,7 @@ fn table_reference_with_alias(input: &str) -> ParserResult<LogicalOperator> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ast::expr::Expression;
+    use ast::expr::{ColumnReference, Expression};
     use data::SortOrder;
 
     #[test]
@@ -274,6 +294,25 @@ mod tests {
                     predicate: Expression::from(true),
                     source: Box::new(LogicalOperator::Single)
                 }))
+            })
+        );
+    }
+
+    #[test]
+    fn test_group_by() {
+        assert_eq!(
+            select("SELECT 1 GROUP BY a").unwrap().1,
+            LogicalOperator::GroupBy(GroupBy {
+                expressions: vec![NamedExpression {
+                    expression: Expression::from(1),
+                    alias: None
+                },],
+                key_expressions: vec![Expression::ColumnReference(ColumnReference {
+                    qualifier: None,
+                    alias: "a".to_string(),
+                    star: false
+                })],
+                source: Box::new(LogicalOperator::Single)
             })
         );
     }

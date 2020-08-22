@@ -118,6 +118,7 @@ pub fn identifier_str(input: &str) -> ParserResult<String> {
                     kw("ORDER"),
                     kw("UNION"),
                     kw("LIMIT"),
+                    kw("GROUP"),
                 )))),
                 pair(
                     take_while_m_n(1, 1, |c: char| {

@@ -319,8 +319,12 @@ fn validate_values_types(query: &mut LogicalOperator) -> Result<(), PlannerError
                 .map(|(datatype, _)| *datatype)
                 .collect();
             for row in &values.data {
-                let row_types = row.iter().map(type_for_expression).collect();
-                if row_types != table_types {
+                let row_types: Vec<_> = row.iter().map(type_for_expression).collect();
+                let is_match = row_types
+                    .iter()
+                    .zip(table_types.iter())
+                    .all(|(row, table)| row == table || *row == DataType::Null);
+                if !is_match {
                     return Err(PlannerError::InsertMismatch(table_types, row_types));
                 }
             }
