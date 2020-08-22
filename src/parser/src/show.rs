@@ -1,7 +1,7 @@
 use crate::atoms::kw;
 use crate::whitespace::ws_0;
 use crate::ParserResult;
-use ast::rel::statement::Statement;
+use ast::statement::Statement;
 use nom::branch::alt;
 use nom::combinator::{cut, value};
 use nom::sequence::preceded;

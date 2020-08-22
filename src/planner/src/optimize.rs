@@ -63,6 +63,12 @@ fn fold_constants_for_expr(expr: &mut Expression, session: &Session) {
                 *expr = Expression::Constant(constant, function_call.signature.ret);
             }
         }
+        Expression::CompiledAggregate(function_call) => {
+            // We'll fold up our inputs but we can't really fold across an aggregation
+            for arg in function_call.args.iter_mut() {
+                fold_constants_for_expr(arg, session);
+            }
+        }
         Expression::CompiledColumnReference(_column_reference) => {
             // TODO once we have the source expr's bit done we can come back here and optimize folding up constants from a subquery
         }
@@ -85,7 +91,7 @@ mod tests {
     use ast::expr::{CompiledFunctionCall, Expression, NamedExpression};
     use ast::rel::logical::Project;
     use data::DataType;
-    use functions::FunctionSignature;
+    use functions::{FunctionSignature, FunctionType};
 
     #[test]
     fn test_constant_fold() -> Result<(), PlannerError> {
@@ -96,9 +102,13 @@ mod tests {
             args: vec![DataType::Integer, DataType::Integer],
             ret: DataType::Integer,
         };
-        let (_, add_function) = planner
-            .function_registry
-            .resolve_scalar_function(&add_signature)?;
+        let (_, add_function_type) = planner.function_registry.resolve_function(&add_signature)?;
+
+        let add_function = if let FunctionType::Scalar(f) = add_function_type {
+            f
+        } else {
+            panic!()
+        };
 
         // 1 + (2 + 3)
         let operator = LogicalOperator::Project(Project {

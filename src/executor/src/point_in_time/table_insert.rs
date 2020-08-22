@@ -16,7 +16,9 @@ impl TableInsertExecutor {
     }
 }
 
-impl TupleIter<ExecutionError> for TableInsertExecutor {
+impl TupleIter for TableInsertExecutor {
+    type E = ExecutionError;
+
     fn advance(&mut self) -> Result<(), ExecutionError> {
         let iter = &mut self.source;
         let table = &self.table;

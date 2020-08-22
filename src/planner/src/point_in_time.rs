@@ -1,10 +1,11 @@
+use crate::common::{fields_for_operator, move_column_references, type_for_expression};
 use crate::{Field, Planner, PlannerError};
-use ast::expr::Expression;
+use ast::expr::{CompiledColumnReference, Expression, SortExpression};
 use ast::rel::logical::{
-    Filter, Limit, LogicalOperator, Project, ResolvedTable, Sort, TableInsert, UnionAll,
+    Filter, GroupBy, Limit, LogicalOperator, Project, ResolvedTable, Sort, TableInsert, UnionAll,
 };
-use ast::rel::point_in_time::{self, PointInTimeOperator};
-use data::{LogicalTimestamp, Session};
+use ast::rel::point_in_time::{self, PointInTimeOperator, SortedGroup};
+use data::{LogicalTimestamp, Session, SortOrder};
 
 pub struct PointInTimePlan {
     pub fields: Vec<Field>,
@@ -38,6 +39,70 @@ fn build_operator(query: LogicalOperator) -> PointInTimeOperator {
                 expressions: expressions.into_iter().map(|ne| ne.expression).collect(),
                 source: Box::new(build_operator(*source)),
             })
+        }
+        LogicalOperator::GroupBy(GroupBy {
+            expressions,
+            key_expressions,
+            source,
+        }) => {
+            if key_expressions.is_empty() {
+                PointInTimeOperator::SortedGroup(SortedGroup {
+                    source: Box::new(build_operator(*source)),
+                    expressions: expressions.into_iter().map(|ne| ne.expression).collect(),
+                    key_len: 0,
+                })
+            } else {
+                // The key expr's have to be in the group by source.
+                // We'll create a new project to do this.
+                let key_len = key_expressions.len();
+                let mut project_exprs = key_expressions;
+                for (idx, field) in fields_for_operator(&source).enumerate() {
+                    project_exprs.push(Expression::CompiledColumnReference(
+                        CompiledColumnReference {
+                            offset: idx,
+                            datatype: field.data_type,
+                        },
+                    ));
+                }
+
+                let project = point_in_time::Project {
+                    expressions: project_exprs,
+                    source: Box::new(build_operator(*source)),
+                };
+
+                // Now we create a sort that just sorts by the first key_expressions columns
+
+                let sort_exprs = project.expressions[0..key_len]
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, expr)| SortExpression {
+                        ordering: SortOrder::Asc,
+                        expression: Expression::CompiledColumnReference(CompiledColumnReference {
+                            offset: idx,
+                            datatype: type_for_expression(expr),
+                        }),
+                    })
+                    .collect();
+
+                let sort = PointInTimeOperator::Sort(point_in_time::Sort {
+                    sort_expressions: sort_exprs,
+                    source: Box::new(PointInTimeOperator::Project(project)),
+                });
+
+                let group_exprs = expressions
+                    .into_iter()
+                    .map(|mut ne| {
+                        move_column_references(&mut ne.expression, key_len as isize);
+                        ne.expression
+                    })
+                    .collect();
+
+                PointInTimeOperator::SortedGroup(SortedGroup {
+                    source: Box::new(sort),
+                    expressions: group_exprs,
+                    key_len,
+                })
+            }
         }
         LogicalOperator::Filter(Filter { predicate, source }) => {
             PointInTimeOperator::Filter(point_in_time::Filter {

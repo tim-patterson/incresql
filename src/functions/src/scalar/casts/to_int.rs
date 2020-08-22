@@ -1,5 +1,5 @@
 use crate::registry::Registry;
-use crate::{Function, FunctionDefinition, FunctionSignature};
+use crate::{Function, FunctionDefinition, FunctionSignature, FunctionType};
 use data::rust_decimal::prelude::ToPrimitive;
 use data::{DataType, Datum, Session};
 
@@ -13,7 +13,7 @@ impl Function for ToIntFromBoolean {
         _signature: &FunctionSignature,
         args: &'a [Datum<'a>],
     ) -> Datum<'a> {
-        if let Some(a) = args[0].as_boolean() {
+        if let Some(a) = args[0].as_maybe_boolean() {
             Datum::Integer(if a { 1 } else { 0 })
         } else {
             Datum::Null
@@ -45,7 +45,7 @@ impl Function for ToIntFromBigInt {
         _signature: &FunctionSignature,
         args: &'a [Datum<'a>],
     ) -> Datum<'a> {
-        if let Some(a) = args[0].as_bigint() {
+        if let Some(a) = args[0].as_maybe_bigint() {
             Datum::from(a as i32)
         } else {
             Datum::Null
@@ -63,7 +63,7 @@ impl Function for ToIntFromDecimal {
         _signature: &FunctionSignature,
         args: &'a [Datum<'a>],
     ) -> Datum<'a> {
-        if let Some(a) = args[0].as_decimal() {
+        if let Some(a) = args[0].as_maybe_decimal() {
             a.to_i32().map(Datum::from).unwrap_or(Datum::Null)
         } else {
             Datum::Null
@@ -81,7 +81,7 @@ impl Function for ToIntFromText {
         _signature: &FunctionSignature,
         args: &'a [Datum<'a>],
     ) -> Datum<'a> {
-        if let Some(a) = args[0].as_text() {
+        if let Some(a) = args[0].as_maybe_text() {
             a.parse::<i32>()
                 .ok()
                 .map(Datum::from)
@@ -97,35 +97,35 @@ pub fn register_builtins(registry: &mut Registry) {
         "to_int",
         vec![DataType::Boolean],
         DataType::Integer,
-        &ToIntFromBoolean {},
+        FunctionType::Scalar(&ToIntFromBoolean {}),
     ));
 
     registry.register_function(FunctionDefinition::new(
         "to_int",
         vec![DataType::Integer],
         DataType::Integer,
-        &ToIntFromInt {},
+        FunctionType::Scalar(&ToIntFromInt {}),
     ));
 
     registry.register_function(FunctionDefinition::new(
         "to_int",
         vec![DataType::BigInt],
         DataType::Integer,
-        &ToIntFromBigInt {},
+        FunctionType::Scalar(&ToIntFromBigInt {}),
     ));
 
     registry.register_function(FunctionDefinition::new(
         "to_int",
         vec![DataType::Decimal(0, 0)],
         DataType::Integer,
-        &ToIntFromDecimal {},
+        FunctionType::Scalar(&ToIntFromDecimal {}),
     ));
 
     registry.register_function(FunctionDefinition::new(
         "to_int",
         vec![DataType::Text],
         DataType::Integer,
-        &ToIntFromText {},
+        FunctionType::Scalar(&ToIntFromText {}),
     ));
 }
 

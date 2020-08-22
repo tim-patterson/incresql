@@ -1,4 +1,4 @@
-use crate::{register_builtins, Function, FunctionDefinition, FunctionSignature};
+use crate::{register_builtins, FunctionDefinition, FunctionSignature, FunctionType};
 use data::DataType;
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
@@ -57,13 +57,13 @@ impl Registry {
             .push(function_definition);
     }
 
-    pub fn resolve_scalar_function(
+    pub fn resolve_function(
         &self,
         function_signature: &FunctionSignature,
-    ) -> Result<(FunctionSignature<'static>, &'static dyn Function), FunctionResolutionError> {
+    ) -> Result<(FunctionSignature<'static>, FunctionType), FunctionResolutionError> {
         if let Some(candidates) = self.functions.get(function_signature.name) {
             // Filter candidates
-            let mut candidate_list: Vec<_> = candidates
+            let candidate_list: Vec<_> = candidates
                 .iter()
                 .filter(|candidate| {
                     if candidate.signature.args.len() == function_signature.args.len() {
@@ -88,7 +88,7 @@ impl Registry {
                 })
                 .collect();
 
-            if let Some(candidate) = candidate_list.pop() {
+            if let Some(candidate) = candidate_list.first() {
                 // Calculate return type,
                 // There's 3 paths here.
                 // 1. A return type is specified in the function signature, used for cast(foo as decimal(2,3)),
@@ -143,7 +143,7 @@ mod tests {
             ret: DataType::Null,
         };
 
-        let (function_sig, _function) = registry.resolve_scalar_function(&mut sig).unwrap();
+        let (function_sig, _function) = registry.resolve_function(&mut sig).unwrap();
 
         assert_eq!(function_sig.ret, DataType::BigInt);
     }
@@ -158,7 +158,7 @@ mod tests {
             ret: DataType::Null,
         };
 
-        let err = registry.resolve_scalar_function(&mut sig).unwrap_err();
+        let err = registry.resolve_function(&mut sig).unwrap_err();
 
         assert_eq!(
             err,
@@ -176,7 +176,7 @@ mod tests {
             ret: DataType::Null,
         };
 
-        let (function_sig, _function) = registry.resolve_scalar_function(&mut sig).unwrap();
+        let (function_sig, _function) = registry.resolve_function(&mut sig).unwrap();
 
         assert_eq!(function_sig.ret, DataType::BigInt);
     }
@@ -191,7 +191,7 @@ mod tests {
             ret: DataType::Null,
         };
 
-        let (computed_signature, _function) = registry.resolve_scalar_function(&mut sig).unwrap();
+        let (computed_signature, _function) = registry.resolve_function(&mut sig).unwrap();
 
         assert_eq!(computed_signature.ret, DataType::Decimal(28, 7));
     }

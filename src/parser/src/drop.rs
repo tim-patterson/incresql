@@ -1,7 +1,7 @@
 use crate::atoms::{identifier_str, kw, qualified_reference};
 use crate::whitespace::ws_0;
 use crate::ParserResult;
-use ast::rel::statement::{DropTable, Statement};
+use ast::statement::{DropTable, Statement};
 use nom::branch::alt;
 use nom::combinator::{cut, map};
 use nom::sequence::{preceded, tuple};

@@ -1,5 +1,5 @@
 use crate::registry::Registry;
-use crate::{Function, FunctionDefinition, FunctionSignature};
+use crate::{Function, FunctionDefinition, FunctionSignature, FunctionType};
 use data::{DataType, Datum, Session};
 
 #[derive(Debug)]
@@ -32,7 +32,7 @@ pub fn register_builtins(registry: &mut Registry) {
             "!=",
             vec![*datatype, *datatype],
             DataType::Boolean,
-            &NE {},
+            FunctionType::Scalar(&NE {}),
         ));
     }
 }

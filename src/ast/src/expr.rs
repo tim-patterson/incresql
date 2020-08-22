@@ -1,16 +1,22 @@
 use data::rust_decimal::Decimal;
 use data::{DataType, Datum, SortOrder};
-use functions::{Function, FunctionSignature};
+use functions::{AggregateFunction, Function, FunctionSignature};
 use regex::Regex;
 use std::cmp::max;
 use std::fmt::{Display, Formatter};
+use std::iter::{empty, once};
 
+/// The expression ast.
+/// For scalar expressions we support evaluating the ast directly,
+/// but for aggregate expressions you'll first need to transform
+/// into an AggregateExpression (from the executor crate).
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Expression {
     Constant(Datum<'static>, DataType),
     FunctionCall(FunctionCall),
     Cast(Cast),
     CompiledFunctionCall(CompiledFunctionCall),
+    CompiledAggregate(CompiledAggregate),
     ColumnReference(ColumnReference),
     CompiledColumnReference(CompiledColumnReference),
 }
@@ -30,7 +36,7 @@ pub struct Cast {
     pub datatype: DataType,
 }
 
-/// Represents a function call once its been resolved and type
+/// Represents a scalar function call once its been resolved and type
 /// checked
 #[derive(Debug, Clone)]
 pub struct CompiledFunctionCall {
@@ -38,7 +44,7 @@ pub struct CompiledFunctionCall {
     // enum a bit hence the boxed slices instead of vec's
     pub function: &'static dyn Function,
     pub args: Box<[Expression]>,
-    // Used to store the evaluation results of the sub expressions
+    // Used to store the evaluation results of the sub expressions during execution
     pub expr_buffer: Box<[Datum<'static>]>,
     pub signature: Box<FunctionSignature<'static>>,
 }
@@ -50,6 +56,25 @@ impl PartialEq for CompiledFunctionCall {
 }
 
 impl Eq for CompiledFunctionCall {}
+
+/// Represents a aggregate function call once its been resolved and type
+/// checked
+#[derive(Debug, Clone)]
+pub struct CompiledAggregate {
+    pub function: &'static dyn AggregateFunction,
+    pub args: Box<[Expression]>,
+    // Used to store the evaluation results of the sub expressions during execution
+    pub expr_buffer: Box<[Datum<'static>]>,
+    pub signature: Box<FunctionSignature<'static>>,
+}
+
+impl PartialEq for CompiledAggregate {
+    fn eq(&self, other: &Self) -> bool {
+        self.args == other.args && self.signature == other.signature
+    }
+}
+
+impl Eq for CompiledAggregate {}
 
 /// A reference to a column in a source.
 /// ie SELECT foo FROM...
@@ -83,6 +108,38 @@ pub struct NamedExpression {
 pub struct SortExpression {
     pub ordering: SortOrder,
     pub expression: Expression,
+}
+
+impl Expression {
+    // Iterates over all child expressions.
+    pub fn children(&self) -> Box<dyn Iterator<Item = &Expression> + '_> {
+        match self {
+            Expression::FunctionCall(function_call) => Box::from(function_call.args.iter()),
+            Expression::CompiledFunctionCall(function_call) => Box::from(function_call.args.iter()),
+            Expression::CompiledAggregate(function_call) => Box::from(function_call.args.iter()),
+            Expression::Cast(cast) => Box::from(once(&*cast.expr)),
+            Expression::CompiledColumnReference(_)
+            | Expression::Constant(_, _)
+            | Expression::ColumnReference(_) => Box::from(empty()),
+        }
+    }
+
+    // Iterates over all child expressions.
+    pub fn children_mut(&mut self) -> Box<dyn Iterator<Item = &mut Expression> + '_> {
+        match self {
+            Expression::FunctionCall(function_call) => Box::from(function_call.args.iter_mut()),
+            Expression::CompiledFunctionCall(function_call) => {
+                Box::from(function_call.args.iter_mut())
+            }
+            Expression::CompiledAggregate(function_call) => {
+                Box::from(function_call.args.iter_mut())
+            }
+            Expression::Cast(cast) => Box::from(once(&mut *cast.expr)),
+            Expression::CompiledColumnReference(_)
+            | Expression::Constant(_, _)
+            | Expression::ColumnReference(_) => Box::from(empty()),
+        }
+    }
 }
 
 // Convenience helpers to construct expression literals
@@ -158,6 +215,19 @@ impl Display for Expression {
                 }
             }
             Expression::CompiledFunctionCall(function_call) => {
+                let args = function_call
+                    .args
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                if IDENTIFIER_OK.is_match(&function_call.signature.name) {
+                    f.write_fmt(format_args!("{}({})", function_call.signature.name, args))
+                } else {
+                    f.write_fmt(format_args!("`{}`({})", function_call.signature.name, args))
+                }
+            }
+            Expression::CompiledAggregate(function_call) => {
                 let args = function_call
                     .args
                     .iter()

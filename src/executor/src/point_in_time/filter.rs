@@ -1,5 +1,5 @@
-use crate::expression::EvalScalar;
 use crate::point_in_time::BoxedExecutor;
+use crate::scalar_expression::EvalScalar;
 use crate::ExecutionError;
 use ast::expr::Expression;
 use data::{Datum, Session, TupleIter};
@@ -21,7 +21,8 @@ impl FilterExecutor {
     }
 }
 
-impl TupleIter<ExecutionError> for FilterExecutor {
+impl TupleIter for FilterExecutor {
+    type E = ExecutionError;
     fn advance(&mut self) -> Result<(), ExecutionError> {
         while let Some((tuple, _freq)) = self.source.next()? {
             if self.predicate.eval_scalar(&self.session, tuple) == Datum::from(true) {

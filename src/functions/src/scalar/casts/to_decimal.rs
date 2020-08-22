@@ -1,5 +1,5 @@
 use crate::registry::Registry;
-use crate::{Function, FunctionDefinition, FunctionSignature};
+use crate::{Function, FunctionDefinition, FunctionSignature, FunctionType};
 use data::rust_decimal::Decimal;
 use data::{DataType, Datum, Session, DECIMAL_MAX_PRECISION, DECIMAL_MAX_SCALE};
 use std::str::FromStr;
@@ -14,7 +14,7 @@ impl Function for ToDecimalFromBoolean {
         _signature: &FunctionSignature,
         args: &'a [Datum<'a>],
     ) -> Datum<'a> {
-        if let Some(a) = args[0].as_boolean() {
+        if let Some(a) = args[0].as_maybe_boolean() {
             Datum::from(if a {
                 Decimal::new(1, 0)
             } else {
@@ -36,7 +36,7 @@ impl Function for ToDecimalFromInt {
         _signature: &FunctionSignature,
         args: &'a [Datum<'a>],
     ) -> Datum<'a> {
-        if let Some(a) = args[0].as_integer() {
+        if let Some(a) = args[0].as_maybe_integer() {
             Datum::from(Decimal::from(a))
         } else {
             Datum::Null
@@ -54,7 +54,7 @@ impl Function for ToDecimalFromBigInt {
         _signature: &FunctionSignature,
         args: &'a [Datum<'a>],
     ) -> Datum<'a> {
-        if let Some(a) = args[0].as_bigint() {
+        if let Some(a) = args[0].as_maybe_bigint() {
             Datum::from(Decimal::from(a))
         } else {
             Datum::Null
@@ -72,7 +72,7 @@ impl Function for ToDecimalFromDecimal {
         signature: &FunctionSignature,
         args: &'a [Datum<'a>],
     ) -> Datum<'a> {
-        if let Some(mut d) = args[0].as_decimal() {
+        if let Some(mut d) = args[0].as_maybe_decimal() {
             if let DataType::Decimal(_p, s) = signature.ret {
                 // We'll rescale to match the cast, (down scaling only, no point upscaling as it just potentially loses
                 // data
@@ -99,7 +99,7 @@ impl Function for ToDecimalFromText {
         signature: &FunctionSignature,
         args: &'a [Datum<'a>],
     ) -> Datum<'a> {
-        if let Some(a) = args[0].as_text() {
+        if let Some(a) = args[0].as_maybe_text() {
             if let (Ok(mut d), DataType::Decimal(_p, s)) = (Decimal::from_str(a), signature.ret) {
                 // We'll rescale to match the cast, (down scaling only, no point upscaling as it just potentially loses
                 // data
@@ -121,21 +121,21 @@ pub fn register_builtins(registry: &mut Registry) {
         "to_decimal",
         vec![DataType::Boolean],
         DataType::Decimal(1, 0),
-        &ToDecimalFromBoolean {},
+        FunctionType::Scalar(&ToDecimalFromBoolean {}),
     ));
 
     registry.register_function(FunctionDefinition::new(
         "to_decimal",
         vec![DataType::Integer],
         DataType::Decimal(10, 0),
-        &ToDecimalFromInt {},
+        FunctionType::Scalar(&ToDecimalFromInt {}),
     ));
 
     registry.register_function(FunctionDefinition::new(
         "to_decimal",
         vec![DataType::BigInt],
         DataType::Decimal(20, 0),
-        &ToDecimalFromBigInt {},
+        FunctionType::Scalar(&ToDecimalFromBigInt {}),
     ));
 
     registry.register_function(FunctionDefinition::new_with_type_resolver(
@@ -144,14 +144,14 @@ pub fn register_builtins(registry: &mut Registry) {
         // Remembering this is just the default that can be overridden in casts, this value will only
         // be used if called as a function
         |args| args[0],
-        &ToDecimalFromDecimal {},
+        FunctionType::Scalar(&ToDecimalFromDecimal {}),
     ));
 
     registry.register_function(FunctionDefinition::new(
         "to_decimal",
         vec![DataType::Text],
         DataType::Decimal(DECIMAL_MAX_PRECISION, DECIMAL_MAX_SCALE),
-        &ToDecimalFromText {},
+        FunctionType::Scalar(&ToDecimalFromText {}),
     ));
 }
 

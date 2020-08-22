@@ -137,7 +137,7 @@ impl Table {
 
     /// Full scan of the table, all returned record timestamps are guaranteed to be *less*
     /// than the passed in timestamp
-    pub fn full_scan(&self, timestamp: LogicalTimestamp) -> impl TupleIter<StorageError> + '_ {
+    pub fn full_scan(&self, timestamp: LogicalTimestamp) -> impl TupleIter<E = StorageError> + '_ {
         self.range_scan(None, None, timestamp)
     }
 
@@ -154,7 +154,7 @@ impl Table {
         from: Option<&[Datum]>,
         to: Option<&[Datum]>,
         timestamp: LogicalTimestamp,
-    ) -> impl TupleIter<StorageError> + '_ {
+    ) -> impl TupleIter<E = StorageError> + '_ {
         let mut iter_options = ReadOptions::default();
         iter_options.set_prefix_same_as_start(true);
 
@@ -210,7 +210,9 @@ impl<'a> IndexIter<'a> {
     }
 }
 
-impl TupleIter<StorageError> for IndexIter<'_> {
+impl TupleIter for IndexIter<'_> {
+    type E = StorageError;
+
     fn advance(&mut self) -> Result<(), StorageError> {
         // Once we emit a record we need to skip to the header of the next.
         // When true this seeks to the next header record

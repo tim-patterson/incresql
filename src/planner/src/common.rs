@@ -24,6 +24,7 @@ pub(crate) fn type_for_expression(expr: &Expression) -> DataType {
         Expression::Constant(_constant, datatype) => *datatype,
         Expression::Cast(cast) => cast.datatype,
         Expression::CompiledFunctionCall(function_call) => function_call.signature.ret,
+        Expression::CompiledAggregate(function_call) => function_call.signature.ret,
         Expression::CompiledColumnReference(column_reference) => column_reference.datatype,
 
         // These should be gone by now!
@@ -33,13 +34,22 @@ pub(crate) fn type_for_expression(expr: &Expression) -> DataType {
     }
 }
 
+/// Returns true if the expression contains an aggregate anywhere in its expressions.
+pub(crate) fn contains_aggregate(expr: &Expression) -> bool {
+    if let Expression::CompiledAggregate(_) = expr {
+        true
+    } else {
+        expr.children().any(contains_aggregate)
+    }
+}
+
 /// Returns the fields for an operator, will panic if called before query is normalized
 pub(crate) fn fields_for_operator(
     operator: &LogicalOperator,
 ) -> Box<dyn Iterator<Item = Field> + '_> {
     match operator {
-        LogicalOperator::Project(project) => {
-            Box::from(project.expressions.iter().map(|ne| Field {
+        LogicalOperator::Project(_) | LogicalOperator::GroupBy(_) => {
+            Box::from(operator.named_expressions().map(|ne| Field {
                 qualifier: None,
                 alias: ne.alias.as_ref().unwrap().clone(),
                 data_type: type_for_expression(&ne.expression),
@@ -83,10 +93,9 @@ pub(crate) fn fieldnames_for_operator(
     operator: &LogicalOperator,
 ) -> Box<dyn Iterator<Item = (Option<&str>, &str)> + '_> {
     match operator {
-        LogicalOperator::Project(project) => Box::from(
-            project
-                .expressions
-                .iter()
+        LogicalOperator::Project(_) | LogicalOperator::GroupBy(_) => Box::from(
+            operator
+                .named_expressions()
                 .map(|ne| (None, ne.alias.as_ref().unwrap().as_str())),
         ),
         LogicalOperator::Filter(filter) => fieldnames_for_operator(&filter.source),
@@ -126,6 +135,7 @@ pub(crate) fn source_fields_for_operator(
 ) -> Box<dyn Iterator<Item = Field> + '_> {
     match operator {
         LogicalOperator::Project(project) => fields_for_operator(&project.source),
+        LogicalOperator::GroupBy(group_by) => fields_for_operator(&group_by.source),
         LogicalOperator::Filter(filter) => fields_for_operator(&filter.source),
         LogicalOperator::Limit(limit) => fields_for_operator(&limit.source),
         LogicalOperator::Sort(sort) => fields_for_operator(&sort.source),
@@ -142,10 +152,22 @@ pub(crate) fn source_fields_for_operator(
     }
 }
 
+/// This bumps all the column references up or down by some amount.
+/// To be used when inserting addition columns into some source, then this can be
+/// used to rewrite the offsets above
+pub(crate) fn move_column_references(expression: &mut Expression, amount: isize) {
+    if let Expression::CompiledColumnReference(column_ref) = expression {
+        column_ref.offset = (column_ref.offset as isize + amount) as usize
+    }
+    for expr in expression.children_mut() {
+        move_column_references(expr, amount);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ast::expr::NamedExpression;
+    use ast::expr::{CompiledColumnReference, NamedExpression};
     use ast::rel::logical::{Project, TableAlias};
     use data::rust_decimal::Decimal;
     use std::str::FromStr;
@@ -225,6 +247,24 @@ mod tests {
         assert_eq!(
             fieldnames_for_operator(&projection).collect::<Vec<_>>(),
             vec![(None, "bar")]
+        );
+    }
+
+    #[test]
+    fn test_move_column_references() {
+        let mut expr = Expression::CompiledColumnReference(CompiledColumnReference {
+            offset: 5,
+            datatype: DataType::Integer,
+        });
+
+        move_column_references(&mut expr, -3);
+
+        assert_eq!(
+            expr,
+            Expression::CompiledColumnReference(CompiledColumnReference {
+                offset: 2,
+                datatype: DataType::Integer
+            })
         );
     }
 }

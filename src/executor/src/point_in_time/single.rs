@@ -19,7 +19,9 @@ impl SingleExecutor {
     }
 }
 
-impl TupleIter<ExecutionError> for SingleExecutor {
+impl TupleIter for SingleExecutor {
+    type E = ExecutionError;
+
     fn advance(&mut self) -> Result<(), ExecutionError> {
         self.state = match self.state {
             State::Ready => State::Single,

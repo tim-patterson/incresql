@@ -43,7 +43,10 @@ impl EvalScalar for Expression {
             }
             // These should be compiled away by this point
             Expression::FunctionCall(_) | Expression::Cast(_) | Expression::ColumnReference(_) => {
-                panic!()
+                panic!("Hit uncompiled expression during evaluation {:?}", self)
+            }
+            Expression::CompiledAggregate(_) => {
+                panic!("Hit aggregate function in scalar expression {:?}", self)
             }
         }
     }
@@ -77,7 +80,7 @@ mod tests {
     use ast::expr::CompiledFunctionCall;
     use data::DataType;
     use functions::registry::Registry;
-    use functions::FunctionSignature;
+    use functions::{FunctionSignature, FunctionType};
 
     #[test]
     fn test_eval_scalar_literal() {
@@ -93,9 +96,15 @@ mod tests {
             args: vec![DataType::Integer, DataType::Integer],
             ret: DataType::Null,
         };
-        let (computed_signature, function) = Registry::new(true)
-            .resolve_scalar_function(&mut signature)
+        let (computed_signature, function_type) = Registry::new(true)
+            .resolve_function(&mut signature)
             .unwrap();
+
+        let function = if let FunctionType::Scalar(f) = function_type {
+            f
+        } else {
+            panic!()
+        };
 
         let mut expression = Expression::CompiledFunctionCall(CompiledFunctionCall {
             function,

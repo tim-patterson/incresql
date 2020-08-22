@@ -21,7 +21,9 @@ impl UnionAllExecutor {
     }
 }
 
-impl TupleIter<ExecutionError> for UnionAllExecutor {
+impl TupleIter for UnionAllExecutor {
+    type E = ExecutionError;
+
     fn advance(&mut self) -> Result<(), ExecutionError> {
         // Basically a union all is just a flatmap
         loop {

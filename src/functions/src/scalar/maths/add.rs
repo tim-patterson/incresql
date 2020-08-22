@@ -1,5 +1,5 @@
 use crate::registry::Registry;
-use crate::{Function, FunctionDefinition, FunctionSignature};
+use crate::{Function, FunctionDefinition, FunctionSignature, FunctionType};
 use data::{DataType, Datum, Session, DECIMAL_MAX_PRECISION};
 use std::cmp::{max, min};
 
@@ -13,7 +13,7 @@ impl Function for AddInteger {
         _signature: &FunctionSignature,
         args: &'a [Datum<'a>],
     ) -> Datum<'a> {
-        if let (Some(a), Some(b)) = (args[0].as_integer(), args[1].as_integer()) {
+        if let (Some(a), Some(b)) = (args[0].as_maybe_integer(), args[1].as_maybe_integer()) {
             Datum::from(a + b)
         } else {
             Datum::Null
@@ -31,7 +31,7 @@ impl Function for AddBigint {
         _signature: &FunctionSignature,
         args: &'a [Datum<'a>],
     ) -> Datum<'a> {
-        if let (Some(a), Some(b)) = (args[0].as_bigint(), args[1].as_bigint()) {
+        if let (Some(a), Some(b)) = (args[0].as_maybe_bigint(), args[1].as_maybe_bigint()) {
             Datum::from(a + b)
         } else {
             Datum::Null
@@ -49,7 +49,7 @@ impl Function for AddDecimal {
         _signature: &FunctionSignature,
         args: &'a [Datum<'a>],
     ) -> Datum<'a> {
-        if let (Some(a), Some(b)) = (args[0].as_decimal(), args[1].as_decimal()) {
+        if let (Some(a), Some(b)) = (args[0].as_maybe_decimal(), args[1].as_maybe_decimal()) {
             Datum::from(a + b)
         } else {
             Datum::Null
@@ -62,14 +62,14 @@ pub fn register_builtins(registry: &mut Registry) {
         "+",
         vec![DataType::Integer, DataType::Integer],
         DataType::Integer,
-        &AddInteger {},
+        FunctionType::Scalar(&AddInteger {}),
     ));
 
     registry.register_function(FunctionDefinition::new(
         "+",
         vec![DataType::BigInt, DataType::BigInt],
         DataType::BigInt,
-        &AddBigint {},
+        FunctionType::Scalar(&AddBigint {}),
     ));
 
     registry.register_function(FunctionDefinition::new_with_type_resolver(
@@ -82,7 +82,7 @@ pub fn register_builtins(registry: &mut Registry) {
                 panic!()
             }
         },
-        &AddDecimal {},
+        FunctionType::Scalar(&AddDecimal {}),
     ));
 }
 

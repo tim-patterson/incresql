@@ -90,10 +90,9 @@ impl Catalog {
             ));
         }
 
-        let id = value[0].as_bigint().unwrap() as u32;
+        let id = value[0].as_bigint() as u32;
         let columns: Vec<_> = value[1]
             .as_json()
-            .unwrap()
             .iter_array()
             .unwrap()
             .map(|col| {
@@ -112,7 +111,6 @@ impl Catalog {
 
         let pk = value[1]
             .as_json()
-            .unwrap()
             .iter_array()
             .unwrap()
             .map(|b| {
@@ -365,7 +363,7 @@ impl Catalog {
             LogicalTimestamp::MAX,
         );
 
-        let table_id = prefix_key[0].as_bigint().unwrap() as u32;
+        let table_id = prefix_key[0].as_bigint() as u32;
 
         let (prefix_tuple, prefix_freq) = prefix_iter.next()?.unwrap();
 

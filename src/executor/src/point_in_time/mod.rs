@@ -4,6 +4,7 @@ use crate::point_in_time::negate_freq::NegateFreqExecutor;
 use crate::point_in_time::project::ProjectExecutor;
 use crate::point_in_time::single::SingleExecutor;
 use crate::point_in_time::sort::SortExecutor;
+use crate::point_in_time::sorted_group::SortedGroupExecutor;
 use crate::point_in_time::table_insert::TableInsertExecutor;
 use crate::point_in_time::table_scan::TableScanExecutor;
 use crate::point_in_time::union_all::UnionAllExecutor;
@@ -19,17 +20,15 @@ mod negate_freq;
 mod project;
 mod single;
 mod sort;
+mod sorted_group;
 mod table_insert;
 mod table_scan;
 mod union_all;
 mod values;
 
-pub type BoxedExecutor = Box<dyn TupleIter<ExecutionError>>;
+pub type BoxedExecutor = Box<dyn TupleIter<E = ExecutionError>>;
 
-pub fn build_executor(
-    session: &Arc<Session>,
-    plan: &PointInTimeOperator,
-) -> Box<dyn TupleIter<ExecutionError>> {
+pub fn build_executor(session: &Arc<Session>, plan: &PointInTimeOperator) -> BoxedExecutor {
     match plan {
         PointInTimeOperator::Single => Box::from(SingleExecutor::new()),
         PointInTimeOperator::Project(project) => Box::from(ProjectExecutor::new(
@@ -74,6 +73,12 @@ pub fn build_executor(
         PointInTimeOperator::NegateFreq(source) => {
             Box::from(NegateFreqExecutor::new(build_executor(session, &source)))
         }
+        PointInTimeOperator::SortedGroup(sorted_group) => Box::from(SortedGroupExecutor::new(
+            build_executor(session, &sorted_group.source),
+            Arc::clone(&session),
+            sorted_group.key_len,
+            sorted_group.expressions.clone(),
+        )),
     }
 }
 

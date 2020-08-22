@@ -1,5 +1,5 @@
 use crate::registry::Registry;
-use crate::{Function, FunctionDefinition, FunctionSignature};
+use crate::{Function, FunctionDefinition, FunctionSignature, FunctionType};
 use data::{DataType, Datum, Session};
 
 #[derive(Debug)]
@@ -21,7 +21,7 @@ pub fn register_builtins(registry: &mut Registry) {
         "database",
         vec![],
         DataType::Text,
-        &Database {},
+        FunctionType::Scalar(&Database {}),
     ));
 }
 

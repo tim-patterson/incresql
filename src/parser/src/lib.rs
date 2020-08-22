@@ -1,4 +1,4 @@
-use ast::rel::statement::Statement;
+use ast::statement::Statement;
 use nom::combinator::all_consuming;
 use nom::error::{convert_error, VerboseError};
 use nom::lib::std::fmt::{Display, Formatter};

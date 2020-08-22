@@ -17,7 +17,9 @@ impl ValuesExecutor {
     }
 }
 
-impl TupleIter<ExecutionError> for ValuesExecutor {
+impl TupleIter for ValuesExecutor {
+    type E = ExecutionError;
+
     fn advance(&mut self) -> Result<(), ExecutionError> {
         self.curr_row = self.iter.next();
         Ok(())

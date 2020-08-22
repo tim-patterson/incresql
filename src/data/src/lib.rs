@@ -13,7 +13,7 @@ pub use datum::Datum;
 use serde::export::Formatter;
 pub use session::Session;
 use std::fmt::Display;
-pub use tuple_iter::TupleIter;
+pub use tuple_iter::*;
 
 #[macro_use]
 extern crate lazy_static;

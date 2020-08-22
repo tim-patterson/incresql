@@ -22,8 +22,9 @@ materialized views.
 - [x] Basic "point in time" query support, select/where/limit 
 - [x] Persistence/Table infra.
 - [x] Inserts / Deletes for tables.
-- [ ] Basic "point in time" order bys, group bys, joins
+- [x] Basic "point in time" order bys and group bys
 - [ ] Data ingestion
+- [ ] Basic "point in time" (inner) joins
 - [ ] Basic "point in time" window functions
 - [ ] View support
 - [ ] Basic MysqlWorkbench/Tableau/Datagrip support - This will mostly be creating system views.

@@ -61,9 +61,7 @@ impl Datum<'_> {
                 } else {
                     buffer.push(!7)
                 }
-                self.as_bytea()
-                    .unwrap()
-                    .write_sortable_bytes(sort_order, buffer)
+                self.as_bytea().write_sortable_bytes(sort_order, buffer)
             }
         }
     }

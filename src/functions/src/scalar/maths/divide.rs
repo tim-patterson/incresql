@@ -1,5 +1,5 @@
 use crate::registry::Registry;
-use crate::{Function, FunctionDefinition, FunctionSignature};
+use crate::{Function, FunctionDefinition, FunctionSignature, FunctionType};
 use data::{DataType, Datum, Session, DECIMAL_MAX_PRECISION, DECIMAL_MAX_SCALE};
 
 #[derive(Debug)]
@@ -12,7 +12,7 @@ impl Function for DivideInteger {
         _signature: &FunctionSignature,
         args: &'a [Datum<'a>],
     ) -> Datum<'a> {
-        if let (Some(a), Some(b)) = (args[0].as_integer(), args[1].as_integer()) {
+        if let (Some(a), Some(b)) = (args[0].as_maybe_integer(), args[1].as_maybe_integer()) {
             Datum::from(a / b)
         } else {
             Datum::Null
@@ -30,7 +30,7 @@ impl Function for DivideBigint {
         _signature: &FunctionSignature,
         args: &'a [Datum<'a>],
     ) -> Datum<'a> {
-        if let (Some(a), Some(b)) = (args[0].as_bigint(), args[1].as_bigint()) {
+        if let (Some(a), Some(b)) = (args[0].as_maybe_bigint(), args[1].as_maybe_bigint()) {
             Datum::from(a / b)
         } else {
             Datum::Null
@@ -48,7 +48,7 @@ impl Function for DivideDecimal {
         _signature: &FunctionSignature,
         args: &'a [Datum<'a>],
     ) -> Datum<'a> {
-        if let (Some(a), Some(b)) = (args[0].as_decimal(), args[1].as_decimal()) {
+        if let (Some(a), Some(b)) = (args[0].as_maybe_decimal(), args[1].as_maybe_decimal()) {
             let mut d = a / b;
             if d.scale() > DECIMAL_MAX_SCALE as u32 {
                 d.rescale(DECIMAL_MAX_SCALE as u32);
@@ -65,21 +65,21 @@ pub fn register_builtins(registry: &mut Registry) {
         "/",
         vec![DataType::Integer, DataType::Integer],
         DataType::Integer,
-        &DivideInteger {},
+        FunctionType::Scalar(&DivideInteger {}),
     ));
 
     registry.register_function(FunctionDefinition::new(
         "/",
         vec![DataType::BigInt, DataType::BigInt],
         DataType::BigInt,
-        &DivideBigint {},
+        FunctionType::Scalar(&DivideBigint {}),
     ));
 
     registry.register_function(FunctionDefinition::new(
         "/",
         vec![DataType::Decimal(0, 0), DataType::Decimal(0, 0)],
         DataType::Decimal(DECIMAL_MAX_PRECISION, DECIMAL_MAX_SCALE),
-        &DivideDecimal {},
+        FunctionType::Scalar(&DivideDecimal {}),
     ));
 }
 

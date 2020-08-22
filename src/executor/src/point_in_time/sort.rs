@@ -1,5 +1,5 @@
-use crate::expression::EvalScalar;
 use crate::point_in_time::BoxedExecutor;
+use crate::scalar_expression::EvalScalar;
 use crate::utils::right_size_new_to;
 use crate::ExecutionError;
 use ast::expr::SortExpression;
@@ -64,7 +64,9 @@ impl SortExecutor {
     }
 }
 
-impl TupleIter<ExecutionError> for SortExecutor {
+impl TupleIter for SortExecutor {
+    type E = ExecutionError;
+
     fn advance(&mut self) -> Result<(), ExecutionError> {
         if self.state == State::Ready {
             self.ingest()?;

@@ -4,7 +4,7 @@ use storage::{StorageError, Table};
 
 pub struct TableScanExecutor {
     // We must drop scan_iter first
-    scan_iter: Box<dyn TupleIter<StorageError>>,
+    scan_iter: Box<dyn TupleIter<E = StorageError>>,
     #[allow(dead_code)]
     table: Table,
 }
@@ -16,16 +16,19 @@ impl TableScanExecutor {
         // so below we fudge the lifetimes to make it work
         let scan_iter = Box::from(table.full_scan(timestamp));
         let scan_iter = unsafe {
-            std::mem::transmute::<Box<dyn TupleIter<StorageError>>, Box<dyn TupleIter<StorageError>>>(
-                scan_iter,
-            )
+            std::mem::transmute::<
+                Box<dyn TupleIter<E = StorageError>>,
+                Box<dyn TupleIter<E = StorageError>>,
+            >(scan_iter)
         };
 
         TableScanExecutor { scan_iter, table }
     }
 }
 
-impl TupleIter<ExecutionError> for TableScanExecutor {
+impl TupleIter for TableScanExecutor {
+    type E = ExecutionError;
+
     fn advance(&mut self) -> Result<(), ExecutionError> {
         self.scan_iter.advance()?;
         Ok(())

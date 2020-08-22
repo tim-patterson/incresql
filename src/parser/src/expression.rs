@@ -66,7 +66,7 @@ fn expression_2(input: &str) -> ParserResult<Expression> {
 }
 
 fn expression_3(input: &str) -> ParserResult<Expression> {
-    alt((function_call, cast, literal, column_reference))(input)
+    alt((count_star, function_call, cast, literal, column_reference))(input)
 }
 
 /// Used to reduce boilerplate at each precedence level for infix operators
@@ -108,6 +108,20 @@ fn function_call(input: &str) -> ParserResult<Expression> {
             Expression::FunctionCall(FunctionCall {
                 function_name,
                 args: params,
+            })
+        },
+    )(input)
+}
+
+/// Due to some sql weirdness count(*) is a thing, the star doesn't
+/// really mean anything and its semantically equivalent to count()
+fn count_star(input: &str) -> ParserResult<Expression> {
+    map(
+        tuple((kw("COUNT"), ws_0, tag("("), ws_0, tag("*"), ws_0, tag(")"))),
+        |_| {
+            Expression::FunctionCall(FunctionCall {
+                function_name: "count".to_string(),
+                args: vec![],
             })
         },
     )(input)
@@ -201,6 +215,17 @@ mod tests {
             Expression::FunctionCall(FunctionCall {
                 function_name: "foo".to_string(),
                 args: vec![Expression::from(1), Expression::from(2),]
+            })
+        );
+    }
+
+    #[test]
+    fn test_count_star_expression() {
+        assert_eq!(
+            expression("count(*)").unwrap().1,
+            Expression::FunctionCall(FunctionCall {
+                function_name: "count".to_string(),
+                args: vec![]
             })
         );
     }

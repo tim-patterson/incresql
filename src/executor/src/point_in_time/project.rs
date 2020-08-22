@@ -1,5 +1,5 @@
-use crate::expression::EvalScalarRow;
 use crate::point_in_time::BoxedExecutor;
+use crate::scalar_expression::EvalScalarRow;
 use crate::utils::*;
 use crate::ExecutionError;
 use ast::expr::Expression;
@@ -26,13 +26,14 @@ impl ProjectExecutor {
     }
 }
 
-impl TupleIter<ExecutionError> for ProjectExecutor {
+impl TupleIter for ProjectExecutor {
     // When we get a tuple from the next/get method, the values are only valid until the next call.
     // The project builds a new tuple from the source tuple, those values may have references back
     // to some byte buffer etc in the source.  Its all safe as to call advance our consumer has to
     // no longer be immutably borrowing from us. And there's no way for our source to advance
     // without that coming through us.
     // We need a little unsafe to muddle with the lifetimes to get past the rust compiler
+    type E = ExecutionError;
 
     fn advance(&mut self) -> Result<(), ExecutionError> {
         if let Some((tuple, _freq)) = self.source.next()? {

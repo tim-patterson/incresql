@@ -2,6 +2,7 @@ use crate::json::Json;
 use crate::{DataType, DECIMAL_MAX_SCALE};
 use rust_decimal::Decimal;
 use std::fmt::{Debug, Display, Formatter};
+use std::hash::{Hash, Hasher};
 
 /// Datum - in memory representation of sql value.
 /// The same datum may be able to be interpreted as multiple different
@@ -73,12 +74,12 @@ impl<'a> Datum<'a> {
     pub fn sql_eq(&self, other: &Self, null_safe: bool) -> bool {
         match self {
             Datum::Null => other.is_null() && null_safe,
-            Datum::Boolean(b) => other.as_boolean() == Some(*b),
-            Datum::Integer(i) => other.as_integer() == Some(*i),
-            Datum::BigInt(i) => other.as_bigint() == Some(*i),
-            Datum::Decimal(d) => other.as_decimal() == Some(*d),
+            Datum::Boolean(b) => other.as_maybe_boolean() == Some(*b),
+            Datum::Integer(i) => other.as_maybe_integer() == Some(*i),
+            Datum::BigInt(i) => other.as_maybe_bigint() == Some(*i),
+            Datum::Decimal(d) => other.as_maybe_decimal() == Some(*d),
             Datum::ByteAOwned(_) | Datum::ByteAInline(..) | Datum::ByteARef(_) => {
-                self.as_text() == other.as_text()
+                self.as_maybe_text() == other.as_maybe_text()
             }
         }
     }
@@ -168,7 +169,7 @@ impl Display for TypedDatum<'_> {
             Datum::ByteARef(_) | Datum::ByteAOwned(_) | Datum::ByteAInline(..) => {
                 match self.datatype {
                     DataType::Text => {
-                        let str = self.datum.as_text().unwrap();
+                        let str = self.datum.as_text();
                         if f.alternate() {
                             // The debug trait should quote and escape our strings for us
                             Debug::fmt(str, f)
@@ -177,11 +178,11 @@ impl Display for TypedDatum<'_> {
                         }
                     }
                     DataType::Json => {
-                        let json = Json::from_bytes(self.datum.as_bytea().unwrap());
+                        let json = Json::from_bytes(self.datum.as_bytea());
                         f.write_str(&serde_json::to_string(&json).unwrap())
                     }
                     _ => {
-                        let bytes = self.datum.as_bytea().unwrap();
+                        let bytes = self.datum.as_bytea();
                         if f.alternate() {
                             f.write_str("\"")?;
                             for b in bytes {
@@ -214,7 +215,7 @@ impl Display for TypedDatum<'_> {
 // Into's to get back rust types from datums, these are just "dumb" and simply map 1-1 without any
 // attempts to do any casting
 impl<'a> Datum<'a> {
-    pub fn as_bytea(&'a self) -> Option<&'a [u8]> {
+    pub fn as_maybe_bytea(&'a self) -> Option<&'a [u8]> {
         match self {
             Datum::ByteARef(s) => Some(s),
             Datum::ByteAInline(len, b) => Some(&b.as_ref()[..(*len as usize)]),
@@ -223,16 +224,28 @@ impl<'a> Datum<'a> {
         }
     }
 
-    pub fn as_text(&'a self) -> Option<&'a str> {
-        self.as_bytea()
+    pub fn as_bytea(&'a self) -> &'a [u8] {
+        self.as_maybe_bytea().unwrap()
+    }
+
+    pub fn as_maybe_text(&'a self) -> Option<&'a str> {
+        self.as_maybe_bytea()
             .map(|bytes| unsafe { std::str::from_utf8_unchecked(bytes) })
     }
 
-    pub fn as_json(&'a self) -> Option<Json<'a>> {
-        self.as_bytea().map(Json::from_bytes)
+    pub fn as_text(&'a self) -> &'a str {
+        self.as_maybe_text().unwrap()
     }
 
-    pub fn as_integer(&self) -> Option<i32> {
+    pub fn as_maybe_json(&'a self) -> Option<Json<'a>> {
+        self.as_maybe_bytea().map(Json::from_bytes)
+    }
+
+    pub fn as_json(&'a self) -> Json<'a> {
+        self.as_maybe_json().unwrap()
+    }
+
+    pub fn as_maybe_integer(&self) -> Option<i32> {
         if let Datum::Integer(i) = self {
             Some(*i)
         } else {
@@ -240,7 +253,19 @@ impl<'a> Datum<'a> {
         }
     }
 
-    pub fn as_bigint(&self) -> Option<i64> {
+    pub fn as_integer(&self) -> i32 {
+        self.as_maybe_integer().unwrap()
+    }
+
+    pub fn as_integer_mut(&mut self) -> &mut i32 {
+        if let Datum::Integer(i) = self {
+            i
+        } else {
+            panic!()
+        }
+    }
+
+    pub fn as_maybe_bigint(&self) -> Option<i64> {
         if let Datum::BigInt(i) = self {
             Some(*i)
         } else {
@@ -248,7 +273,19 @@ impl<'a> Datum<'a> {
         }
     }
 
-    pub fn as_decimal(&self) -> Option<Decimal> {
+    pub fn as_bigint(&self) -> i64 {
+        self.as_maybe_bigint().unwrap()
+    }
+
+    pub fn as_bigint_mut(&mut self) -> &mut i64 {
+        if let Datum::BigInt(i) = self {
+            i
+        } else {
+            panic!()
+        }
+    }
+
+    pub fn as_maybe_decimal(&self) -> Option<Decimal> {
         if let Datum::Decimal(d) = self {
             Some(*d)
         } else {
@@ -256,11 +293,43 @@ impl<'a> Datum<'a> {
         }
     }
 
-    pub fn as_boolean(&self) -> Option<bool> {
+    pub fn as_decimal(&self) -> Decimal {
+        self.as_maybe_decimal().unwrap()
+    }
+
+    pub fn as_decimal_mut(&mut self) -> &mut Decimal {
+        if let Datum::Decimal(d) = self {
+            d
+        } else {
+            panic!()
+        }
+    }
+
+    pub fn as_maybe_boolean(&self) -> Option<bool> {
         if let Datum::Boolean(b) = self {
             Some(*b)
         } else {
             None
+        }
+    }
+
+    pub fn as_boolean(&self) -> bool {
+        self.as_maybe_boolean().unwrap()
+    }
+}
+
+/// Hash implementation on datum. Allows us to use hashmaps etc.
+impl Hash for Datum<'_> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            Datum::Null => state.write_u8(0),
+            Datum::Boolean(b) => b.hash(state),
+            Datum::Integer(i) => i.hash(state),
+            Datum::BigInt(i) => i.hash(state),
+            Datum::Decimal(d) => d.hash(state),
+            Datum::ByteAOwned(_) | Datum::ByteAInline(_, _) | Datum::ByteARef(_) => {
+                self.as_bytea().hash(state)
+            }
         }
     }
 }
@@ -384,50 +453,53 @@ mod tests {
     #[test]
     fn test_datum_as_str() {
         assert_eq!(
-            Datum::ByteAOwned(Box::from(b"Hello world".as_ref())).as_text(),
+            Datum::ByteAOwned(Box::from(b"Hello world".as_ref())).as_maybe_text(),
             Some("Hello world")
         );
 
         let mut bytes = [0_u8; 22];
         bytes.as_mut().write_all("Hello world".as_bytes()).unwrap();
 
-        assert_eq!(Datum::ByteAInline(11, bytes).as_text(), Some("Hello world"));
-
-        let backing_slice = b"Hello world";
         assert_eq!(
-            Datum::ByteARef(backing_slice).as_text(),
+            Datum::ByteAInline(11, bytes).as_maybe_text(),
             Some("Hello world")
         );
 
-        assert_eq!(Datum::Null.as_text(), None);
+        let backing_slice = b"Hello world";
+        assert_eq!(
+            Datum::ByteARef(backing_slice).as_maybe_text(),
+            Some("Hello world")
+        );
+
+        assert_eq!(Datum::Null.as_maybe_text(), None);
     }
 
     #[test]
     fn test_datum_as_ints() {
-        assert_eq!(Datum::Integer(123).as_integer(), Some(123_i32));
+        assert_eq!(Datum::Integer(123).as_maybe_integer(), Some(123_i32));
 
-        assert_eq!(Datum::Null.as_integer(), None);
+        assert_eq!(Datum::Null.as_maybe_integer(), None);
 
-        assert_eq!(Datum::BigInt(123).as_bigint(), Some(123_i64));
+        assert_eq!(Datum::BigInt(123).as_maybe_bigint(), Some(123_i64));
 
-        assert_eq!(Datum::Null.as_bigint(), None);
+        assert_eq!(Datum::Null.as_maybe_bigint(), None);
     }
 
     #[test]
     fn test_datum_as_decimal() {
         assert_eq!(
-            Datum::Decimal(Decimal::new(3232, 1)).as_decimal(),
+            Datum::Decimal(Decimal::new(3232, 1)).as_maybe_decimal(),
             Some(Decimal::new(3232, 1))
         );
 
-        assert_eq!(Datum::Null.as_decimal(), None);
+        assert_eq!(Datum::Null.as_maybe_decimal(), None);
     }
 
     #[test]
     fn test_datum_as_boolean() {
-        assert_eq!(Datum::Boolean(true).as_boolean(), Some(true));
+        assert_eq!(Datum::Boolean(true).as_maybe_boolean(), Some(true));
 
-        assert_eq!(Datum::Null.as_decimal(), None);
+        assert_eq!(Datum::Null.as_maybe_decimal(), None);
     }
 
     #[test]
