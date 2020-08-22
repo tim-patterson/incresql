@@ -1,5 +1,5 @@
 use crate::utils::expr::contains_aggregate;
-use ast::rel::logical::{GroupBy, LogicalOperator};
+use ast::rel::logical::*;
 
 /// Detects projects using aggregate functions and turns them into a group by.
 pub(super) fn project_to_groupby(operator: &mut LogicalOperator) {

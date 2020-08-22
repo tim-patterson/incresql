@@ -1,5 +1,5 @@
 use crate::utils::logical::fieldnames_for_operator;
-use ast::expr::{ColumnReference, Expression, NamedExpression};
+use ast::expr::*;
 use ast::rel::logical::LogicalOperator;
 
 /// Walks the named expressions of projects looking for stars and replaces them with

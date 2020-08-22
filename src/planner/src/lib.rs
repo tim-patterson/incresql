@@ -3,16 +3,16 @@ mod p2_optimization;
 mod p3_pit_planning;
 mod utils;
 
-use data::DataType;
+use data::{DataType, Session};
 
-mod common;
 mod error;
 mod explain;
-mod point_in_time;
+use crate::utils::logical::fields_for_operator;
+use ast::rel::logical::LogicalOperator;
 use catalog::Catalog;
 pub use error::*;
 use functions::registry::Registry;
-pub use point_in_time::PointInTimePlan;
+pub use p3_pit_planning::PointInTimePlan;
 use std::sync::RwLock;
 
 #[derive(Debug)]
@@ -33,6 +33,18 @@ impl Planner {
     /// catalog backed by in-memory storage
     pub fn new_for_test() -> Self {
         Planner::new(Registry::default(), Catalog::new_for_test().unwrap())
+    }
+
+    /// Runs the validation and optimization phases
+    pub(crate) fn plan_common(
+        &self,
+        query: LogicalOperator,
+        session: &Session,
+    ) -> Result<(Vec<Field>, LogicalOperator), PlannerError> {
+        let query = self.validate(query, session)?;
+        let query = self.optimize(query, session)?;
+        let fields = fields_for_operator(&query).collect();
+        Ok((fields, query))
     }
 }
 

@@ -1,4 +1,4 @@
-use ast::expr::{ColumnReference, Expression};
+use ast::expr::*;
 use ast::rel::logical::LogicalOperator;
 
 /// This just created dummy _col1 style column aliases for expressions
