@@ -1,4 +1,5 @@
-use crate::common::{fields_for_operator, type_for_expression};
+use crate::utils::expr::type_for_expression;
+use crate::utils::logical::fields_for_operator;
 use crate::{Planner, PlannerError};
 use ast::expr::{Expression, NamedExpression};
 use ast::rel::logical::{LogicalOperator, Values};

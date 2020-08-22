@@ -1,10 +1,10 @@
-use crate::common::{fields_for_operator, move_column_references, type_for_expression};
+use crate::utils::expr::{move_column_references, type_for_expression};
+use crate::utils::logical::fields_for_operator;
 use crate::{Field, Planner, PlannerError};
-use ast::expr::{CompiledColumnReference, Expression, SortExpression};
-use ast::rel::logical::{
-    Filter, GroupBy, Limit, LogicalOperator, Project, ResolvedTable, Sort, TableInsert, UnionAll,
-};
-use ast::rel::point_in_time::{self, PointInTimeOperator, SortedGroup};
+use ast::expr::*;
+use ast::rel::logical::*;
+use ast::rel::point_in_time;
+use ast::rel::point_in_time::{PointInTimeOperator, SortedGroup};
 use data::{LogicalTimestamp, Session, SortOrder};
 
 pub struct PointInTimePlan {
