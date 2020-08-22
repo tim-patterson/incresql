@@ -1,22 +1,9 @@
-use crate::{Planner, PlannerError};
 use ast::expr::Expression;
 use ast::rel::logical::LogicalOperator;
 use data::Session;
 
-impl Planner {
-    /// Optimizes the query by rewriting parts of it to be more efficient.
-    pub(crate) fn optimize(
-        &self,
-        mut query: LogicalOperator,
-        session: &Session,
-    ) -> Result<LogicalOperator, PlannerError> {
-        fold_constants(&mut query, session);
-        Ok(query)
-    }
-}
-
 /// Simplifies expressions involving only constants
-fn fold_constants(query: &mut LogicalOperator, session: &Session) {
+pub(super) fn fold_constants(query: &mut LogicalOperator, session: &Session) {
     for child in query.children_mut() {
         fold_constants(child, session);
     }
@@ -88,39 +75,34 @@ fn fold_constants_for_expr(expr: &mut Expression, session: &Session) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ast::expr::{CompiledFunctionCall, Expression, NamedExpression};
+    use ast::expr::{CompiledFunctionCall, NamedExpression};
     use ast::rel::logical::Project;
     use data::DataType;
-    use functions::{FunctionSignature, FunctionType};
+    use functions::registry::Registry;
+    use functions::FunctionSignature;
 
     #[test]
-    fn test_constant_fold() -> Result<(), PlannerError> {
-        let planner = Planner::new_for_test();
+    fn test_constant_fold() {
         let session = Session::new(1);
+        let function_registry = Registry::default();
         let add_signature = FunctionSignature {
             name: "+",
             args: vec![DataType::Integer, DataType::Integer],
             ret: DataType::Integer,
         };
-        let (_, add_function_type) = planner.function_registry.resolve_function(&add_signature)?;
-
-        let add_function = if let FunctionType::Scalar(f) = add_function_type {
-            f
-        } else {
-            panic!()
-        };
+        let (_, add_function) = function_registry.resolve_function(&add_signature).unwrap();
 
         // 1 + (2 + 3)
-        let operator = LogicalOperator::Project(Project {
+        let mut operator = LogicalOperator::Project(Project {
             distinct: false,
             expressions: vec![NamedExpression {
                 alias: None,
                 expression: Expression::CompiledFunctionCall(CompiledFunctionCall {
-                    function: add_function,
+                    function: add_function.as_scalar(),
                     args: Box::from(vec![
                         Expression::from(1),
                         Expression::CompiledFunctionCall(CompiledFunctionCall {
-                            function: add_function,
+                            function: add_function.as_scalar(),
                             args: Box::from(vec![Expression::from(2), Expression::from(3)]),
                             expr_buffer: Box::from(vec![]),
                             signature: Box::new(add_signature.clone()),
@@ -133,8 +115,6 @@ mod tests {
             source: Box::new(LogicalOperator::Single),
         });
 
-        let optimized = planner.optimize(operator, &session)?;
-
         let expected = LogicalOperator::Project(Project {
             distinct: false,
             expressions: vec![NamedExpression {
@@ -144,8 +124,8 @@ mod tests {
             source: Box::new(LogicalOperator::Single),
         });
 
-        assert_eq!(optimized, expected);
+        fold_constants(&mut operator, &session);
 
-        Ok(())
+        assert_eq!(operator, expected);
     }
 }

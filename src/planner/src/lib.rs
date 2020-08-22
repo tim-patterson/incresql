@@ -8,7 +8,6 @@ use data::DataType;
 mod common;
 mod error;
 mod explain;
-mod optimize;
 mod point_in_time;
 use catalog::Catalog;
 pub use error::*;
