@@ -1,4 +1,5 @@
-use crate::common::{fields_for_operator, move_column_references, type_for_expression};
+use crate::utils::expr::{move_column_references, type_for_expression};
+use crate::utils::logical::fields_for_operator;
 use crate::{Field, Planner, PlannerError};
 use ast::expr::{CompiledColumnReference, Expression, SortExpression};
 use ast::rel::logical::{

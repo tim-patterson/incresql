@@ -1,6 +1,6 @@
-use crate::common::{
-    contains_aggregate, fieldnames_for_operator, fields_for_operator, source_fields_for_operator,
-    type_for_expression,
+use crate::utils::expr::{contains_aggregate, type_for_expression};
+use crate::utils::logical::{
+    fieldnames_for_operator, fields_for_operator, source_fields_for_operator,
 };
 use crate::{Field, FieldResolutionError, Planner, PlannerError};
 use ast::expr::{
