@@ -15,19 +15,19 @@ fn select_limit_no_offset() {
     query(
         r#"EXPLAIN SELECT foo FROM (SELECT 1 as foo) LIMIT 2"#,
         "
-        |LIMIT|||
-        | |offset: 0|||
-        | |limit: 2|||
-        | |source:|||
-        | |  PROJECT|||
-        | |   |exprs:|||
-        | |   |  foo <INTEGER>|0|<OFFSET 0>|
-        | |   |source:|||
-        | |   |  PROJECT|||
-        | |   |   |exprs:|||
-        | |   |   |  foo <INTEGER>|0|1|
-        | |   |   |source:|||
-        | |   |   |  SINGLE|||
+        |LIMIT||||
+        | |limit: 2||||
+        | |offset: 0||||
+        | |source:||||
+        | |  PROJECT||||
+        | |   |output_exprs:||||
+        | |   |  foo|0|INTEGER|<OFFSET 0>|
+        | |   |source:||||
+        | |   |  PROJECT||||
+        | |   |   |output_exprs:||||
+        | |   |   |  foo|0|INTEGER|1|
+        | |   |   |source:||||
+        | |   |   |  SINGLE||||
         ",
     );
 }
@@ -57,19 +57,19 @@ fn select_limit_with_offset() {
     query(
         r#"EXPLAIN SELECT foo FROM (SELECT 1 as foo) LIMIT 1, 2"#,
         "
-        |LIMIT|||
-        | |offset: 1|||
-        | |limit: 2|||
-        | |source:|||
-        | |  PROJECT|||
-        | |   |exprs:|||
-        | |   |  foo <INTEGER>|0|<OFFSET 0>|
-        | |   |source:|||
-        | |   |  PROJECT|||
-        | |   |   |exprs:|||
-        | |   |   |  foo <INTEGER>|0|1|
-        | |   |   |source:|||
-        | |   |   |  SINGLE|||
+        |LIMIT||||
+        | |limit: 2||||
+        | |offset: 1||||
+        | |source:||||
+        | |  PROJECT||||
+        | |   |output_exprs:||||
+        | |   |  foo|0|INTEGER|<OFFSET 0>|
+        | |   |source:||||
+        | |   |  PROJECT||||
+        | |   |   |output_exprs:||||
+        | |   |   |  foo|0|INTEGER|1|
+        | |   |   |source:||||
+        | |   |   |  SINGLE||||
         ",
     );
 }

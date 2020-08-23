@@ -59,10 +59,14 @@ impl Connection<'_> {
                 return Ok((vec![], empty_tuple_iter()));
             }
             Statement::Query(logical_operator) => logical_operator,
-            Statement::Explain(explain) => self
-                .runtime
-                .planner
-                .explain_logical(explain.operator, &self.session)?,
+            Statement::Explain(explain) => {
+                let validated = self
+                    .runtime
+                    .planner
+                    .validate(explain.operator, &self.session)?;
+                let optimized = self.runtime.planner.optimize(validated, &self.session)?;
+                self.runtime.planner.explain(&optimized)
+            }
             Statement::CreateDatabase(create_database) => {
                 let mut catalog = self.runtime.planner.catalog.write().unwrap();
                 catalog.create_database(&create_database.name)?;
