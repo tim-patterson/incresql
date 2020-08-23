@@ -1,4 +1,4 @@
-use crate::json::Json;
+use crate::json::{Json, OwnedJson};
 use crate::{DataType, DECIMAL_MAX_SCALE};
 use rust_decimal::Decimal;
 use std::fmt::{Debug, Display, Formatter};
@@ -141,6 +141,12 @@ impl<'a> From<&'a str> for Datum<'a> {
 impl From<Vec<u8>> for Datum<'static> {
     fn from(vec: Vec<u8>) -> Self {
         Datum::ByteAOwned(vec.into_boxed_slice())
+    }
+}
+
+impl From<OwnedJson> for Datum<'static> {
+    fn from(json: OwnedJson) -> Self {
+        Datum::ByteAOwned(json.bytes.into_boxed_slice())
     }
 }
 
@@ -567,13 +573,13 @@ mod tests {
 
     #[test]
     fn test_datum_display_json() {
-        let tape = JsonBuilder::default().object(|object| {
+        let json = JsonBuilder::default().object(|object| {
             object.push_int("one", 1);
             object.push_int("two", 2);
         });
 
         assert_eq!(
-            format!("{}", Datum::from(tape).typed_with(DataType::Json)),
+            format!("{}", Datum::from(json).typed_with(DataType::Json)),
             r#"{"one":1,"two":2}"#
         );
     }

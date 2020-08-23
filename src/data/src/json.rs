@@ -57,7 +57,17 @@ use std::convert::TryInto;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct Json<'a> {
-    bytes: &'a [u8],
+    pub(crate) bytes: &'a [u8],
+}
+
+pub struct OwnedJson {
+    pub(crate) bytes: Vec<u8>,
+}
+
+impl OwnedJson {
+    pub fn as_json(&self) -> Json<'_> {
+        Json { bytes: &self.bytes }
+    }
 }
 
 impl<'a> Json<'a> {
@@ -192,7 +202,7 @@ impl<'a> Json<'a> {
             Some(JsonIter {
                 json: Json {
                     bytes: if self.bytes[0] == 0x1b {
-                        &[]
+                        [].as_ref()
                     } else {
                         self.read_varlen(0x1c).1
                     },
@@ -210,7 +220,7 @@ impl<'a> Json<'a> {
                 inner: JsonIter {
                     json: Json {
                         bytes: if self.bytes[0] == 0x1f {
-                            &[]
+                            [].as_ref()
                         } else {
                             self.read_varlen(0x20).1
                         },
@@ -305,7 +315,7 @@ impl<'a> Iterator for JsonObjectIter<'a> {
 
 /// A builder to build json tapes
 pub struct JsonBuilder {
-    inner: JsonBuilderInner,
+    pub(crate) inner: JsonBuilderInner,
 }
 
 impl Default for JsonBuilder {
@@ -318,43 +328,43 @@ impl Default for JsonBuilder {
 
 impl JsonBuilder {
     /// Creates a json tape containing a single null
-    pub fn null(mut self) -> Vec<u8> {
+    pub fn null(mut self) -> OwnedJson {
         self.inner.push_null();
         self.inner.build()
     }
 
     /// Creates a json tape containing a single bool
-    pub fn bool(mut self, b: bool) -> Vec<u8> {
+    pub fn bool(mut self, b: bool) -> OwnedJson {
         self.inner.push_bool(b);
         self.inner.build()
     }
 
     /// Creates a json tape containing a single number
-    pub fn int(mut self, i: i64) -> Vec<u8> {
+    pub fn int(mut self, i: i64) -> OwnedJson {
         self.inner.push_int(i);
         self.inner.build()
     }
 
     /// Creates a json tape containing a single number
-    pub fn decimal(mut self, d: Decimal) -> Vec<u8> {
+    pub fn decimal(mut self, d: Decimal) -> OwnedJson {
         self.inner.push_decimal(d);
         self.inner.build()
     }
 
     /// Creates a json tape containing a single string
-    pub fn string(mut self, s: &str) -> Vec<u8> {
+    pub fn string(mut self, s: &str) -> OwnedJson {
         self.inner.push_string(s);
         self.inner.build()
     }
 
     /// Creates a json array
-    pub fn array<F: FnOnce(&mut ArrayJsonBuilder)>(mut self, f: F) -> Vec<u8> {
+    pub fn array<F: FnOnce(&mut ArrayJsonBuilder)>(mut self, f: F) -> OwnedJson {
         self.inner.push_array(f);
         self.inner.build()
     }
 
     /// Creates a json object
-    pub fn object<F: FnOnce(&mut ObjectJsonBuilder)>(mut self, f: F) -> Vec<u8> {
+    pub fn object<F: FnOnce(&mut ObjectJsonBuilder)>(mut self, f: F) -> OwnedJson {
         self.inner.push_object(f);
         self.inner.build()
     }
@@ -362,7 +372,7 @@ impl JsonBuilder {
 
 /// Builder for arrays
 pub struct ArrayJsonBuilder<'a> {
-    inner: &'a mut JsonBuilderInner,
+    pub(crate) inner: &'a mut JsonBuilderInner,
 }
 
 impl ArrayJsonBuilder<'_> {
@@ -404,7 +414,7 @@ impl ArrayJsonBuilder<'_> {
 
 /// Builder for objects
 pub struct ObjectJsonBuilder<'a> {
-    inner: &'a mut JsonBuilderInner,
+    pub(crate) inner: &'a mut JsonBuilderInner,
 }
 
 impl ObjectJsonBuilder<'_> {
@@ -452,19 +462,19 @@ impl ObjectJsonBuilder<'_> {
 }
 
 /// Impl part of JsonBuilder that knows how to work with all the types.
-#[derive(Default)]
-struct JsonBuilderInner {
+#[derive(Default, Debug)]
+pub(crate) struct JsonBuilderInner {
     bytes: Vec<u8>,
 }
 
 impl JsonBuilderInner {
     /// Push a null onto the json tape
-    fn push_null(&mut self) {
+    pub(crate) fn push_null(&mut self) {
         self.bytes.push(0x00);
     }
 
     /// Push a bool onto the json tape
-    fn push_bool(&mut self, b: bool) {
+    pub(crate) fn push_bool(&mut self, b: bool) {
         if b {
             self.bytes.push(0x02);
         } else {
@@ -473,7 +483,7 @@ impl JsonBuilderInner {
     }
 
     /// Push an int onto the json tape
-    fn push_int(&mut self, i: i64) {
+    pub(crate) fn push_int(&mut self, i: i64) {
         if i8::MIN as i64 <= i && i <= i8::MAX as i64 {
             self.bytes.push(0x03);
             self.bytes.push(i as i8 as u8);
@@ -490,7 +500,7 @@ impl JsonBuilderInner {
     }
 
     /// Push a decimal onto the json tape
-    fn push_decimal(&mut self, d: Decimal) {
+    pub(crate) fn push_decimal(&mut self, d: Decimal) {
         d.normalize();
         let unpacked = d.unpack();
         let mut m =
@@ -544,7 +554,7 @@ impl JsonBuilderInner {
     }
 
     /// Push string onto the json tape
-    fn push_string(&mut self, s: &str) {
+    pub(crate) fn push_string(&mut self, s: &str) {
         let len = s.len();
         if len == 0 {
             self.bytes.push(0x17);
@@ -566,7 +576,7 @@ impl JsonBuilderInner {
     }
 
     /// Creates a json array
-    fn push_array<F: FnOnce(&mut ArrayJsonBuilder)>(&mut self, f: F) {
+    pub(crate) fn push_array<F: FnOnce(&mut ArrayJsonBuilder)>(&mut self, f: F) {
         // We'll optimistically hope that our array is <= 256 bytes long, so we'll only
         // reserve 1 byte for the length, if we're wrong we'll just have to do an memmove.
         self.bytes.push(0x1b);
@@ -603,7 +613,7 @@ impl JsonBuilderInner {
     }
 
     /// Creates a json array
-    fn push_object<F: FnOnce(&mut ObjectJsonBuilder)>(&mut self, f: F) {
+    pub(crate) fn push_object<F: FnOnce(&mut ObjectJsonBuilder)>(&mut self, f: F) {
         // We'll optimistically hope that our array is <= 256 bytes long, so we'll only
         // reserve 1 byte for the length, if we're wrong we'll just have to do an memmove.
         self.bytes.push(0x1f);
@@ -640,8 +650,8 @@ impl JsonBuilderInner {
     }
 
     /// Return the tape as a vector of bytes
-    fn build(self) -> Vec<u8> {
-        self.bytes
+    pub(crate) fn build(self) -> OwnedJson {
+        OwnedJson { bytes: self.bytes }
     }
 }
 
@@ -652,8 +662,8 @@ mod tests {
     #[test]
     fn test_null() {
         let builder = JsonBuilder::default();
-        let tape = builder.null();
-        let json = Json { bytes: &tape };
+        let owned_json = builder.null();
+        let json = owned_json.as_json();
 
         assert_eq!(json.json_type(), JsonType::Null);
         assert_eq!(json.size(), 1);
@@ -664,8 +674,8 @@ mod tests {
     #[test]
     fn test_bool() {
         let builder = JsonBuilder::default();
-        let tape = builder.bool(true);
-        let json = Json { bytes: &tape };
+        let owned_json = builder.bool(true);
+        let json = owned_json.as_json();
 
         assert_eq!(json.json_type(), JsonType::Boolean);
         assert_eq!(json.size(), 1);
@@ -676,8 +686,8 @@ mod tests {
     #[test]
     fn test_small_int() {
         let builder = JsonBuilder::default();
-        let tape = builder.int(-10);
-        let json = Json { bytes: &tape };
+        let owned_json = builder.int(-10);
+        let json = owned_json.as_json();
 
         assert_eq!(json.json_type(), JsonType::Number);
         assert_eq!(json.size(), 2);
@@ -688,8 +698,8 @@ mod tests {
     #[test]
     fn test_med_int() {
         let builder = JsonBuilder::default();
-        let tape = builder.int(100000);
-        let json = Json { bytes: &tape };
+        let owned_json = builder.int(100000);
+        let json = owned_json.as_json();
 
         assert_eq!(json.json_type(), JsonType::Number);
         assert_eq!(json.size(), 5);
@@ -700,11 +710,11 @@ mod tests {
     #[test]
     fn test_decimal() {
         let builder = JsonBuilder::default();
-        let tape = builder.decimal(Decimal::from_i128_with_scale(
+        let owned_json = builder.decimal(Decimal::from_i128_with_scale(
             -1234567890123456789012345,
             10,
         ));
-        let json = Json { bytes: &tape };
+        let json = owned_json.as_json();
 
         assert_eq!(json.json_type(), JsonType::Number);
         assert_eq!(json.size(), 14);
@@ -721,8 +731,8 @@ mod tests {
     #[test]
     fn test_string() {
         let builder = JsonBuilder::default();
-        let tape = builder.string("hello world");
-        let json = Json { bytes: &tape };
+        let owned_json = builder.string("hello world");
+        let json = owned_json.as_json();
 
         assert_eq!(json.json_type(), JsonType::String);
         assert_eq!(json.size(), 13);
@@ -733,15 +743,14 @@ mod tests {
     #[test]
     fn test_array() {
         let builder = JsonBuilder::default();
-        let tape = builder.array(|array| {
+        let owned_json = builder.array(|array| {
             array.push_int(1);
             array.push_array(|array| {
                 array.push_int(2);
             });
             array.push_int(3);
         });
-
-        let json = Json { bytes: &tape };
+        let json = owned_json.as_json();
 
         assert_eq!(json.json_type(), JsonType::Array);
         assert_eq!(json.size(), 10);
@@ -766,14 +775,13 @@ mod tests {
     #[test]
     fn test_medium_array() {
         let builder = JsonBuilder::default();
-        let tape = builder.array(|array| {
+        let owned_json = builder.array(|array| {
             for _ in 0..50 {
                 // with tag and size this should be 10 bytes
                 array.push_string("12345678");
             }
         });
-
-        let json = Json { bytes: &tape };
+        let json = owned_json.as_json();
 
         assert_eq!(json.json_type(), JsonType::Array);
         // 500 for contents + 1 byte tag + 2 bytes size
@@ -786,14 +794,13 @@ mod tests {
     #[test]
     fn test_large_array() {
         let builder = JsonBuilder::default();
-        let tape = builder.array(|array| {
+        let owned_json = builder.array(|array| {
             for _ in 0..10000 {
                 // with tag and size this should be 10 bytes
                 array.push_string("12345678");
             }
         });
-
-        let json = Json { bytes: &tape };
+        let json = owned_json.as_json();
 
         assert_eq!(json.json_type(), JsonType::Array);
         // 100000 for contents + 1 byte tag + 4 bytes size
@@ -806,13 +813,12 @@ mod tests {
     #[test]
     fn test_object() {
         let builder = JsonBuilder::default();
-        let tape = builder.object(|object| {
+        let owned_json = builder.object(|object| {
             object.push_int("first", 1);
             object.push_object("empty_obj", |_| {});
             object.push_int("last", -1);
         });
-
-        let json = Json { bytes: &tape };
+        let json = owned_json.as_json();
 
         assert_eq!(json.json_type(), JsonType::Object);
         assert_eq!(json.size(), 31);
