@@ -14,6 +14,7 @@ use ast::rel::point_in_time::PointInTimeOperator;
 use data::{Session, TupleIter};
 use std::sync::Arc;
 
+mod file_scan;
 mod filter;
 mod limit;
 mod negate_freq;
