@@ -42,22 +42,23 @@ fn select_union_explain() {
     query(
         r#"EXPLAIN SELECT c1 FROM (SELECT 1 as c1 UNION ALL SELECT 2)"#,
         "
-        |PROJECT|||
-        | |exprs:|||
-        | |  c1 <INTEGER>|0|<OFFSET 0>|
-        | |source:|||
-        | |  UNION_ALL|||
-        | |   |sources:|||
-        | |   |  PROJECT|||
-        | |   |   |exprs:|||
-        | |   |   |  c1 <INTEGER>|0|1|
-        | |   |   |source:|||
-        | |   |   |  SINGLE|||
-        | |   |  PROJECT|||
-        | |   |   |exprs:|||
-        | |   |   |  _col1 <INTEGER>|0|2|
-        | |   |   |source:|||
-        | |   |   |  SINGLE|||
+        |PROJECT||||
+        | |output_exprs:||||
+        | |  c1|0|INTEGER|<OFFSET 0>|
+        | |source:||||
+        | |  UNION_ALL||||
+        | |   |source_0:||||
+        | |   |  PROJECT||||
+        | |   |   |output_exprs:||||
+        | |   |   |  c1|0|INTEGER|1|
+        | |   |   |source:||||
+        | |   |   |  SINGLE||||
+        | |   |source_1:||||
+        | |   |  PROJECT||||
+        | |   |   |output_exprs:||||
+        | |   |   |  _col1|0|INTEGER|2|
+        | |   |   |source:||||
+        | |   |   |  SINGLE||||
         ",
     );
 }

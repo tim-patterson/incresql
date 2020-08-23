@@ -6,14 +6,13 @@ fn test_auto_convert_project() {
         connection.query(
             r#"explain select count(*) from incresql.databases"#,
             "
-            |GROUP|||
-            | |exprs:|||
-            | |  _col1 <BIGINT>|0|count()|
-            | |group keys:|||
-            | |source:|||
-            | |  TABLE(databases)|||
-            | |   |cols:|||
-            | |   |  name <TEXT>|0||
+        |GROUP||||
+        | |output_exprs:||||
+        | |  _col1|0|BIGINT|count()|
+        | |source:||||
+        | |  TABLE(databases)||||
+        | |   |columns:||||
+        | |   |  name|0|TEXT||
         ",
         );
 

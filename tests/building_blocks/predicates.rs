@@ -12,14 +12,15 @@ fn select_predicate_constant() {
     query(
         r#"EXPLAIN SELECT 1 where true"#,
         "
-        |PROJECT|||
-        | |exprs:|||
-        | |  _col1 <INTEGER>|0|1|
-        | |source:|||
-        | |  FILTER|||
-        | |   |predicate:||TRUE|
-        | |   |source:|||
-        | |   |  SINGLE|||
+        |PROJECT||||
+        | |output_exprs:||||
+        | |  _col1|0|INTEGER|1|
+        | |source:||||
+        | |  FILTER||||
+        | |   |predicate:||||
+        | |   |||BOOLEAN|TRUE|
+        | |   |source:||||
+        | |   |  SINGLE||||
         ",
     );
 }
@@ -36,18 +37,19 @@ fn select_predicate_reference() {
     query(
         r#"EXPLAIN SELECT foo from (select 1 as foo) where foo = 1"#,
         "
-        |PROJECT|||
-        | |exprs:|||
-        | |  foo <INTEGER>|0|<OFFSET 0>|
-        | |source:|||
-        | |  FILTER|||
-        | |   |predicate:||`=`(<OFFSET 0>, 1)|
-        | |   |source:|||
-        | |   |  PROJECT|||
-        | |   |   |exprs:|||
-        | |   |   |  foo <INTEGER>|0|1|
-        | |   |   |source:|||
-        | |   |   |  SINGLE|||
+        |PROJECT||||
+        | |output_exprs:||||
+        | |  foo|0|INTEGER|<OFFSET 0>|
+        | |source:||||
+        | |  FILTER||||
+        | |   |predicate:||||
+        | |   |||BOOLEAN|`=`(<OFFSET 0>, 1)|
+        | |   |source:||||
+        | |   |  PROJECT||||
+        | |   |   |output_exprs:||||
+        | |   |   |  foo|0|INTEGER|1|
+        | |   |   |source:||||
+        | |   |   |  SINGLE||||
         ",
     );
 }
