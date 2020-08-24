@@ -15,6 +15,7 @@ pub enum PointInTimeOperator {
     TableInsert(TableInsert),
     NegateFreq(Box<PointInTimeOperator>),
     SortedGroup(SortedGroup),
+    FileScan(FileScan),
 }
 
 impl Default for PointInTimeOperator {
@@ -77,4 +78,9 @@ pub struct SortedGroup {
     pub source: Box<PointInTimeOperator>,
     pub expressions: Vec<Expression>,
     pub key_len: usize,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct FileScan {
+    pub directory: String,
 }

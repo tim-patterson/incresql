@@ -1,17 +1,14 @@
-use crate::utils::right_size_new_to;
 use crate::ExecutionError;
+use data::json::{JsonBuilder, OwnedJson};
 use data::{Datum, TupleIter};
-use std::fs::File;
-use std::io::BufReader;
 use std::iter::{empty, once};
 use std::path::PathBuf;
-use data::json::{OwnedJson, JsonBuilder};
 
 /// Walks all the files in the directory reads them in as json.
 pub struct FileScanExecutor {
     lines: Box<dyn Iterator<Item = Result<OwnedJson, ExecutionError>>>,
-    tuple: [Datum<'static>;1],
-    done: bool
+    tuple: [Datum<'static>; 1],
+    done: bool,
 }
 
 impl FileScanExecutor {
@@ -20,8 +17,8 @@ impl FileScanExecutor {
 
         FileScanExecutor {
             lines: Box::from(file_entries.flat_map(csv_lines)),
-            tuple: [Datum::Null;1],
-            done: false
+            tuple: [Datum::Null; 1],
+            done: false,
         }
     }
 }
@@ -86,24 +83,26 @@ fn entries(entry: PathBuf) -> Box<dyn Iterator<Item = Result<PathBuf, std::io::E
 //     }
 // }
 
-fn csv_lines(entry: Result<PathBuf, std::io::Error>) -> Box<dyn Iterator<Item=Result<OwnedJson, ExecutionError>>> {
+fn csv_lines(
+    entry: Result<PathBuf, std::io::Error>,
+) -> Box<dyn Iterator<Item = Result<OwnedJson, ExecutionError>>> {
     match entry {
         Ok(entry) => {
             let mut builder = csv::ReaderBuilder::new();
             builder.has_headers(false);
             let reader_result = builder.from_path(entry);
             match reader_result {
-                Ok(reader) => {
-                    Box::from(reader.into_records().map(|record_result| {
-                        record_result.map(|record| {
+                Ok(reader) => Box::from(reader.into_records().map(|record_result| {
+                    record_result
+                        .map(|record| {
                             JsonBuilder::default().array(|array| {
                                 for col in record.iter() {
                                     array.push_string(col);
                                 }
                             })
-                        }).map_err(ExecutionError::from)
-                    }))
-                }
+                        })
+                        .map_err(ExecutionError::from)
+                })),
                 Err(e) => Box::from(once(Err(e.into()))),
             }
         }
@@ -158,8 +157,14 @@ mod tests {
             array.push_string("13.2");
         });
 
-        assert_eq!(executor.next()?, Some(([Datum::from(expected_line1)].as_ref(), 1)));
-        assert_eq!(executor.next()?, Some(([Datum::from(expected_line2)].as_ref(), 1)));
+        assert_eq!(
+            executor.next()?,
+            Some(([Datum::from(expected_line1)].as_ref(), 1))
+        );
+        assert_eq!(
+            executor.next()?,
+            Some(([Datum::from(expected_line2)].as_ref(), 1))
+        );
         assert_eq!(executor.next()?, None);
 
         Ok(())
@@ -178,7 +183,10 @@ mod tests {
         });
 
         // Lets just test the first line
-        assert_eq!(executor.next()?, Some(([Datum::from(expected_line1)].as_ref(), 1)));
+        assert_eq!(
+            executor.next()?,
+            Some(([Datum::from(expected_line1)].as_ref(), 1))
+        );
 
         Ok(())
     }

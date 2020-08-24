@@ -1,3 +1,4 @@
+use crate::point_in_time::file_scan::FileScanExecutor;
 use crate::point_in_time::filter::FilterExecutor;
 use crate::point_in_time::limit::LimitExecutor;
 use crate::point_in_time::negate_freq::NegateFreqExecutor;
@@ -80,6 +81,9 @@ pub fn build_executor(session: &Arc<Session>, plan: &PointInTimeOperator) -> Box
             sorted_group.key_len,
             sorted_group.expressions.clone(),
         )),
+        PointInTimeOperator::FileScan(file_scan) => {
+            Box::from(FileScanExecutor::new(file_scan.directory.clone()))
+        }
     }
 }
 

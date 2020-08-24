@@ -11,7 +11,7 @@ mod utils;
 pub enum ExecutionError {
     StorageError(StorageError),
     IOError(String),
-    DecodingError(String)
+    DecodingError(String),
 }
 
 impl Error for ExecutionError {}
