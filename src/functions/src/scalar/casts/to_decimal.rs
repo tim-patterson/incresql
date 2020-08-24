@@ -116,6 +116,42 @@ impl Function for ToDecimalFromText {
     }
 }
 
+#[derive(Debug)]
+struct ToDecimalFromJson {}
+
+impl Function for ToDecimalFromJson {
+    fn execute<'a>(
+        &self,
+        _session: &Session,
+        signature: &FunctionSignature,
+        args: &'a [Datum<'a>],
+    ) -> Datum<'a> {
+        // We need to try both the json::number and the json::text and do rescaling
+        if let (Some(mut d), DataType::Decimal(_p, s)) = (
+            args[0].as_maybe_json().and_then(|j| j.get_number()),
+            signature.ret,
+        ) {
+            if (s as u32) < d.scale() {
+                d.rescale(s as u32);
+            }
+            Datum::from(d)
+        } else if let (Some(mut d), DataType::Decimal(_p, s)) = (
+            args[0]
+                .as_maybe_json()
+                .and_then(|j| j.get_string())
+                .and_then(|s| Decimal::from_str(s).ok()),
+            signature.ret,
+        ) {
+            if (s as u32) < d.scale() {
+                d.rescale(s as u32);
+            }
+            Datum::from(d)
+        } else {
+            Datum::Null
+        }
+    }
+}
+
 pub fn register_builtins(registry: &mut Registry) {
     registry.register_function(FunctionDefinition::new(
         "to_decimal",
@@ -153,11 +189,19 @@ pub fn register_builtins(registry: &mut Registry) {
         DataType::Decimal(DECIMAL_MAX_PRECISION, DECIMAL_MAX_SCALE),
         FunctionType::Scalar(&ToDecimalFromText {}),
     ));
+
+    registry.register_function(FunctionDefinition::new(
+        "to_decimal",
+        vec![DataType::Json],
+        DataType::Decimal(DECIMAL_MAX_PRECISION, DECIMAL_MAX_SCALE),
+        FunctionType::Scalar(&ToDecimalFromJson {}),
+    ));
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use data::json::OwnedJson;
     use data::rust_decimal::Decimal;
 
     const DUMMY_SIG: FunctionSignature = FunctionSignature {
@@ -214,6 +258,27 @@ mod tests {
     fn test_from_text() {
         assert_eq!(
             ToDecimalFromText {}.execute(&Session::new(1), &DUMMY_SIG, &[Datum::from("1234.5678")]),
+            Datum::from(Decimal::new(123457, 2))
+        )
+    }
+
+    #[test]
+    fn test_from_json() {
+        assert_eq!(
+            ToDecimalFromJson {}.execute(
+                &Session::new(1),
+                &DUMMY_SIG,
+                &[Datum::from(OwnedJson::parse("1234.5678").unwrap())]
+            ),
+            Datum::from(Decimal::new(123457, 2))
+        );
+
+        assert_eq!(
+            ToDecimalFromJson {}.execute(
+                &Session::new(1),
+                &DUMMY_SIG,
+                &[Datum::from(OwnedJson::parse("\"1234.5678\"").unwrap())]
+            ),
             Datum::from(Decimal::new(123457, 2))
         )
     }

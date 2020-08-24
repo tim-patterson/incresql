@@ -120,17 +120,8 @@ mod tests {
 
         let mut line_iter = csv_lines(Ok(path));
 
-        let expected_line1 = JsonBuilder::default().array(|array| {
-            array.push_string("123");
-            array.push_string("abc");
-            array.push_string("12.1");
-        });
-
-        let expected_line2 = JsonBuilder::default().array(|array| {
-            array.push_string("456");
-            array.push_string("d,ef");
-            array.push_string("13.2");
-        });
+        let expected_line1 = OwnedJson::parse(r#"["123","abc","12.1"]"#).unwrap();
+        let expected_line2 = OwnedJson::parse(r#"["456","d,ef","13.2"]"#).unwrap();
 
         assert_eq!(line_iter.next().unwrap().unwrap(), expected_line1);
         assert_eq!(line_iter.next().unwrap().unwrap(), expected_line2);
@@ -145,17 +136,8 @@ mod tests {
 
         let mut executor = FileScanExecutor::new(directory);
 
-        let expected_line1 = JsonBuilder::default().array(|array| {
-            array.push_string("123");
-            array.push_string("abc");
-            array.push_string("12.1");
-        });
-
-        let expected_line2 = JsonBuilder::default().array(|array| {
-            array.push_string("456");
-            array.push_string("d,ef");
-            array.push_string("13.2");
-        });
+        let expected_line1 = OwnedJson::parse(r#"["123","abc","12.1"]"#).unwrap();
+        let expected_line2 = OwnedJson::parse(r#"["456","d,ef","13.2"]"#).unwrap();
 
         assert_eq!(
             executor.next()?,
@@ -176,11 +158,7 @@ mod tests {
 
         let mut executor = FileScanExecutor::new(directory);
 
-        let expected_line1 = JsonBuilder::default().array(|array| {
-            array.push_string("123");
-            array.push_string("abc");
-            array.push_string("12.1");
-        });
+        let expected_line1 = OwnedJson::parse(r#"["123","abc","12.1"]"#).unwrap();
 
         // Lets just test the first line
         assert_eq!(

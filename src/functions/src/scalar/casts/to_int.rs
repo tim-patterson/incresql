@@ -92,6 +92,35 @@ impl Function for ToIntFromText {
     }
 }
 
+#[derive(Debug)]
+struct ToIntFromJson {}
+
+impl Function for ToIntFromJson {
+    fn execute<'a>(
+        &self,
+        _session: &Session,
+        _signature: &FunctionSignature,
+        args: &'a [Datum<'a>],
+    ) -> Datum<'a> {
+        // We need to try both the json::number and the json::text
+        if let Some(i) = args[0]
+            .as_maybe_json()
+            .and_then(|j| j.get_number())
+            .and_then(|d| d.to_i32())
+        {
+            Datum::from(i)
+        } else if let Some(i) = args[0]
+            .as_maybe_json()
+            .and_then(|j| j.get_string())
+            .and_then(|s| s.parse::<i32>().ok())
+        {
+            Datum::from(i)
+        } else {
+            Datum::Null
+        }
+    }
+}
+
 pub fn register_builtins(registry: &mut Registry) {
     registry.register_function(FunctionDefinition::new(
         "to_int",
@@ -127,11 +156,19 @@ pub fn register_builtins(registry: &mut Registry) {
         DataType::Integer,
         FunctionType::Scalar(&ToIntFromText {}),
     ));
+
+    registry.register_function(FunctionDefinition::new(
+        "to_int",
+        vec![DataType::Json],
+        DataType::Integer,
+        FunctionType::Scalar(&ToIntFromJson {}),
+    ));
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use data::json::OwnedJson;
     use data::rust_decimal::Decimal;
 
     const DUMMY_SIG: FunctionSignature = FunctionSignature {
@@ -190,5 +227,35 @@ mod tests {
             ToIntFromText {}.execute(&Session::new(1), &DUMMY_SIG, &[Datum::from("1")]),
             Datum::from(1)
         )
+    }
+
+    #[test]
+    fn test_from_json() {
+        assert_eq!(
+            ToIntFromJson {}.execute(
+                &Session::new(1),
+                &DUMMY_SIG,
+                &[Datum::from(OwnedJson::parse("1").unwrap())]
+            ),
+            Datum::from(1)
+        );
+
+        assert_eq!(
+            ToIntFromJson {}.execute(
+                &Session::new(1),
+                &DUMMY_SIG,
+                &[Datum::from(OwnedJson::parse("\"1\"").unwrap())]
+            ),
+            Datum::from(1)
+        );
+
+        assert_eq!(
+            ToIntFromJson {}.execute(
+                &Session::new(1),
+                &DUMMY_SIG,
+                &[Datum::from(OwnedJson::parse("12345.2").unwrap())]
+            ),
+            Datum::from(12345)
+        );
     }
 }
