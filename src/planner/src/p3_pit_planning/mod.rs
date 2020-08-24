@@ -172,6 +172,11 @@ fn build_operator(query: LogicalOperator) -> PointInTimeOperator {
             PointInTimeOperator::NegateFreq(Box::new(build_operator(*source)))
         }
         LogicalOperator::TableAlias(table_alias) => build_operator(*table_alias.source),
+        LogicalOperator::FileScan(file_scan) => {
+            PointInTimeOperator::FileScan(point_in_time::FileScan {
+                directory: file_scan.directory,
+            })
+        }
         LogicalOperator::TableReference(_) => panic!(),
     }
 }

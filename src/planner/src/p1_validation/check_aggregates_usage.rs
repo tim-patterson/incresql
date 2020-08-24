@@ -24,16 +24,7 @@ pub(super) fn check_for_aggregates(operator: &mut LogicalOperator) -> Result<(),
         }
         // These have no expressions in them to be checked
         // Any in the project would have caused the project to be converted to a group by.
-        LogicalOperator::Project(_)
-        | LogicalOperator::Single
-        | LogicalOperator::Limit(_)
-        | LogicalOperator::Values(_)
-        | LogicalOperator::TableAlias(_)
-        | LogicalOperator::UnionAll(_)
-        | LogicalOperator::TableReference(_)
-        | LogicalOperator::ResolvedTable(_)
-        | LogicalOperator::TableInsert(_)
-        | LogicalOperator::NegateFreq(_) => {}
+        _ => {}
     }
     Ok(())
 }

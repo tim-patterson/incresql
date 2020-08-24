@@ -5,6 +5,7 @@ use crate::Planner;
 use ast::expr::{Expression, NamedExpression, SortExpression};
 use ast::rel::logical::{LogicalOperator, Values};
 use data::DataType;
+use std::borrow::Cow;
 use std::fmt::{Display, Formatter};
 
 /// A trait to be implemented by the nodes to be rendered in an explain plan
@@ -18,7 +19,7 @@ pub trait ExplainNode {
 
     // Any columns from tables, rendered in the same as expressions, but without
     // the expression itself
-    fn table_columns(&self) -> &[(String, DataType)];
+    fn table_columns(&self) -> Cow<[(String, DataType)]>;
 
     fn limit_offset(&self) -> Option<(i64, i64)>;
 

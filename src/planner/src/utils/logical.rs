@@ -1,7 +1,8 @@
 use crate::utils::expr::type_for_expression;
 use crate::Field;
 use ast::rel::logical::LogicalOperator;
-use std::iter::empty;
+use data::DataType;
+use std::iter::{empty, once};
 
 /// Returns the fields for an operator, will panic if called before query is normalized
 pub(crate) fn fields_for_operator(
@@ -43,6 +44,11 @@ pub(crate) fn fields_for_operator(
         }
         LogicalOperator::NegateFreq(source) => fields_for_operator(source),
         LogicalOperator::Single | LogicalOperator::TableInsert(_) => Box::from(empty()),
+        LogicalOperator::FileScan(_) => Box::from(once(Field {
+            qualifier: None,
+            alias: "data".to_string(),
+            data_type: DataType::Json,
+        })),
         LogicalOperator::TableReference(_) => panic!(),
     }
 }
@@ -82,6 +88,7 @@ pub(crate) fn fieldnames_for_operator(
                 .map(|(alias, _datatype)| (None, alias.as_str())),
         ),
         LogicalOperator::NegateFreq(source) => fieldnames_for_operator(source),
+        LogicalOperator::FileScan(_) => Box::from(once((None, "data"))),
         LogicalOperator::Single | LogicalOperator::TableInsert(_) => Box::from(empty()),
         LogicalOperator::TableReference(_) => panic!(),
     }
@@ -108,6 +115,7 @@ pub(crate) fn source_fields_for_operator(
         LogicalOperator::Values(_)
         | LogicalOperator::Single
         | LogicalOperator::TableReference(_)
+        | LogicalOperator::FileScan(_)
         | LogicalOperator::ResolvedTable(_) => Box::from(empty()),
     }
 }

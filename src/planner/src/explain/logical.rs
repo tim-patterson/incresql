@@ -2,6 +2,7 @@ use crate::explain::ExplainNode;
 use ast::expr::{Expression, NamedExpression, SortExpression};
 use ast::rel::logical::LogicalOperator;
 use data::DataType;
+use std::borrow::Cow;
 
 impl ExplainNode for LogicalOperator {
     fn node_name(&self) -> String {
@@ -22,6 +23,7 @@ impl ExplainNode for LogicalOperator {
             LogicalOperator::UnionAll(_) => "UNION_ALL".to_string(),
             LogicalOperator::TableInsert(_) => "INSERT".to_string(),
             LogicalOperator::NegateFreq(_) => "NEGATE".to_string(),
+            LogicalOperator::FileScan(_) => "FILE_SCAN".to_string(),
         }
     }
 
@@ -34,11 +36,12 @@ impl ExplainNode for LogicalOperator {
         }
     }
 
-    fn table_columns(&self) -> &[(String, DataType)] {
+    fn table_columns(&self) -> Cow<[(String, DataType)]> {
         match self {
             LogicalOperator::TableAlias(table_alias) => table_alias.source.table_columns(),
-            LogicalOperator::ResolvedTable(table) => table.table.columns(),
-            _ => &[],
+            LogicalOperator::ResolvedTable(table) => Cow::from(table.table.columns()),
+            LogicalOperator::FileScan(_) => Cow::from(vec![("data".to_string(), DataType::Json)]),
+            _ => Cow::from(vec![]),
         }
     }
 
@@ -76,15 +79,11 @@ impl ExplainNode for LogicalOperator {
 
     fn child_nodes(&self) -> Vec<(String, &Self)> {
         match self {
-            LogicalOperator::Single => vec![],
             LogicalOperator::GroupBy(group) => vec![("source".to_string(), group.source.as_ref())],
             LogicalOperator::Project(project) => {
                 vec![("source".to_string(), project.source.as_ref())]
             }
             LogicalOperator::Sort(sort) => vec![("source".to_string(), sort.source.as_ref())],
-            LogicalOperator::Values(_)
-            | LogicalOperator::ResolvedTable(_)
-            | LogicalOperator::TableReference(_) => vec![],
             LogicalOperator::Filter(filter) => vec![("source".to_string(), filter.source.as_ref())],
             LogicalOperator::Limit(limit) => vec![("source".to_string(), limit.source.as_ref())],
             LogicalOperator::TableAlias(table_alias) => table_alias.source.child_nodes(),
@@ -98,6 +97,11 @@ impl ExplainNode for LogicalOperator {
                 vec![("source".to_string(), insert.source.as_ref())]
             }
             LogicalOperator::NegateFreq(source) => vec![("source".to_string(), source.as_ref())],
+            LogicalOperator::Values(_)
+            | LogicalOperator::ResolvedTable(_)
+            | LogicalOperator::Single
+            | LogicalOperator::FileScan(_)
+            | LogicalOperator::TableReference(_) => vec![],
         }
     }
 }
