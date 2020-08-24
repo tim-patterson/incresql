@@ -123,7 +123,7 @@ impl<'a> MysqlConnection<'a> {
                             self.send_packet(|buf| {
                                 write_err_packet_from_err(&my_err, capabilities, buf)
                             })?;
-                            break;
+                            return Ok(());
                         }
                     }
                 }

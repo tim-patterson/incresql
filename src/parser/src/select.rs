@@ -1,10 +1,11 @@
-use crate::atoms::{as_clause, integer, kw, qualified_reference};
+use crate::atoms::{as_clause, integer, kw, qualified_reference, quoted_string};
 use crate::expression::{comma_sep_expressions, expression, named_expression, sort_expression};
 use crate::whitespace::ws_0;
 use crate::ParserResult;
 use ast::expr::{Expression, NamedExpression, SortExpression};
 use ast::rel::logical::{
-    Filter, GroupBy, Limit, LogicalOperator, Project, Sort, TableAlias, TableReference, UnionAll,
+    FileScan, Filter, GroupBy, Limit, LogicalOperator, Project, Sort, TableAlias, TableReference,
+    UnionAll,
 };
 use nom::branch::alt;
 use nom::bytes::complete::tag;
@@ -120,6 +121,7 @@ fn from_item(input: &str) -> ParserResult<LogicalOperator> {
 fn unaliased_from_item(input: &str) -> ParserResult<LogicalOperator> {
     alt((
         // sub query
+        directory_source,
         delimited(pair(tag("("), ws_0), select, pair(ws_0, tag(")"))),
         table_reference_with_alias,
     ))(input)
@@ -189,6 +191,14 @@ fn table_reference_with_alias(input: &str) -> ParserResult<LogicalOperator> {
             source: Box::new(table_source),
         })
     })(input)
+}
+
+/// Parse a file source
+fn directory_source(input: &str) -> ParserResult<LogicalOperator> {
+    map(
+        preceded(kw("DIRECTORY"), cut(preceded(ws_0, quoted_string))),
+        |directory| LogicalOperator::FileScan(FileScan { directory }),
+    )(input)
 }
 
 #[cfg(test)]
@@ -422,6 +432,23 @@ mod tests {
                 source: Box::new(LogicalOperator::TableReference(TableReference {
                     database: Some("foo".to_string()),
                     table: "bar".to_string()
+                })),
+            })
+        );
+    }
+
+    #[test]
+    fn test_directory_src() {
+        assert_eq!(
+            select(r#"SELECT 1 FROM DIRECTORY "test""#).unwrap().1,
+            LogicalOperator::Project(Project {
+                distinct: false,
+                expressions: vec![NamedExpression {
+                    expression: Expression::from(1),
+                    alias: None,
+                }],
+                source: Box::new(LogicalOperator::FileScan(FileScan {
+                    directory: "test".to_string()
                 })),
             })
         );
