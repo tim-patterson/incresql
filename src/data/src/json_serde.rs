@@ -47,6 +47,14 @@ impl Serialize for Json<'_> {
     }
 }
 
+/// This deserialize treats Json(OwnedJson) as a Serializable object rather than a serializer,
+/// This allows us to use serde json to deserialize to our Json objects from json strings
+/// (or any other supported serde format, ie csv).
+/// Json Serde seems to be the only json parser around at the moment that supports properly parsing
+/// in numbers as decimals rather than going to floats.
+/// Once this lands https://github.com/simdjson/simdjson/issues/489
+/// and https://github.com/simdjson/simdjson/issues/923 this land then switching to simdjson is
+/// probably the way to go given how common parsing json is.
 impl<'de> Deserialize<'de> for OwnedJson {
     fn deserialize<D>(deserializer: D) -> Result<Self, <D as Deserializer<'de>>::Error>
     where

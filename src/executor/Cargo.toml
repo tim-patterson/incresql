@@ -11,5 +11,7 @@ data = { path = "../data" }
 functions = { path = "../functions" }
 storage = { path = "../storage" }
 
+csv = "1.1"
+
 [dev-dependencies]
 catalog = { path = "../catalog" }

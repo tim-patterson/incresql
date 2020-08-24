@@ -14,7 +14,9 @@ pub fn write_int_2(i: u16, buffer: &mut Vec<u8>) {
 }
 
 pub fn read_int_2<'a>(i: &mut u16, buffer: &'a [u8]) -> &'a [u8] {
-    *i = u16::from_le_bytes(buffer[..2].as_ref().try_into().unwrap());
+    // There seems to be a bug? in the rust compiler that screws up type inf here for as_ref due to
+    // a type just being used in another crate in the workspace...
+    *i = u16::from_le_bytes(AsRef::<[u8]>::as_ref(&buffer[..2]).try_into().unwrap());
     &buffer[2..]
 }
 
@@ -36,7 +38,7 @@ pub fn write_int_4(i: u32, buffer: &mut Vec<u8>) {
 }
 
 pub fn read_int_4<'a>(i: &mut u32, buffer: &'a [u8]) -> &'a [u8] {
-    *i = u32::from_le_bytes(buffer[..4].as_ref().try_into().unwrap());
+    *i = u32::from_le_bytes(AsRef::<[u8]>::as_ref(&buffer[..4]).try_into().unwrap());
     &buffer[4..]
 }
 
@@ -72,7 +74,7 @@ pub fn read_enc_int<'a>(i: &mut u64, buffer: &'a [u8]) -> &'a [u8] {
         }
         0xfe => {
             // 8 byte
-            *i = u64::from_le_bytes(buffer[1..9].as_ref().try_into().unwrap());
+            *i = u64::from_le_bytes(AsRef::<[u8]>::as_ref(&buffer[1..9]).try_into().unwrap());
             &buffer[9..]
         }
         b => {

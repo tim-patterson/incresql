@@ -1,5 +1,7 @@
 use rust_decimal::prelude::*;
 use std::convert::TryInto;
+use std::fmt::Debug;
+use std::fmt::Formatter;
 
 /// Json Data
 /// There's a few in memory representations we could use for json.
@@ -60,6 +62,9 @@ pub struct Json<'a> {
     pub(crate) bytes: &'a [u8],
 }
 
+/// This is just a wrapper around a vec<u8>, its whats returned from
+/// the json builder
+#[derive(Clone, Eq, PartialEq)]
 pub struct OwnedJson {
     pub(crate) bytes: Vec<u8>,
 }
@@ -67,6 +72,12 @@ pub struct OwnedJson {
 impl OwnedJson {
     pub fn as_json(&self) -> Json<'_> {
         Json { bytes: &self.bytes }
+    }
+}
+
+impl Debug for OwnedJson {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&serde_json::to_string(&self.as_json()).unwrap())
     }
 }
 
