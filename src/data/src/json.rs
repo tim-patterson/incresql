@@ -212,7 +212,7 @@ impl<'a> Json<'a> {
     }
 
     /// Iter over an array
-    pub fn iter_array(&'a self) -> Option<impl Iterator<Item = Json<'a>>> {
+    pub fn iter_array(self) -> Option<impl Iterator<Item = Json<'a>>> {
         if self.json_type() == JsonType::Array {
             Some(JsonIter {
                 json: Json {
@@ -229,7 +229,7 @@ impl<'a> Json<'a> {
     }
 
     /// Iter over an object
-    pub fn iter_object(&'a self) -> Option<impl Iterator<Item = (&'a str, Json<'a>)>> {
+    pub fn iter_object(self) -> Option<impl Iterator<Item = (&'a str, Json<'a>)>> {
         if self.json_type() == JsonType::Object {
             Some(JsonObjectIter {
                 inner: JsonIter {
