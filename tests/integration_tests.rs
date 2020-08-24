@@ -1,6 +1,7 @@
 mod building_blocks;
 mod create;
 mod delete;
+mod file_sources;
 mod group;
 mod insert;
 mod optimize;

@@ -21,6 +21,7 @@ pub enum LogicalOperator {
     ResolvedTable(ResolvedTable),
     TableInsert(TableInsert),
     NegateFreq(Box<LogicalOperator>),
+    FileScan(FileScan),
 }
 
 impl Default for LogicalOperator {
@@ -105,6 +106,11 @@ pub struct TableInsert {
     pub source: Box<LogicalOperator>,
 }
 
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct FileScan {
+    pub directory: String,
+}
+
 impl LogicalOperator {
     /// Iterates over the named(output) expressions *owned* by this operator.
     /// To iterate over the output fields instead use one of the fields methods in the planner
@@ -122,7 +128,8 @@ impl LogicalOperator {
             | LogicalOperator::TableReference(_)
             | LogicalOperator::ResolvedTable(_)
             | LogicalOperator::TableInsert(_)
-            | LogicalOperator::NegateFreq(_) => Box::from(empty()),
+            | LogicalOperator::NegateFreq(_)
+            | LogicalOperator::FileScan(_) => Box::from(empty()),
         }
     }
 
@@ -142,7 +149,8 @@ impl LogicalOperator {
             | LogicalOperator::TableReference(_)
             | LogicalOperator::ResolvedTable(_)
             | LogicalOperator::TableInsert(_)
-            | LogicalOperator::NegateFreq(_) => Box::from(empty()),
+            | LogicalOperator::NegateFreq(_)
+            | LogicalOperator::FileScan(_) => Box::from(empty()),
         }
     }
 
@@ -175,7 +183,8 @@ impl LogicalOperator {
             | LogicalOperator::TableReference(_)
             | LogicalOperator::ResolvedTable(_)
             | LogicalOperator::TableInsert(_)
-            | LogicalOperator::NegateFreq(_) => Box::from(empty()),
+            | LogicalOperator::NegateFreq(_)
+            | LogicalOperator::FileScan(_) => Box::from(empty()),
         }
     }
 
@@ -198,7 +207,8 @@ impl LogicalOperator {
             LogicalOperator::Single
             | LogicalOperator::Values(_)
             | LogicalOperator::TableReference(_)
-            | LogicalOperator::ResolvedTable(_) => Box::from(empty()),
+            | LogicalOperator::ResolvedTable(_)
+            | LogicalOperator::FileScan(_) => Box::from(empty()),
         }
     }
 }
