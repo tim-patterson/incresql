@@ -45,12 +45,12 @@ pub fn quoted_string(input: &str) -> ParserResult<String> {
 /// Parse an integer
 pub fn integer(input: &str) -> ParserResult<i64> {
     map_res(
-        pair(
+        recognize(pair(
             opt(tag("-")),
             // Take .'s and then fail in result so we don't wrongly parse just the start of a float
             take_while(|c: char| c.is_dec_digit() || c == '.'),
-        ),
-        |(neg, digits)| (neg.unwrap_or("").to_string() + digits).parse(),
+        )),
+        |s: &str| s.parse(),
     )(input)
 }
 
