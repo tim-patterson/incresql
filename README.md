@@ -72,7 +72,7 @@ To connect to incresql first start it by running
 
 And then in another terminal (tab) run(assuming you have the mysql client installed):
 ```sh
-  mysql -h 127.0.0.1
+  mysql -h 127.0.0.1 -P3307
 
   mysql> select 1+2;
 ```

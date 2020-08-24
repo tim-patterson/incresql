@@ -73,6 +73,10 @@ impl OwnedJson {
     pub fn as_json(&self) -> Json<'_> {
         Json { bytes: &self.bytes }
     }
+
+    pub fn parse(s: &str) -> Option<OwnedJson> {
+        serde_json::from_str(s).ok()
+    }
 }
 
 impl Debug for OwnedJson {
@@ -164,7 +168,7 @@ impl<'a> Json<'a> {
         let (scale, rest) = match self.bytes[0] {
             0x03..=0x07 => (0_u8, &self.bytes[1..]),
             0x08..=0x0c => (1, &self.bytes[1..]),
-            0x0d..=0x11 => (12, &self.bytes[1..]),
+            0x0d..=0x11 => (2, &self.bytes[1..]),
             0x12..=0x16 => (self.bytes[1], &self.bytes[2..]),
             _ => return None,
         };

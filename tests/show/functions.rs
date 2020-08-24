@@ -18,6 +18,7 @@ fn show_functions() {
             |to_bool|
             |to_decimal|
             |to_int|
+            |to_json|
             |to_text|
             |type_of|
         ",

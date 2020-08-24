@@ -3,7 +3,7 @@ use server::Server;
 use std::error::Error;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let listen_address = "0.0.0.0:3306";
+    let listen_address = "0.0.0.0:3307";
     let path = "target/test_db";
     eprintln!("Initializing Runtime");
     let runtime = Runtime::new(path)?;
