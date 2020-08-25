@@ -59,6 +59,32 @@ impl<'a> Datum<'a> {
         }
     }
 
+    /// As datums can reference data external to themselves they're only guaranteed to be valid
+    /// for the current iteration of the iterator/loop etc. This method consumes a datum
+    /// and returns a static equivalent, in the case where the datum already owns
+    /// some data on the heap this will prevent us from making a copy where we don't need to.
+    pub fn into_static(self) -> Datum<'static> {
+        match self {
+            Datum::Null => Datum::Null,
+            Datum::Boolean(b) => Datum::Boolean(b),
+            Datum::Integer(i) => Datum::Integer(i),
+            Datum::BigInt(i) => Datum::BigInt(i),
+            Datum::Decimal(d) => Datum::Decimal(d),
+            Datum::ByteAOwned(s) => Datum::ByteAOwned(s),
+            Datum::ByteAInline(l, bytes) => Datum::ByteAInline(l, bytes),
+            Datum::ByteARef(s) => {
+                let len = s.len();
+                if len <= 22 {
+                    let mut bytes = [0_u8; 22];
+                    bytes.as_mut()[..len].copy_from_slice(s);
+                    Datum::ByteAInline(len as u8, bytes)
+                } else {
+                    Datum::ByteAOwned(Box::from(s))
+                }
+            }
+        }
+    }
+
     /// Returns true if this value is null
     pub fn is_null(&self) -> bool {
         if let Datum::Null = self {

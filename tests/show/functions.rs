@@ -10,6 +10,7 @@ fn show_functions() {
         |+|
         |-|
         |->|
+        |->>|
         |/|
         |=|
         |count|
