@@ -73,6 +73,10 @@ impl OwnedJson {
     pub fn as_json(&self) -> Json<'_> {
         Json { bytes: &self.bytes }
     }
+
+    pub fn parse(s: &str) -> Option<OwnedJson> {
+        serde_json::from_str(s).ok()
+    }
 }
 
 impl Debug for OwnedJson {
@@ -164,7 +168,7 @@ impl<'a> Json<'a> {
         let (scale, rest) = match self.bytes[0] {
             0x03..=0x07 => (0_u8, &self.bytes[1..]),
             0x08..=0x0c => (1, &self.bytes[1..]),
-            0x0d..=0x11 => (12, &self.bytes[1..]),
+            0x0d..=0x11 => (2, &self.bytes[1..]),
             0x12..=0x16 => (self.bytes[1], &self.bytes[2..]),
             _ => return None,
         };
@@ -208,7 +212,7 @@ impl<'a> Json<'a> {
     }
 
     /// Iter over an array
-    pub fn iter_array(&'a self) -> Option<impl Iterator<Item = Json<'a>>> {
+    pub fn iter_array(self) -> Option<impl Iterator<Item = Json<'a>>> {
         if self.json_type() == JsonType::Array {
             Some(JsonIter {
                 json: Json {
@@ -225,7 +229,7 @@ impl<'a> Json<'a> {
     }
 
     /// Iter over an object
-    pub fn iter_object(&'a self) -> Option<impl Iterator<Item = (&'a str, Json<'a>)>> {
+    pub fn iter_object(self) -> Option<impl Iterator<Item = (&'a str, Json<'a>)>> {
         if self.json_type() == JsonType::Object {
             Some(JsonObjectIter {
                 inner: JsonIter {
@@ -420,6 +424,11 @@ impl ArrayJsonBuilder<'_> {
     /// Append a json object
     pub fn push_object<F: FnOnce(&mut ObjectJsonBuilder)>(&mut self, f: F) {
         self.inner.push_object(f);
+    }
+
+    /// Append an existing json object/reference
+    pub fn push_json(&mut self, j: Json) {
+        self.inner.push_json(j);
     }
 }
 
@@ -657,6 +666,14 @@ impl JsonBuilderInner {
                 .copy_from_slice(&(array_len as u32).to_le_bytes());
         } else {
             panic!("Oversized object {}", array_len);
+        }
+    }
+
+    pub(crate) fn push_json(&mut self, j: Json) {
+        if j.bytes.is_empty() {
+            self.push_null()
+        } else {
+            self.bytes.extend_from_slice(j.bytes);
         }
     }
 

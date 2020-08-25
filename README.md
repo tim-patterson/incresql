@@ -23,7 +23,7 @@ materialized views.
 - [x] Persistence/Table infra.
 - [x] Inserts / Deletes for tables.
 - [x] Basic "point in time" order bys and group bys
-- [ ] Data ingestion
+- [x] Data ingestion
 - [ ] Basic "point in time" (inner) joins
 - [ ] Basic "point in time" window functions
 - [ ] View support
@@ -72,7 +72,7 @@ To connect to incresql first start it by running
 
 And then in another terminal (tab) run(assuming you have the mysql client installed):
 ```sh
-  mysql -h 127.0.0.1
+  mysql -h 127.0.0.1 -P3307
 
   mysql> select 1+2;
 ```

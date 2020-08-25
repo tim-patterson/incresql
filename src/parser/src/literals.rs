@@ -41,6 +41,7 @@ pub fn datatype(input: &str) -> ParserResult<DataType> {
         ),
         value(DataType::Decimal(DECIMAL_MAX_PRECISION, 0), kw("DECIMAL")),
         value(DataType::Text, kw("TEXT")),
+        value(DataType::Json, kw("JSON")),
     ))(input)
 }
 

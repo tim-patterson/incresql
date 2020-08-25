@@ -1,6 +1,8 @@
 mod aggregate;
+mod jsonpath_utils;
 pub mod registry;
 mod scalar;
+
 use crate::registry::Registry;
 use data::{DataType, Datum, Session};
 use std::fmt::{Debug, Formatter};

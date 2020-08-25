@@ -40,6 +40,32 @@ impl Function for ToBooleanFromText {
     }
 }
 
+#[derive(Debug)]
+struct ToBooleanFromJson {}
+
+impl Function for ToBooleanFromJson {
+    fn execute<'a>(
+        &self,
+        _session: &Session,
+        _signature: &FunctionSignature,
+        args: &'a [Datum<'a>],
+    ) -> Datum<'a> {
+        if let Some(b) = args[0].as_maybe_json().and_then(|j| j.get_boolean()) {
+            Datum::from(b)
+        } else if let Some(s) = args[0].as_maybe_json().and_then(|j| j.get_string()) {
+            if s.eq_ignore_ascii_case("true") {
+                Datum::from(true)
+            } else if s.eq_ignore_ascii_case("false") {
+                Datum::from(false)
+            } else {
+                Datum::Null
+            }
+        } else {
+            Datum::Null
+        }
+    }
+}
+
 pub fn register_builtins(registry: &mut Registry) {
     registry.register_function(FunctionDefinition::new(
         "to_bool",
@@ -54,11 +80,19 @@ pub fn register_builtins(registry: &mut Registry) {
         DataType::Boolean,
         FunctionType::Scalar(&ToBooleanFromText {}),
     ));
+
+    registry.register_function(FunctionDefinition::new(
+        "to_bool",
+        vec![DataType::Json],
+        DataType::Boolean,
+        FunctionType::Scalar(&ToBooleanFromJson {}),
+    ));
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use data::json::OwnedJson;
 
     const DUMMY_SIG: FunctionSignature = FunctionSignature {
         name: "to_bool",
@@ -80,5 +114,26 @@ mod tests {
             ToBooleanFromText {}.execute(&Session::new(1), &DUMMY_SIG, &[Datum::from("True")]),
             Datum::from(true)
         )
+    }
+
+    #[test]
+    fn test_from_json() {
+        assert_eq!(
+            ToBooleanFromJson {}.execute(
+                &Session::new(1),
+                &DUMMY_SIG,
+                &[Datum::from(OwnedJson::parse("true").unwrap())]
+            ),
+            Datum::from(true)
+        );
+
+        assert_eq!(
+            ToBooleanFromJson {}.execute(
+                &Session::new(1),
+                &DUMMY_SIG,
+                &[Datum::from(OwnedJson::parse("\"true\"").unwrap())]
+            ),
+            Datum::from(true)
+        );
     }
 }

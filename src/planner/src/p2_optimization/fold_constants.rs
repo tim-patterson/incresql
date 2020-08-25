@@ -45,7 +45,7 @@ fn fold_constants_for_expr(expr: &mut Expression, session: &Session) {
                 let constant = function_call
                     .function
                     .execute(session, &function_call.signature, &function_input)
-                    .as_static();
+                    .into_static();
 
                 *expr = Expression::Constant(constant, function_call.signature.ret);
             }
