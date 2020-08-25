@@ -2,6 +2,13 @@ use runtime::Runtime;
 use std::error::Error;
 use std::process::Command;
 
+#[cfg(not(windows))]
+use jemallocator::Jemalloc;
+
+#[cfg(not(windows))]
+#[global_allocator]
+static GLOBAL: Jemalloc = Jemalloc;
+
 fn main() -> Result<(), Box<dyn Error>> {
     println!("Building dbgen");
     Command::new("docker")

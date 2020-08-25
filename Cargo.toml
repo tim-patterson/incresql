@@ -24,6 +24,10 @@ members = [
 runtime = { path = "src/runtime" }
 server = { path = "src/server" }
 
+# Non windows Deps
+[target.'cfg(not(windows))'.dependencies]
+jemallocator = { version = "0.3.2", features=["unprefixed_malloc_on_supported_platforms"] }
+
 # These are needed to support the integration tests
 [dev-dependencies]
 data = { path = "src/data" }
