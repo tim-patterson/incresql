@@ -4,6 +4,8 @@ use crate::{Function, FunctionDefinition, FunctionSignature, FunctionType};
 use data::json::JsonBuilder;
 use data::{DataType, Datum, Session};
 
+/// Extracts part of a json object using jsonpath, see
+/// https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#function_json-extract
 #[derive(Debug)]
 struct JsonExtract {}
 

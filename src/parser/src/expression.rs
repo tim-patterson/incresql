@@ -66,7 +66,7 @@ fn expression_2(input: &str) -> ParserResult<Expression> {
 }
 
 fn expression_3(input: &str) -> ParserResult<Expression> {
-    infix_many((tag("->"), tag("->>")), expression_4)(input)
+    infix_many((tag("->>"), tag("->")), expression_4)(input)
 }
 
 fn expression_4(input: &str) -> ParserResult<Expression> {

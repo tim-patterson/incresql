@@ -15,6 +15,7 @@ fn show_functions() {
         |count|
         |database|
         |json_extract|
+        |json_unquote|
         |sum|
         |to_bigint|
         |to_bool|
