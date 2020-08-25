@@ -14,6 +14,7 @@ pub enum DataType {
     Text,
     ByteA,
     Json,
+    Date,
 }
 
 pub const DECIMAL_MAX_PRECISION: u8 = 28;
@@ -30,6 +31,7 @@ impl Display for DataType {
             DataType::Text => f.write_str("TEXT"),
             DataType::ByteA => f.write_str("BYTEA"),
             DataType::Json => f.write_str("JSON"),
+            DataType::Date => f.write_str("DATE"),
         }
     }
 }
@@ -52,6 +54,7 @@ impl TryFrom<&str> for DataType {
             "TEXT" => Ok(DataType::Text),
             "BYTEA" => Ok(DataType::ByteA),
             "JSON" => Ok(DataType::Json),
+            "DATE" => Ok(DataType::Date),
             _ => DECIMAL_RE
                 .captures(value)
                 .map(|d_match| {

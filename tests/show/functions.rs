@@ -20,6 +20,7 @@ fn show_functions() {
         |sum|
         |to_bigint|
         |to_bool|
+        |to_date|
         |to_decimal|
         |to_int|
         |to_json|
