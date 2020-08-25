@@ -1,7 +1,9 @@
+use crate::whitespace::ws_0;
 use ast::statement::Statement;
 use nom::combinator::all_consuming;
 use nom::error::{convert_error, VerboseError};
 use nom::lib::std::fmt::{Display, Formatter};
+use nom::sequence::delimited;
 use nom::IResult;
 use std::error::Error;
 
@@ -23,7 +25,7 @@ type ParserResult<'a, T> = IResult<&'a str, T, VerboseError<&'a str>>;
 // By forming sub parsers into a tree with branches in the tree being common prefixes it allows us
 // To give better contextual error messages in the future.
 pub fn parse(input: &str) -> Result<Statement, ParseError> {
-    let parser_result = all_consuming(statement::statement)(input);
+    let parser_result = all_consuming(delimited(ws_0, statement::statement, ws_0))(input);
 
     parser_result.map(|(_, command)| command).map_err(|err| {
         match err {

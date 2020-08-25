@@ -81,7 +81,7 @@ the code needs to be formatted and lints need to pass.
 ### Benchmarking
 To benchmark run the following command
 ```sh
-  cargo run --release --bin tpch
+  cargo run --release --example tpch
 ```
 
 ### Related Work

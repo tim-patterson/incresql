@@ -77,6 +77,8 @@ exceptions = [
     # Build time deps
     { allow = ["BSD-3-Clause"], name = "bindgen", version = "*" },
     { allow = ["ISC"], name = "libloading", version = "*" },
+    # Test/Benchmark deps
+    { allow = ["BSD-3-Clause"], name = "sha1", version = "*" },
 ]
 
 # Some crates don't have (easily) machine readable licensing information,

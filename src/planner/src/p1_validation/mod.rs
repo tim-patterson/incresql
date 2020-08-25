@@ -10,6 +10,7 @@ mod compile_functions_and_refs;
 mod convert_project_to_groupby;
 mod expand_stars;
 mod resolve_tables;
+mod sub_in_special_vars;
 mod validate_values_types;
 
 /// Validate the query, as part of the process of validating the query we will actually end up
@@ -21,6 +22,7 @@ impl Planner {
         session: &Session,
     ) -> Result<LogicalOperator, PlannerError> {
         // Populate column aliases
+        sub_in_special_vars::sub_in_special_vars(&mut query);
         column_aliases::normalize_column_aliases(&mut query);
         // Grab a read lock on the catalog and look up the tables
         {

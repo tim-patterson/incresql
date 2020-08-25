@@ -28,11 +28,12 @@ server = { path = "src/server" }
 [target.'cfg(not(windows))'.dependencies]
 jemallocator = { version = "0.3.2", features=["unprefixed_malloc_on_supported_platforms"] }
 
-# These are needed to support the integration tests
+# These are needed to support the integration tests and/or benchmarking
 [dev-dependencies]
 data = { path = "src/data" }
+mysql ="19.0.0"
 
-[[bin]]
+[[example]]
 name = "tpch"
 path = "benchmarking/tpch.rs"
 
