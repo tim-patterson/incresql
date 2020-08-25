@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Tim Patterson <tim.wanaka@gmail.com>"]
 edition = "2018"
 publish = false
+default-run = "incresql"
 
 [workspace]
 members = [
@@ -27,13 +28,11 @@ server = { path = "src/server" }
 [dev-dependencies]
 data = { path = "src/data" }
 
-[profile.release]
-debug = true
-opt-level = 3
-lto = "thin"
-codegen-units = 1
+[[bin]]
+name = "tpch"
+path = "benchmarking/tpch.rs"
 
-[profile.bench]
+[profile.release]
 debug = true
 opt-level = 3
 lto = "thin"

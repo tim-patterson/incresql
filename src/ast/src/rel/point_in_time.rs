@@ -1,4 +1,5 @@
 use crate::expr::{Expression, SortExpression};
+use crate::rel::logical::SerdeOptions;
 use data::{Datum, LogicalTimestamp};
 use storage::Table;
 
@@ -83,4 +84,5 @@ pub struct SortedGroup {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct FileScan {
     pub directory: String,
+    pub serde_options: SerdeOptions,
 }

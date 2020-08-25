@@ -4,8 +4,8 @@ use crate::whitespace::ws_0;
 use crate::ParserResult;
 use ast::expr::{Expression, NamedExpression, SortExpression};
 use ast::rel::logical::{
-    FileScan, Filter, GroupBy, Limit, LogicalOperator, Project, Sort, TableAlias, TableReference,
-    UnionAll,
+    FileScan, Filter, GroupBy, Limit, LogicalOperator, Project, SerdeOptions, Sort, TableAlias,
+    TableReference, UnionAll,
 };
 use nom::branch::alt;
 use nom::bytes::complete::tag;
@@ -196,8 +196,40 @@ fn table_reference_with_alias(input: &str) -> ParserResult<LogicalOperator> {
 /// Parse a file source
 fn directory_source(input: &str) -> ParserResult<LogicalOperator> {
     map(
-        preceded(kw("DIRECTORY"), cut(preceded(ws_0, quoted_string))),
-        |directory| LogicalOperator::FileScan(FileScan { directory }),
+        preceded(
+            kw("DIRECTORY"),
+            cut(preceded(
+                ws_0,
+                pair(quoted_string, opt(preceded(ws_0, serde_options))),
+            )),
+        ),
+        |(directory, serde_options)| {
+            LogicalOperator::FileScan(FileScan {
+                directory,
+                serde_options: serde_options.unwrap_or_default(),
+            })
+        },
+    )(input)
+}
+
+fn serde_options(input: &str) -> ParserResult<SerdeOptions> {
+    map(
+        delimited(
+            tuple((kw("WITH"), ws_0, tag("("), ws_0)),
+            delimiter_option,
+            tuple((ws_0, tag(")"))),
+        ),
+        |delimiter| SerdeOptions { delimiter },
+    )(input)
+}
+
+fn delimiter_option(input: &str) -> ParserResult<u8> {
+    map(
+        preceded(
+            tuple((kw("DELIMITER"), ws_0, tag("="), ws_0)),
+            quoted_string,
+        ),
+        |s| s.as_bytes()[0],
     )(input)
 }
 
@@ -448,7 +480,28 @@ mod tests {
                     alias: None,
                 }],
                 source: Box::new(LogicalOperator::FileScan(FileScan {
-                    directory: "test".to_string()
+                    directory: "test".to_string(),
+                    serde_options: SerdeOptions::default()
+                })),
+            })
+        );
+    }
+
+    #[test]
+    fn test_directory_src_serde_option() {
+        assert_eq!(
+            select(r#"SELECT 1 FROM DIRECTORY "test" WITH (delimiter="|")"#)
+                .unwrap()
+                .1,
+            LogicalOperator::Project(Project {
+                distinct: false,
+                expressions: vec![NamedExpression {
+                    expression: Expression::from(1),
+                    alias: None,
+                }],
+                source: Box::new(LogicalOperator::FileScan(FileScan {
+                    directory: "test".to_string(),
+                    serde_options: SerdeOptions { delimiter: b'|' }
                 })),
             })
         );
