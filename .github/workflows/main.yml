@@ -19,6 +19,8 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Load cache
+        # See https://github.com/actions/cache/issues/403
+        if: runner.os != 'macOS'
         uses: actions/cache@v2
         with:
           path: |
