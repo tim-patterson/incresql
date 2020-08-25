@@ -96,27 +96,128 @@ fn create_tables(connection: &mut Conn) -> Result<(), Box<dyn Error>> {
     connection.query_drop("create database tpch_1")?;
     connection.query_drop(
         "\
-CREATE TABLE tpch_1.lineitem
+CREATE TABLE tpch_1.part
 (
-    l_orderkey    BIGINT,
-    l_partkey     BIGINT,
-    l_suppkey     BIGINT,
-    l_linenumber  BIGINT,
-    l_quantity    DECIMAL(10,4),
-    l_extendedprice  DECIMAL(10,4),
-    l_discount    DECIMAL(10,4),
-    l_tax         DECIMAL(10,4),
-    l_returnflag  BOOLEAN,
-    l_linestatus  BOOLEAN,
-    l_shipdate    TEXT,
-    l_commitdate  TEXT,
-    l_receiptdate TEXT,
-    l_shipinstruct TEXT,
-    l_shipmode     TEXT,
-    l_comment      TEXT
+    p_partkey       BIGINT,
+    p_name          TEXT,
+    p_mfgr          TEXT,
+    p_brand         TEXT,
+    p_type          TEXT,
+    p_size          INTEGER,
+    p_container     TEXT,
+    p_retailprice   DECIMAL(12,4),
+    p_comment       TEXT
 )
     ",
     )?;
+
+    connection.query_drop(
+        "\
+CREATE TABLE tpch_1.supplier
+(
+    s_suppkey     BIGINT,
+    s_name        TEXT,
+    s_address     TEXT,
+    s_nationkey   INTEGER,
+    s_phone       TEXT,
+    s_acctbal     DECIMAL(12,4),
+    s_comment     TEXT
+)
+    ",
+    )?;
+
+    connection.query_drop(
+        "\
+CREATE TABLE tpch_1.partsupp
+(
+    ps_partkey     BIGINT,
+    ps_suppkey     BIGINT,
+    ps_availqty    INTEGER,
+    ps_supplycost  DECIMAL(12,4),
+    ps_comment     TEXT
+)
+    ",
+    )?;
+
+    connection.query_drop(
+        "\
+CREATE TABLE tpch_1.customer
+(
+    c_custkey    BIGINT,
+    c_name       TEXT,
+    c_address    TEXT,
+    c_nationkey  INTEGER,
+    c_phone      TEXT,
+    c_acctbal    DECIMAL(12,4),
+    c_mkcsegment TEXT,
+    c_comment    TEXT
+)
+    ",
+    )?;
+
+    connection.query_drop(
+        "\
+CREATE TABLE tpch_1.orders
+(
+    o_orderkey       BIGINT,
+    o_custkey        BIGINT,
+    o_orderstatus    TEXT,
+    o_totalprice     DECIMAL(12,4),
+    o_orderpriority  TEXT,
+    o_clerk          TEXT,
+    o_shippriority   INTEGER,
+    o_comment        TEXT
+)
+    ",
+    )?;
+
+    connection.query_drop(
+        "\
+CREATE TABLE tpch_1.lineitem
+(
+    l_orderkey       BIGINT,
+    l_partkey        BIGINT,
+    l_suppkey        BIGINT,
+    l_linenumber     INTEGER,
+    l_quantity       DECIMAL(12,4),
+    l_extendedprice  DECIMAL(12,4),
+    l_discount       DECIMAL(12,4),
+    l_tax            DECIMAL(12,4),
+    l_returnflag     BOOLEAN,
+    l_linestatus     BOOLEAN,
+    l_shipdate       DATE,
+    l_commitdate     DATE,
+    l_receiptdate    DATE,
+    l_shipinstruct   TEXT,
+    l_shipmode       TEXT,
+    l_comment        TEXT
+)
+    ",
+    )?;
+
+    connection.query_drop(
+        "\
+CREATE TABLE tpch_1.nation
+(
+    n_nationkey   INTEGER,
+    n_name        TEXT,
+    n_regionkey   INTEGER,
+    n_comment     TEXT
+)
+    ",
+    )?;
+
+    connection.query_drop(
+        "\
+CREATE TABLE tpch_1.region
+(
+    r_regionkey   INTEGER,
+    r_name        TEXT,
+    r_comment     TEXT
+)
+    ",
+    )?;
+
     Ok(())
 }
 
@@ -130,16 +231,16 @@ SELECT
   CAST(data->>"$[0]" AS BIGINT) as l_orderkey,
   CAST(data->>"$[1]" AS BIGINT) as l_partkey,
   CAST(data->>"$[2]" AS BIGINT) as l_suppkey,
-  CAST(data->>"$[3]" AS BIGINT) as l_linenumber,
-  CAST(data->>"$[4]" AS DECIMAL(10,4)) as l_quantity,
-  CAST(data->>"$[5]" AS DECIMAL(10,4)) as l_extendedprice,
-  CAST(data->>"$[6]" AS DECIMAL(10,4)) as l_discount,
-  CAST(data->>"$[7]" AS DECIMAL(10,4)) as l_tax,
+  CAST(data->>"$[3]" AS INTEGER) as l_linenumber,
+  CAST(data->>"$[4]" AS DECIMAL(12,4)) as l_quantity,
+  CAST(data->>"$[5]" AS DECIMAL(12,4)) as l_extendedprice,
+  CAST(data->>"$[6]" AS DECIMAL(12,4)) as l_discount,
+  CAST(data->>"$[7]" AS DECIMAL(12,4)) as l_tax,
   CAST(data->>"$[8]" AS BOOLEAN) as l_returnflag,
   CAST(data->>"$[9]" AS BOOLEAN) as l_linestatus,
-  data->>"$[10]" as l_shipdate,
-  data->>"$[11]" as l_commitdate,
-  data->>"$[12]" as l_receiptdate,
+  CAST(data->>"$[10]" AS DATE) as l_shipdate,
+  CAST(data->>"$[11]" AS DATE) as l_commitdate,
+  CAST(data->>"$[12]" AS DATE) as l_receiptdate,
   data->>"$[13]" as l_shipinstruct,
   data->>"$[14]" as l_shipmode,
   data->>"$[15]" as l_comment
