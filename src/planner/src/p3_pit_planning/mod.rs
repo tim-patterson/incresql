@@ -175,6 +175,7 @@ fn build_operator(query: LogicalOperator) -> PointInTimeOperator {
         LogicalOperator::FileScan(file_scan) => {
             PointInTimeOperator::FileScan(point_in_time::FileScan {
                 directory: file_scan.directory,
+                serde_options: file_scan.serde_options,
             })
         }
         LogicalOperator::TableReference(_) => panic!(),

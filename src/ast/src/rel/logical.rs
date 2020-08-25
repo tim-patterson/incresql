@@ -109,6 +109,18 @@ pub struct TableInsert {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct FileScan {
     pub directory: String,
+    pub serde_options: SerdeOptions,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct SerdeOptions {
+    pub delimiter: u8,
+}
+
+impl Default for SerdeOptions {
+    fn default() -> Self {
+        SerdeOptions { delimiter: b',' }
+    }
 }
 
 impl LogicalOperator {

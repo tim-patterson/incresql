@@ -1,4 +1,5 @@
 use crate::ExecutionError;
+use ast::rel::logical::SerdeOptions;
 use data::json::{JsonBuilder, OwnedJson};
 use data::{Datum, TupleIter};
 use std::iter::{empty, once};
@@ -12,11 +13,11 @@ pub struct FileScanExecutor {
 }
 
 impl FileScanExecutor {
-    pub fn new(directory: String) -> Self {
+    pub fn new(directory: String, serde_options: SerdeOptions) -> Self {
         let file_entries = entries(PathBuf::from(directory));
 
         FileScanExecutor {
-            lines: Box::from(file_entries.flat_map(csv_lines)),
+            lines: Box::from(file_entries.flat_map(move |e| csv_lines(e, &serde_options))),
             tuple: [Datum::Null; 1],
             done: false,
         }
@@ -85,11 +86,13 @@ fn entries(entry: PathBuf) -> Box<dyn Iterator<Item = Result<PathBuf, std::io::E
 
 fn csv_lines(
     entry: Result<PathBuf, std::io::Error>,
+    serde_options: &SerdeOptions,
 ) -> Box<dyn Iterator<Item = Result<OwnedJson, ExecutionError>>> {
     match entry {
         Ok(entry) => {
             let mut builder = csv::ReaderBuilder::new();
             builder.has_headers(false);
+            builder.delimiter(serde_options.delimiter);
             let reader_result = builder.from_path(entry);
             match reader_result {
                 Ok(reader) => Box::from(reader.into_records().map(|record_result| {
@@ -118,7 +121,7 @@ mod tests {
     fn test_csv_lines() -> Result<(), ExecutionError> {
         let path = PathBuf::from("../../test_data/csv/simple.csv");
 
-        let mut line_iter = csv_lines(Ok(path));
+        let mut line_iter = csv_lines(Ok(path), &SerdeOptions::default());
 
         let expected_line1 = OwnedJson::parse(r#"["123","abc","12.1"]"#).unwrap();
         let expected_line2 = OwnedJson::parse(r#"["456","d,ef","13.2"]"#).unwrap();
@@ -134,7 +137,7 @@ mod tests {
     fn test_single_csv() -> Result<(), ExecutionError> {
         let directory = "../../test_data/csv/simple.csv".to_string();
 
-        let mut executor = FileScanExecutor::new(directory);
+        let mut executor = FileScanExecutor::new(directory, SerdeOptions::default());
 
         let expected_line1 = OwnedJson::parse(r#"["123","abc","12.1"]"#).unwrap();
         let expected_line2 = OwnedJson::parse(r#"["456","d,ef","13.2"]"#).unwrap();
@@ -156,7 +159,7 @@ mod tests {
     fn test_csv_director() -> Result<(), ExecutionError> {
         let directory = "../../test_data/csv".to_string();
 
-        let mut executor = FileScanExecutor::new(directory);
+        let mut executor = FileScanExecutor::new(directory, SerdeOptions::default());
 
         let expected_line1 = OwnedJson::parse(r#"["123","abc","12.1"]"#).unwrap();
 

@@ -49,14 +49,6 @@ Once this is done you can use the standard cargo commands to build/test/run.
   cargo build --release
 ```
 
-### Developing
-Before checking in all tests need to pass,
-the code needs to be formatted and lints need to pass.
-```sh
-  cargo test --workspace --tests
-  cargo fmt --all
-  cargo clippy --all
-```
 
 ### Connecting
 To connect to incresql first start it by running
@@ -75,6 +67,21 @@ And then in another terminal (tab) run(assuming you have the mysql client instal
   mysql -h 127.0.0.1 -P3307
 
   mysql> select 1+2;
+```
+
+### Developing
+Before checking in all tests need to pass,
+the code needs to be formatted and lints need to pass.
+```sh
+  cargo test --workspace --tests
+  cargo fmt --all
+  cargo clippy --all
+```
+
+### Benchmarking
+To benchmark run the following command
+```sh
+  cargo run --release --example tpch
 ```
 
 ### Related Work

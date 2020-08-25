@@ -1,18 +1,21 @@
 use crate::point_in_time::BoxedExecutor;
 use crate::ExecutionError;
-use data::{Datum, LogicalTimestamp, TupleIter};
+use data::{Datum, LogicalTimestamp, PeekableIter, TupleIter};
 use storage::Table;
 
 /// When advance is called this simply inserts all tuples
 /// into the table
 pub struct TableInsertExecutor {
-    source: BoxedExecutor,
+    source: PeekableIter<dyn TupleIter<E = ExecutionError>>,
     table: Table,
 }
 
 impl TableInsertExecutor {
     pub fn new(source: BoxedExecutor, table: Table) -> Self {
-        TableInsertExecutor { source, table }
+        TableInsertExecutor {
+            source: PeekableIter::from(source),
+            table,
+        }
     }
 }
 
@@ -22,12 +25,23 @@ impl TupleIter for TableInsertExecutor {
     fn advance(&mut self) -> Result<(), ExecutionError> {
         let iter = &mut self.source;
         let table = &self.table;
-        table.atomic_write::<_, ExecutionError>(|batch| {
-            while let Some((tuple, freq)) = iter.next()? {
-                batch.write_tuple(table, tuple, LogicalTimestamp::now(), freq)?;
-            }
-            Ok(())
-        })?;
+
+        while iter.peek()?.is_some() {
+            table.atomic_write::<_, ExecutionError>(|batch| {
+                // Chunk our write batches as we don't want to blow out our memory.
+                // We'll lose atomicity but tables are only really meant for lookup
+                // data etc not for etl type workloads
+                let mut c = 10000;
+                while let Some((tuple, freq)) = iter.next()? {
+                    batch.write_tuple(table, tuple, LogicalTimestamp::now(), freq)?;
+                    c -= 1;
+                    if c == 0 {
+                        break;
+                    }
+                }
+                Ok(())
+            })?;
+        }
         Ok(())
     }
 

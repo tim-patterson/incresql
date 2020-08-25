@@ -81,9 +81,10 @@ pub fn build_executor(session: &Arc<Session>, plan: &PointInTimeOperator) -> Box
             sorted_group.key_len,
             sorted_group.expressions.clone(),
         )),
-        PointInTimeOperator::FileScan(file_scan) => {
-            Box::from(FileScanExecutor::new(file_scan.directory.clone()))
-        }
+        PointInTimeOperator::FileScan(file_scan) => Box::from(FileScanExecutor::new(
+            file_scan.directory.clone(),
+            file_scan.serde_options.clone(),
+        )),
     }
 }
 

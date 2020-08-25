@@ -59,8 +59,21 @@ impl<I: TupleIter + ?Sized> PeekableIter<I> {
         if !self.advanced {
             self.inner.advance()?;
         }
-        self.advanced = false;
-        Ok(self.inner.get())
+
+        let next = self.inner.get();
+
+        // This allows us to call peek after the iterator is exhausted
+        // without doing anything weird...
+        // the binding's into rocks db can segfault if using the mem env
+        // for example... but other iterators in general may do weird
+        // undefined behaviour things...
+        if next.is_some() {
+            self.advanced = false;
+        } else {
+            self.advanced = true;
+        }
+
+        Ok(next)
     }
 
     /// Peeks at the next value with out mucking up the state.

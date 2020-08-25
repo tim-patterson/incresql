@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Tim Patterson <tim.wanaka@gmail.com>"]
 edition = "2018"
 publish = false
+default-run = "incresql"
 
 [workspace]
 members = [
@@ -23,17 +24,20 @@ members = [
 runtime = { path = "src/runtime" }
 server = { path = "src/server" }
 
-# These are needed to support the integration tests
+# Non windows Deps
+[target.'cfg(not(windows))'.dependencies]
+jemallocator = { version = "0.3.2", features=["unprefixed_malloc_on_supported_platforms"] }
+
+# These are needed to support the integration tests and/or benchmarking
 [dev-dependencies]
 data = { path = "src/data" }
+mysql ="19.0.0"
+
+[[example]]
+name = "tpch"
+path = "benchmarking/tpch.rs"
 
 [profile.release]
-debug = true
-opt-level = 3
-lto = "thin"
-codegen-units = 1
-
-[profile.bench]
 debug = true
 opt-level = 3
 lto = "thin"
