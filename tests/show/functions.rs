@@ -5,22 +5,24 @@ fn show_functions() {
     query(
         r#"SHOW FUNCTIONS"#,
         "
-            |!=|
-            |*|
-            |+|
-            |-|
-            |/|
-            |=|
-            |count|
-            |database|
-            |sum|
-            |to_bigint|
-            |to_bool|
-            |to_decimal|
-            |to_int|
-            |to_json|
-            |to_text|
-            |type_of|
+        |!=|
+        |*|
+        |+|
+        |-|
+        |->|
+        |/|
+        |=|
+        |count|
+        |database|
+        |json_extract|
+        |sum|
+        |to_bigint|
+        |to_bool|
+        |to_decimal|
+        |to_int|
+        |to_json|
+        |to_text|
+        |type_of|
         ",
     );
 }

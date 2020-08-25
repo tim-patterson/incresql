@@ -150,6 +150,12 @@ impl From<OwnedJson> for Datum<'static> {
     }
 }
 
+impl<'a> From<Json<'a>> for Datum<'a> {
+    fn from(json: Json) -> Datum {
+        Datum::ByteARef(json.bytes)
+    }
+}
+
 /// A Wrapper that can be used to temporarily associate a datum
 /// with it's typing information to perform low level operations
 /// where we need that extra typing

@@ -425,6 +425,11 @@ impl ArrayJsonBuilder<'_> {
     pub fn push_object<F: FnOnce(&mut ObjectJsonBuilder)>(&mut self, f: F) {
         self.inner.push_object(f);
     }
+
+    /// Append an existing json object/reference
+    pub fn push_json(&mut self, j: Json) {
+        self.inner.push_json(j);
+    }
 }
 
 /// Builder for objects
@@ -661,6 +666,14 @@ impl JsonBuilderInner {
                 .copy_from_slice(&(array_len as u32).to_le_bytes());
         } else {
             panic!("Oversized object {}", array_len);
+        }
+    }
+
+    pub(crate) fn push_json(&mut self, j: Json) {
+        if j.bytes.is_empty() {
+            self.push_null()
+        } else {
+            self.bytes.extend_from_slice(j.bytes);
         }
     }
 
