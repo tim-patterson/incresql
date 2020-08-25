@@ -1,5 +1,6 @@
 use crate::json::{Json, OwnedJson};
-use crate::{DataType, DECIMAL_MAX_SCALE};
+use crate::DataType;
+use chrono::{Datelike, NaiveDate};
 use rust_decimal::Decimal;
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::{Hash, Hasher};
@@ -144,11 +145,14 @@ impl From<i64> for Datum<'static> {
 }
 
 impl From<Decimal> for Datum<'static> {
-    fn from(mut d: Decimal) -> Self {
-        if d.scale() > DECIMAL_MAX_SCALE as u32 {
-            d.rescale(DECIMAL_MAX_SCALE as u32);
-        }
+    fn from(d: Decimal) -> Self {
         Datum::Decimal(d)
+    }
+}
+
+impl From<NaiveDate> for Datum<'static> {
+    fn from(d: NaiveDate) -> Self {
+        Datum::Integer((d.year() << 9) + (d.ordinal() as i32))
     }
 }
 
@@ -237,7 +241,10 @@ impl Display for TypedDatum<'_> {
                 }
             }
             Datum::Boolean(b) => f.write_str(if *b { "TRUE" } else { "FALSE" }),
-            Datum::Integer(i) => Display::fmt(i, f),
+            Datum::Integer(i) => match self.datatype {
+                DataType::Date => Display::fmt(&self.datum.as_date(), f),
+                _ => Display::fmt(i, f),
+            },
             Datum::BigInt(i) => Display::fmt(i, f),
             Datum::Decimal(d) => {
                 if let DataType::Decimal(_p, s) = self.datatype {
@@ -341,6 +348,18 @@ impl<'a> Datum<'a> {
         } else {
             panic!()
         }
+    }
+
+    pub fn as_maybe_date(&self) -> Option<NaiveDate> {
+        if let Datum::Integer(i) = self {
+            Some(NaiveDate::from_yo(i >> 9, (i & 511) as u32))
+        } else {
+            None
+        }
+    }
+
+    pub fn as_date(&self) -> NaiveDate {
+        self.as_maybe_date().unwrap()
     }
 
     pub fn as_maybe_boolean(&self) -> Option<bool> {
@@ -600,6 +619,14 @@ mod tests {
                 Datum::from("hello".to_string()).typed_with(DataType::ByteA)
             ),
             "68656c6c6f"
+        );
+
+        assert_eq!(
+            format!(
+                "{}",
+                Datum::from(NaiveDate::from_ymd(2000, 2, 10)).typed_with(DataType::Date)
+            ),
+            "2000-02-10"
         );
     }
 

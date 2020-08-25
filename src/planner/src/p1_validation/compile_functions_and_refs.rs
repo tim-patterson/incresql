@@ -79,6 +79,7 @@ fn compile_functions_in_expr(
                 DataType::Text => "to_text",
                 DataType::ByteA => "to_bytes",
                 DataType::Json => "to_json",
+                DataType::Date => "to_date",
             };
 
             let lookup_sig = FunctionSignature {

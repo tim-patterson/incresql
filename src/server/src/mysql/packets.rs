@@ -289,6 +289,7 @@ pub fn write_column_packet(
             MYSQL_TYPE_VAR_STRING
         }
         DataType::Integer => MYSQL_TYPE_LONG,
+        DataType::Date => MYSQL_TYPE_DATE,
         DataType::BigInt => MYSQL_TYPE_LONGLONG,
         DataType::Boolean => MYSQL_TYPE_TINY,
         DataType::Decimal(precision, scale) => {
