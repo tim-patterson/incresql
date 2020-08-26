@@ -9,7 +9,7 @@ use nom::bytes::complete::tag;
 use nom::combinator::{cut, map, value};
 use nom::error::VerboseError;
 use nom::multi::{many0, separated_list};
-use nom::sequence::{pair, preceded, separated_pair, tuple};
+use nom::sequence::{delimited, pair, preceded, separated_pair, tuple};
 
 /// Parses a bog standard expression, ie 1 + 2
 /// operators precedence according to https://dev.mysql.com/doc/refman/8.0/en/operator-precedence.html
@@ -54,7 +54,17 @@ pub fn comma_sep_expressions(input: &str) -> ParserResult<Vec<Expression>> {
 }
 
 fn expression_0(input: &str) -> ParserResult<Expression> {
-    infix_many((tag("="), tag("!=")), expression_1)(input)
+    infix_many(
+        (
+            tag("="),
+            tag("!="),
+            tag(">="),
+            tag(">"),
+            tag("<="),
+            tag("<"),
+        ),
+        expression_1,
+    )(input)
 }
 
 fn expression_1(input: &str) -> ParserResult<Expression> {
@@ -70,7 +80,14 @@ fn expression_3(input: &str) -> ParserResult<Expression> {
 }
 
 fn expression_4(input: &str) -> ParserResult<Expression> {
-    alt((count_star, function_call, cast, literal, column_reference))(input)
+    alt((
+        count_star,
+        function_call,
+        cast,
+        literal,
+        column_reference,
+        brackets,
+    ))(input)
 }
 
 /// Used to reduce boilerplate at each precedence level for infix operators
@@ -150,6 +167,10 @@ fn cast(input: &str) -> ParserResult<Expression> {
             },
         )),
     )(input)
+}
+
+fn brackets(input: &str) -> ParserResult<Expression> {
+    delimited(pair(tag("("), ws_0), expression, pair(ws_0, tag(")")))(input)
 }
 
 fn column_reference(input: &str) -> ParserResult<Expression> {
@@ -302,6 +323,23 @@ mod tests {
             Expression::Cast(Cast {
                 expr: Box::new(expr),
                 datatype: DataType::Decimal(1, 2)
+            })
+        );
+    }
+
+    #[test]
+    fn test_brackets() {
+        assert_eq!(
+            expression("(((1 + 2)) * 3)").unwrap().1,
+            Expression::FunctionCall(FunctionCall {
+                function_name: "*".to_string(),
+                args: vec![
+                    Expression::FunctionCall(FunctionCall {
+                        function_name: "+".to_string(),
+                        args: vec![Expression::from(1), Expression::from(2)]
+                    }),
+                    Expression::from(3)
+                ]
             })
         );
     }
