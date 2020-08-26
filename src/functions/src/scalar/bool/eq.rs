@@ -44,7 +44,7 @@ mod tests {
     const DUMMY_SIG: FunctionSignature = FunctionSignature {
         name: "=",
         args: vec![],
-        ret: DataType::Integer,
+        ret: DataType::Boolean,
     };
 
     #[test]

@@ -2,6 +2,7 @@ use crate::json::{Json, OwnedJson};
 use crate::DataType;
 use chrono::{Datelike, NaiveDate};
 use rust_decimal::Decimal;
+use std::cmp::Ordering;
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::{Hash, Hasher};
 
@@ -118,6 +119,65 @@ impl PartialEq for Datum<'_> {
     }
 }
 impl Eq for Datum<'_> {}
+
+impl Ord for Datum<'_> {
+    /// This cmp is only valid for datums of the same type.
+    /// It is "null" safe, ie it doesn't follow the standard sql rules.
+    /// ie null == null
+    /// and (null < foo) == true
+    fn cmp(&self, other: &Self) -> Ordering {
+        match self {
+            Datum::Null => {
+                if other.is_null() {
+                    Ordering::Equal
+                } else {
+                    Ordering::Less
+                }
+            }
+            Datum::Boolean(b) => {
+                if let Some(o) = other.as_maybe_boolean() {
+                    b.cmp(&o)
+                } else {
+                    Ordering::Greater
+                }
+            }
+            Datum::Integer(i) => {
+                if let Some(o) = other.as_maybe_integer() {
+                    i.cmp(&o)
+                } else {
+                    Ordering::Greater
+                }
+            }
+            Datum::BigInt(i) => {
+                if let Some(o) = other.as_maybe_bigint() {
+                    i.cmp(&o)
+                } else {
+                    Ordering::Greater
+                }
+            }
+            Datum::Decimal(d) => {
+                if let Some(o) = other.as_maybe_decimal() {
+                    d.cmp(&o)
+                } else {
+                    Ordering::Greater
+                }
+            }
+            Datum::ByteAOwned(_) | Datum::ByteAInline(..) | Datum::ByteARef(_) => {
+                if let Some(t) = other.as_maybe_text() {
+                    self.as_text().cmp(t)
+                } else {
+                    Ordering::Greater
+                }
+            }
+        }
+    }
+}
+
+impl PartialOrd for Datum<'_> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
 
 // From builders to build datums from the native rust types
 impl Default for Datum<'_> {

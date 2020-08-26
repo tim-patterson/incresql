@@ -12,7 +12,11 @@ fn show_functions() {
         |->|
         |->>|
         |/|
+        |<|
+        |<=|
         |=|
+        |>|
+        |>=|
         |avg|
         |count|
         |database|

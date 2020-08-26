@@ -3,9 +3,9 @@ use crate::{Function, FunctionDefinition, FunctionSignature, FunctionType};
 use data::{DataType, Datum, Session};
 
 #[derive(Debug)]
-struct NE {}
+struct Lte {}
 
-impl Function for NE {
+impl Function for Lte {
     fn execute<'a>(
         &self,
         _session: &Session,
@@ -15,7 +15,7 @@ impl Function for NE {
         if args[0].is_null() || args[1].is_null() {
             Datum::Null
         } else {
-            Datum::from(!args[0].sql_eq(&args[1], false))
+            Datum::from(args[0] <= args[1])
         }
     }
 }
@@ -29,10 +29,10 @@ pub fn register_builtins(registry: &mut Registry) {
         DataType::Text,
     ] {
         registry.register_function(FunctionDefinition::new(
-            "!=",
+            "<=",
             vec![*datatype, *datatype],
             DataType::Boolean,
-            FunctionType::Scalar(&NE {}),
+            FunctionType::Scalar(&Lte {}),
         ));
     }
 }
@@ -42,7 +42,7 @@ mod tests {
     use super::*;
 
     const DUMMY_SIG: FunctionSignature = FunctionSignature {
-        name: "!=",
+        name: "<=",
         args: vec![],
         ret: DataType::Boolean,
     };
@@ -50,24 +50,33 @@ mod tests {
     #[test]
     fn test_null() {
         assert_eq!(
-            NE {}.execute(&Session::new(1), &DUMMY_SIG, &[Datum::Null, Datum::from(1)]),
+            Lte {}.execute(&Session::new(1), &DUMMY_SIG, &[Datum::Null, Datum::from(1)]),
             Datum::Null
         )
     }
 
     #[test]
-    fn test_ne() {
+    fn test_lte() {
         assert_eq!(
-            NE {}.execute(
+            Lte {}.execute(
                 &Session::new(1),
                 &DUMMY_SIG,
                 &[Datum::from(1), Datum::from(1)]
+            ),
+            Datum::from(true)
+        );
+
+        assert_eq!(
+            Lte {}.execute(
+                &Session::new(1),
+                &DUMMY_SIG,
+                &[Datum::from(1), Datum::from(0)]
             ),
             Datum::from(false)
         );
 
         assert_eq!(
-            NE {}.execute(
+            Lte {}.execute(
                 &Session::new(1),
                 &DUMMY_SIG,
                 &[Datum::from(1), Datum::from(2)]
