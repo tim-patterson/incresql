@@ -1,16 +1,22 @@
 use crate::atoms::{decimal, integer, kw, quoted_string};
 use crate::whitespace::ws_0;
 use crate::ParserResult;
-use ast::expr::Expression;
+use ast::expr::{Cast, Expression};
 use data::DataType::Decimal;
 use data::{DataType, Datum, DECIMAL_MAX_PRECISION};
 use nom::branch::alt;
 use nom::bytes::complete::tag;
-use nom::combinator::{map, value};
-use nom::sequence::tuple;
+use nom::combinator::{cut, map, value};
+use nom::sequence::{preceded, tuple};
 
 pub fn literal(input: &str) -> ParserResult<Expression> {
-    alt((null_literal, boolean_literal, number_literal, text_literal))(input)
+    alt((
+        null_literal,
+        boolean_literal,
+        number_literal,
+        text_literal,
+        date_literal,
+    ))(input)
 }
 
 pub fn datatype(input: &str) -> ParserResult<DataType> {
@@ -77,6 +83,20 @@ fn number_literal(input: &str) -> ParserResult<Expression> {
 
 fn text_literal(input: &str) -> ParserResult<Expression> {
     map(quoted_string, Expression::from)(input)
+}
+
+fn date_literal(input: &str) -> ParserResult<Expression> {
+    // A date literal is just a cast, but to avoid any parsing
+    // weirdness we'll restrict the expr part to being a string literal.
+    map(
+        preceded(kw("DATE"), cut(preceded(ws_0, text_literal))),
+        |expr| {
+            Expression::Cast(Cast {
+                expr: Box::new(expr),
+                datatype: DataType::Date,
+            })
+        },
+    )(input)
 }
 
 #[cfg(test)]
@@ -146,6 +166,17 @@ mod tests {
         assert_eq!(
             datatype("decimal ( 10 , 2 )").unwrap().1,
             DataType::Decimal(10, 2)
+        );
+    }
+
+    #[test]
+    fn test_date_literals() {
+        assert_eq!(
+            literal(r#"date "2010-01-01""#).unwrap().1,
+            Expression::Cast(Cast {
+                expr: Box::new(Expression::from("2010-01-01")),
+                datatype: DataType::Date
+            })
         );
     }
 }
