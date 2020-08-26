@@ -44,9 +44,8 @@ impl AggregateExpression {
             AggregateExpression::ScalarFunctionCall(funct) => {
                 funct.args.iter().map(Self::state_len).sum::<usize>()
             }
-            AggregateExpression::CompiledAggregate(_) | AggregateExpression::ColumnReference(_) => {
-                1
-            }
+            AggregateExpression::CompiledAggregate(function) => function.function.state_size(),
+            AggregateExpression::ColumnReference(_) => 1,
             AggregateExpression::Constant(_, _) => 0,
         }
     }
@@ -63,7 +62,7 @@ impl AggregateExpression {
                 }
             }
             AggregateExpression::CompiledAggregate(funct) => {
-                state[0] = funct.function.initialize();
+                funct.function.initialize(state);
             }
             AggregateExpression::Constant(_, _) => {}
             AggregateExpression::ColumnReference(_) => {
@@ -103,7 +102,7 @@ impl AggregateExpression {
 
                 function_call
                     .function
-                    .apply(&function_call.signature, &buf, freq, &mut state[0])
+                    .apply(&function_call.signature, &buf, freq, state)
             }
             AggregateExpression::ColumnReference(column_ref) => {
                 // Grabs a copy of the column ref unless we've already set it
@@ -145,7 +144,7 @@ impl AggregateExpression {
             }
             AggregateExpression::CompiledAggregate(function_call) => function_call
                 .function
-                .finalize(&function_call.signature, &state[0]),
+                .finalize(&function_call.signature, state),
             AggregateExpression::ColumnReference(_) => state[0].ref_clone(),
         }
     }

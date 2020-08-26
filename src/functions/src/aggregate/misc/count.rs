@@ -6,8 +6,8 @@ use data::{DataType, Datum};
 struct Count {}
 
 impl AggregateFunction for Count {
-    fn initialize(&self) -> Datum<'static> {
-        Datum::from(0 as i64)
+    fn initialize(&self, state: &mut [Datum<'static>]) {
+        state[0] = Datum::from(0 as i64);
     }
 
     fn apply<'a>(
@@ -15,20 +15,20 @@ impl AggregateFunction for Count {
         _signature: &FunctionSignature<'a>,
         args: &[Datum<'a>],
         freq: i64,
-        state: &mut Datum<'static>,
+        state: &mut [Datum<'static>],
     ) {
         if args.is_empty() || !args[0].is_null() {
-            *state.as_bigint_mut() += freq;
+            *state[0].as_bigint_mut() += freq;
         }
     }
 
     fn merge<'a>(
         &self,
         _signature: &FunctionSignature<'a>,
-        input_state: &Datum<'static>,
-        state: &mut Datum<'static>,
+        input_state: &[Datum<'static>],
+        state: &mut [Datum<'static>],
     ) {
-        *state.as_bigint_mut() += input_state.as_bigint()
+        *state[0].as_bigint_mut() += input_state[0].as_bigint()
     }
 
     fn supports_retract(&self) -> bool {
@@ -67,7 +67,8 @@ mod tests {
     fn test_apply() {
         let funct = &Count {};
 
-        let mut state = funct.initialize();
+        let mut state = vec![Datum::Null];
+        funct.initialize(&mut state);
 
         funct.apply(&DUMMY_SIG, &[], 10, &mut state);
         funct.apply(&DUMMY_SIG, &[], -2, &mut state);
@@ -81,10 +82,12 @@ mod tests {
     fn test_merge() {
         let funct = &Count {};
 
-        let mut state1 = funct.initialize();
+        let mut state1 = vec![Datum::Null];
+        funct.initialize(&mut state1);
         funct.apply(&DUMMY_SIG, &[], 10, &mut state1);
 
-        let mut state2 = funct.initialize();
+        let mut state2 = vec![Datum::Null];
+        funct.initialize(&mut state2);
         funct.apply(&DUMMY_SIG, &[], -2, &mut state2);
 
         funct.merge(&DUMMY_SIG, &state2, &mut state1);

@@ -14,27 +14,27 @@ impl AggregateFunction for IntSum {
         _signature: &FunctionSignature<'a>,
         args: &[Datum<'a>],
         freq: i64,
-        state: &mut Datum<'static>,
+        state: &mut [Datum<'static>],
     ) {
         if let Some(i) = args[0].as_maybe_integer() {
-            if state.is_null() {
-                *state = Datum::Integer(0);
+            if state[0].is_null() {
+                state[0] = Datum::Integer(0);
             }
-            *state.as_integer_mut() += freq as i32 * i;
+            *state[0].as_integer_mut() += freq as i32 * i;
         }
     }
 
     fn merge<'a>(
         &self,
         _signature: &FunctionSignature<'a>,
-        input_state: &Datum<'static>,
-        state: &mut Datum<'static>,
+        input_state: &[Datum<'static>],
+        state: &mut [Datum<'static>],
     ) {
-        if let Some(i) = input_state.as_maybe_integer() {
-            if state.is_null() {
-                *state = input_state.as_static()
+        if let Some(i) = input_state[0].as_maybe_integer() {
+            if state[0].is_null() {
+                state[0] = input_state[0].as_static()
             } else {
-                *state.as_integer_mut() += i
+                *state[0].as_integer_mut() += i
             }
         }
     }
@@ -54,27 +54,27 @@ impl AggregateFunction for BigintSum {
         _signature: &FunctionSignature<'a>,
         args: &[Datum<'a>],
         freq: i64,
-        state: &mut Datum<'static>,
+        state: &mut [Datum<'static>],
     ) {
         if let Some(i) = args[0].as_maybe_bigint() {
-            if state.is_null() {
-                *state = Datum::BigInt(0);
+            if state[0].is_null() {
+                state[0] = Datum::BigInt(0);
             }
-            *state.as_bigint_mut() += freq * i;
+            *state[0].as_bigint_mut() += freq * i;
         }
     }
 
     fn merge<'a>(
         &self,
         _signature: &FunctionSignature<'a>,
-        input_state: &Datum<'static>,
-        state: &mut Datum<'static>,
+        input_state: &[Datum<'static>],
+        state: &mut [Datum<'static>],
     ) {
-        if let Some(i) = input_state.as_maybe_bigint() {
-            if state.is_null() {
-                *state = input_state.as_static()
+        if let Some(i) = input_state[0].as_maybe_bigint() {
+            if state[0].is_null() {
+                state[0] = input_state[0].as_static()
             } else {
-                *state.as_bigint_mut() += i
+                *state[0].as_bigint_mut() += i
             }
         }
     }
@@ -93,27 +93,27 @@ impl AggregateFunction for DecimalSum {
         _signature: &FunctionSignature<'a>,
         args: &[Datum<'a>],
         freq: i64,
-        state: &mut Datum<'static>,
+        state: &mut [Datum<'static>],
     ) {
         if let Some(d) = args[0].as_maybe_decimal() {
-            if state.is_null() {
-                *state = Datum::from(Decimal::zero());
+            if state[0].is_null() {
+                state[0] = Datum::from(Decimal::zero());
             }
-            *state.as_decimal_mut() += d * Decimal::new(freq, 0);
+            *state[0].as_decimal_mut() += d * Decimal::new(freq, 0);
         }
     }
 
     fn merge<'a>(
         &self,
         _signature: &FunctionSignature<'a>,
-        input_state: &Datum<'static>,
-        state: &mut Datum<'static>,
+        input_state: &[Datum<'static>],
+        state: &mut [Datum<'static>],
     ) {
-        if let Some(d) = input_state.as_maybe_decimal() {
-            if state.is_null() {
-                *state = input_state.as_static()
+        if let Some(d) = input_state[0].as_maybe_decimal() {
+            if state[0].is_null() {
+                state[0] = input_state[0].as_static()
             } else {
-                *state.as_decimal_mut() += d
+                *state[0].as_decimal_mut() += d
             }
         }
     }
@@ -165,8 +165,8 @@ mod tests {
     #[test]
     fn test_apply_int() {
         let funct = &IntSum {};
-
-        let mut state = funct.initialize();
+        let mut state = vec![Datum::Null];
+        funct.initialize(&mut state);
 
         funct.apply(&DUMMY_SIG, &[Datum::Integer(5)], 2, &mut state);
         funct.apply(&DUMMY_SIG, &[Datum::Integer(2)], -1, &mut state);
@@ -180,10 +180,12 @@ mod tests {
     fn test_merge_int() {
         let funct = &IntSum {};
 
-        let mut state1 = funct.initialize();
+        let mut state1 = vec![Datum::Null];
+        funct.initialize(&mut state1);
         funct.apply(&DUMMY_SIG, &[Datum::Integer(5)], 2, &mut state1);
 
-        let mut state2 = funct.initialize();
+        let mut state2 = vec![Datum::Null];
+        funct.initialize(&mut state2);
         funct.apply(&DUMMY_SIG, &[Datum::Integer(2)], -1, &mut state2);
 
         funct.merge(&DUMMY_SIG, &state2, &mut state1);
@@ -197,7 +199,8 @@ mod tests {
     fn test_apply_bigint() {
         let funct = &BigintSum {};
 
-        let mut state = funct.initialize();
+        let mut state = vec![Datum::Null];
+        funct.initialize(&mut state);
 
         funct.apply(&DUMMY_SIG, &[Datum::BigInt(5)], 2, &mut state);
         funct.apply(&DUMMY_SIG, &[Datum::BigInt(2)], -1, &mut state);
@@ -211,10 +214,12 @@ mod tests {
     fn test_merge_bigint() {
         let funct = &BigintSum {};
 
-        let mut state1 = funct.initialize();
+        let mut state1 = vec![Datum::Null];
+        funct.initialize(&mut state1);
         funct.apply(&DUMMY_SIG, &[Datum::BigInt(5)], 2, &mut state1);
 
-        let mut state2 = funct.initialize();
+        let mut state2 = vec![Datum::Null];
+        funct.initialize(&mut state2);
         funct.apply(&DUMMY_SIG, &[Datum::BigInt(2)], -1, &mut state2);
 
         funct.merge(&DUMMY_SIG, &state2, &mut state1);
@@ -228,7 +233,8 @@ mod tests {
     fn test_apply_decimal() {
         let funct = &DecimalSum {};
 
-        let mut state = funct.initialize();
+        let mut state = vec![Datum::Null];
+        funct.initialize(&mut state);
 
         funct.apply(
             &DUMMY_SIG,
@@ -252,7 +258,8 @@ mod tests {
     fn test_merge_decimal() {
         let funct = &DecimalSum {};
 
-        let mut state1 = funct.initialize();
+        let mut state1 = vec![Datum::Null];
+        funct.initialize(&mut state1);
         funct.apply(
             &DUMMY_SIG,
             &[Datum::from(Decimal::new(5, 0))],
@@ -260,7 +267,8 @@ mod tests {
             &mut state1,
         );
 
-        let mut state2 = funct.initialize();
+        let mut state2 = vec![Datum::Null];
+        funct.initialize(&mut state2);
         funct.apply(
             &DUMMY_SIG,
             &[Datum::from(Decimal::new(15, 1))],
