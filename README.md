@@ -82,6 +82,13 @@ the code needs to be formatted and lints need to pass.
 To benchmark run the following command
 ```sh
   cargo run --release --example tpch
+
+  # Or with a larger scale factor
+  cargo run --release --example tpch -- -s 10
+
+  # Or to skip the reset/loading phase and rerun with
+  # the tables loaded from the previous run
+  cargo run --release --example tpch -- --skipload
 ```
 
 ### Related Work

@@ -17,6 +17,10 @@ use std::time::{Duration, Instant};
 static GLOBAL: Jemalloc = Jemalloc;
 
 fn main() -> Result<(), Box<dyn Error>> {
+    let listen_address = "0.0.0.0:3308";
+    let client_url = "mysql://root:password@localhost:3308";
+    let path = "target/benchmark_db";
+
     let matches = App::new("My Super Program")
         .arg(
             Arg::with_name("scale")
@@ -25,27 +29,35 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .default_value("1")
                 .possible_values(&["1", "5", "10", "15"]),
         )
+        .arg(
+            Arg::with_name("skip_load")
+                .long("skipload")
+                .takes_value(false),
+        )
         .get_matches();
 
     let s = matches.value_of("scale").unwrap().parse().unwrap();
+    let skip_load = matches.is_present("skip_load");
 
-    let listen_address = "0.0.0.0:3308";
-    let client_url = "mysql://root:password@localhost:3308";
-    let path = "target/benchmark_db";
     let current_dir = std::env::current_dir().unwrap();
-
     let dbgendata_dir = current_dir.join("target").join(format!("dbgen_s{}", s));
-    build_test_data(s, dbgendata_dir.as_path())?;
-    reset_database(path)?;
+
+    if !skip_load {
+        build_test_data(s, dbgendata_dir.as_path())?;
+        reset_database(path)?;
+    }
+
     let server_thread = start_server(listen_address, path)?;
     std::thread::sleep(Duration::from_secs(1));
     eprintln!("Creating connection");
     let mut mysql_connection = mysql::Conn::new(client_url)?;
-    create_tables(&mut mysql_connection)?;
-    load_tables(
-        &mut mysql_connection,
-        dbgendata_dir.as_os_str().to_str().unwrap(),
-    )?;
+    if !skip_load {
+        create_tables(&mut mysql_connection)?;
+        load_tables(
+            &mut mysql_connection,
+            dbgendata_dir.as_os_str().to_str().unwrap(),
+        )?;
+    }
     run_queries(&mut mysql_connection)?;
     eprintln!("Done");
     std::mem::drop(server_thread);
