@@ -1,6 +1,7 @@
 use crate::registry::Registry;
 use crate::{Function, FunctionDefinition, FunctionSignature, FunctionType};
-use data::{DataType, Datum, NaiveDate, Session};
+use data::chrono::NaiveDate;
+use data::{DataType, Datum, Session};
 use std::str::FromStr;
 
 #[derive(Debug)]
