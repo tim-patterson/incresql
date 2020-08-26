@@ -99,9 +99,15 @@ pub trait Function: Debug + Sync + 'static {
 
 /// A function implementation for aggregate functions.
 pub trait AggregateFunction: Debug + Sync + 'static {
-    /// Returns a new "empty"/initial state
-    fn initialize(&self) -> Datum<'static> {
-        Datum::Null
+    /// Returns the size of the state (in number of datums) needed by this
+    /// aggregate function
+    fn state_size(&self) -> usize {
+        1
+    }
+
+    /// Initializes the initial state
+    fn initialize(&self, state: &mut [Datum<'static>]) {
+        state[0] = Datum::Null;
     }
 
     /// Applies the new input to the state, for retractable
@@ -111,20 +117,20 @@ pub trait AggregateFunction: Debug + Sync + 'static {
         signature: &FunctionSignature,
         args: &[Datum],
         freq: i64,
-        state: &mut Datum<'static>,
+        state: &mut [Datum<'static>],
     );
 
     /// Merges two states together.
     fn merge(
         &self,
         signature: &FunctionSignature,
-        input_state: &Datum<'static>,
-        state: &mut Datum<'static>,
+        input_state: &[Datum<'static>],
+        state: &mut [Datum<'static>],
     );
 
     /// Render the final result from the state
-    fn finalize<'a>(&self, _signature: &FunctionSignature, state: &'a Datum<'a>) -> Datum<'a> {
-        state.ref_clone()
+    fn finalize<'a>(&self, _signature: &FunctionSignature, state: &'a [Datum<'a>]) -> Datum<'a> {
+        state[0].ref_clone()
     }
 
     /// Can we undo records from this aggregate. Postgres calls these
