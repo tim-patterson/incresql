@@ -436,7 +436,7 @@ select
 from
     tpch.lineitem
 where
-    l_shipdate <= date_sub(cast('1998-12-01' as date), 90)
+    l_shipdate <= date_sub(date '1998-12-01', 90)
 group by
     l_returnflag,
     l_linestatus
