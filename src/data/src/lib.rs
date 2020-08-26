@@ -1,6 +1,6 @@
 // Re-exported as almost every crate using data will also need decimal and
 // NaiveDate
-pub use chrono::NaiveDate;
+pub use chrono;
 pub use rust_decimal;
 mod datatype;
 mod datum;

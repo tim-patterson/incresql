@@ -16,6 +16,7 @@ fn show_functions() {
         |avg|
         |count|
         |database|
+        |date_sub|
         |json_extract|
         |json_unquote|
         |sum|
