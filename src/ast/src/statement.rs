@@ -12,6 +12,7 @@ pub enum Statement {
     DropDatabase(String),
     UseDatabase(String),
     CreateTable(CreateTable),
+    CompactTable(CompactTable),
     DropTable(DropTable),
     Explain(Explain),
 }
@@ -35,6 +36,12 @@ pub struct CreateTable {
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct DropTable {
+    pub database: Option<String>,
+    pub name: String,
+}
+
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct CompactTable {
     pub database: Option<String>,
     pub name: String,
 }
