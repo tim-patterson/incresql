@@ -62,33 +62,41 @@ impl Registry {
         function_signature: &FunctionSignature,
     ) -> Result<(FunctionSignature<'static>, FunctionType), FunctionResolutionError> {
         if let Some(candidates) = self.functions.get(function_signature.name) {
-            // Filter candidates
-            let candidate_list: Vec<_> = candidates
+            // Rank and filter candidates.
+            let top_candidate = candidates
                 .iter()
-                .filter(|candidate| {
+                .filter_map(|candidate| {
                     if candidate.signature.args.len() == function_signature.args.len() {
                         candidate
                             .signature
                             .args
                             .iter()
                             .zip(function_signature.args.iter())
-                            .all(|(d1, d2)| {
-                                if let (DataType::Decimal(..), DataType::Decimal(..)) = (d1, d2) {
-                                    true
-                                } else if *d1 == DataType::Null || *d2 == DataType::Null {
-                                    // Null types are really more like wildcards
-                                    true
+                            .map(Registry::datatype_rank)
+                            .fold(Some(0_u32), |a,b|
+                                if let (Some(a), Some(b)) =(a,b) {
+                                    Some(a + b)
                                 } else {
-                                    d1 == d2
+                                    None
                                 }
-                            })
+                            ).map(|rank| (rank, candidate))
                     } else {
-                        false
+                        None
                     }
-                })
-                .collect();
+                }).next();
 
-            if let Some(candidate) = candidate_list.first() {
+            if let Some((_rank, candidate)) = top_candidate {
+                // TODO we've hit a blocker here, we'd need to either
+                // 1. accept the list of input expressions so we can mutate the casts in.
+                // 2. return all candidates to the caller and let them handle it.
+                // 3. figure out how to represent compound functions and return them instead.
+                // #3 would support us representing regex functions as a compiler function
+                // wrapped in an evaluator and if the regex was a constant then the constant
+                // folding would automagically handle that for us. The same applies to jsonpath
+                // expressions.
+                panic!();
+                function_signature.args.iter().zip(&candidate.signature.args);
+
                 // Calculate return type,
                 // There's 3 paths here.
                 // 1. A return type is specified in the function signature, used for cast(foo as decimal(2,3)),
@@ -125,6 +133,29 @@ impl Registry {
         self.functions
             .iter()
             .map(|(function_name, _defs)| *function_name)
+    }
+
+    /// Returns a "closeness" ranking of our desire to type widen
+    /// from one type to another type. None is returned where
+    /// we wont type widen.
+    /// 0 is the highest closeness, we use this for identity or upcasting nulls, ie
+    /// int -> int.
+    fn datatype_rank(from: DataType, to: DataType) -> Option<u32> {
+        if from == to || from == DataType::Null || to == DataType::Null {
+            return Some(0)
+        }
+
+        match (from, to) {
+            // Special case for decimal, functions that accept decimal
+            // accept any sized decimals.
+            (DataType::Decimal(_,_), DataType::Decimal(_,_)) => Some(0),
+            // Int can be cast to bigint and decimal safely
+            (DataType::Integer, DataType::BigInt) => Some(1),
+            (DataType::Integer, DataType::Decimal(_,_)) => Some(2),
+            // Bigint can be cast to decimal safely
+            (DataType::BigInt, DataType::Decimal(_,_)) => Some(1),
+            _ => None
+        }
     }
 }
 
