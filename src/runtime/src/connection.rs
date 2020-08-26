@@ -86,6 +86,19 @@ impl Connection<'_> {
                 catalog.create_table(&database, &create_table.name, &create_table.columns)?;
                 return Ok((vec![], empty_tuple_iter()));
             }
+            Statement::CompactTable(compact_table) => {
+                let database = compact_table
+                    .database
+                    .unwrap_or_else(|| self.session.current_database.read().unwrap().to_string());
+
+                let table = {
+                    let catalog = self.runtime.planner.catalog.read().unwrap();
+                    catalog.table(&database, &compact_table.name)?
+                };
+                table.force_rocks_compaction();
+
+                return Ok((vec![], empty_tuple_iter()));
+            }
             Statement::DropTable(drop_table) => {
                 let mut catalog = self.runtime.planner.catalog.write().unwrap();
                 let database = drop_table

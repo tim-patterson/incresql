@@ -1,4 +1,4 @@
-use crate::atoms::{identifier_str, kw};
+use crate::atoms::{identifier_str, kw, qualified_reference};
 use crate::create::create;
 use crate::delete::delete;
 use crate::drop::drop_;
@@ -8,10 +8,10 @@ use crate::show::show;
 use crate::whitespace::ws_0;
 use crate::ParserResult;
 use ast::rel::logical::LogicalOperator;
-use ast::statement::{Explain, Statement};
+use ast::statement::{CompactTable, Explain, Statement};
 use nom::branch::alt;
 use nom::combinator::{cut, map};
-use nom::sequence::preceded;
+use nom::sequence::{preceded, tuple};
 
 pub fn statement(input: &str) -> ParserResult<Statement> {
     alt((
@@ -21,6 +21,7 @@ pub fn statement(input: &str) -> ParserResult<Statement> {
         use_,
         create,
         drop_,
+        compact,
     ))(input)
 }
 
@@ -41,6 +42,19 @@ fn use_(input: &str) -> ParserResult<Statement> {
     map(
         preceded(kw("USE"), cut(preceded(ws_0, identifier_str))),
         Statement::UseDatabase,
+    )(input)
+}
+
+fn compact(input: &str) -> ParserResult<Statement> {
+    map(
+        preceded(
+            kw("COMPACT"),
+            cut(preceded(
+                tuple((ws_0, kw("TABLE"), ws_0)),
+                qualified_reference,
+            )),
+        ),
+        |(database, name)| Statement::CompactTable(CompactTable { database, name }),
     )(input)
 }
 
@@ -95,6 +109,17 @@ mod tests {
         assert_eq!(
             statement("USE foobar").unwrap().1,
             Statement::UseDatabase("foobar".to_string())
+        );
+    }
+
+    #[test]
+    fn test_compact() {
+        assert_eq!(
+            statement("Compact table foo.bar").unwrap().1,
+            Statement::CompactTable(CompactTable {
+                database: Some("foo".to_string()),
+                name: "bar".to_string()
+            })
         );
     }
 }

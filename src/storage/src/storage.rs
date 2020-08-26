@@ -104,7 +104,6 @@ impl Storage {
 
         // These options are "tunable"
         block_options.set_bloom_filter(10, false);
-        block_options.set_cache_index_and_filter_blocks(true);
         options.set_block_based_table_factory(&block_options);
         options.increase_parallelism(4);
         options.set_compression_type(DBCompressionType::Lz4);
