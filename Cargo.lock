@@ -498,6 +498,7 @@ dependencies = [
 name = "incresql"
 version = "0.1.0"
 dependencies = [
+ "clap 2.33.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "data 0.1.0",
  "jemallocator 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "mysql 19.0.0 (registry+https://github.com/rust-lang/crates.io-index)",

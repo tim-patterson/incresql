@@ -2,12 +2,13 @@ use runtime::Runtime;
 use std::error::Error;
 use std::process::Command;
 
+use clap::{App, Arg};
 #[cfg(not(windows))]
 use jemallocator::Jemalloc;
 use mysql::prelude::Queryable;
 use mysql::Conn;
 use server::Server;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -16,26 +17,42 @@ use std::time::{Duration, Instant};
 static GLOBAL: Jemalloc = Jemalloc;
 
 fn main() -> Result<(), Box<dyn Error>> {
+    let matches = App::new("My Super Program")
+        .arg(
+            Arg::with_name("scale")
+                .short("s")
+                .long("scale")
+                .default_value("1")
+                .possible_values(&["1", "5", "10", "15"]),
+        )
+        .get_matches();
+
+    let s = matches.value_of("scale").unwrap().parse().unwrap();
+
     let listen_address = "0.0.0.0:3308";
     let client_url = "mysql://root:password@localhost:3308";
     let path = "target/benchmark_db";
-    build_test_data()?;
+    let current_dir = std::env::current_dir().unwrap();
+
+    let dbgendata_dir = current_dir.join("target").join(format!("dbgen_s{}", s));
+    build_test_data(s, dbgendata_dir.as_path())?;
     reset_database(path)?;
-    let server_thread = start_server(listen_address, path);
+    let server_thread = start_server(listen_address, path)?;
     std::thread::sleep(Duration::from_secs(1));
     eprintln!("Creating connection");
     let mut mysql_connection = mysql::Conn::new(client_url)?;
     create_tables(&mut mysql_connection)?;
-    load_tables(&mut mysql_connection)?;
+    load_tables(
+        &mut mysql_connection,
+        dbgendata_dir.as_os_str().to_str().unwrap(),
+    )?;
+    run_queries(&mut mysql_connection)?;
     eprintln!("Done");
     std::mem::drop(server_thread);
     Ok(())
 }
 
-fn build_test_data() -> Result<(), Box<dyn Error>> {
-    let current_dir = std::env::current_dir().unwrap();
-    let dbgendata_dir = current_dir.join("target").join("dbgen_s1");
-
+fn build_test_data(s: u32, dbgendata_dir: &Path) -> Result<(), Box<dyn Error>> {
     if dbgendata_dir.is_dir() {
         eprintln!("dbgen files already exist :)");
         return Ok(());
@@ -60,7 +77,7 @@ fn build_test_data() -> Result<(), Box<dyn Error>> {
             "dbgen",
             "/tpch-dbgen/dbgen",
             "-s",
-            "1",
+            &s.to_string(),
             "-f",
             "-b",
             "/tpch-dbgen/dists.dss",
@@ -93,10 +110,10 @@ fn start_server(listen_address: &str, path: &str) -> Result<JoinHandle<()>, Box<
 
 fn create_tables(connection: &mut Conn) -> Result<(), Box<dyn Error>> {
     eprintln!("Creating schema/tables");
-    connection.query_drop("create database tpch_1")?;
+    connection.query_drop("create database tpch")?;
     connection.query_drop(
         "\
-CREATE TABLE tpch_1.part
+CREATE TABLE tpch.part
 (
     p_partkey       BIGINT,
     p_name          TEXT,
@@ -113,7 +130,7 @@ CREATE TABLE tpch_1.part
 
     connection.query_drop(
         "\
-CREATE TABLE tpch_1.supplier
+CREATE TABLE tpch.supplier
 (
     s_suppkey     BIGINT,
     s_name        TEXT,
@@ -128,7 +145,7 @@ CREATE TABLE tpch_1.supplier
 
     connection.query_drop(
         "\
-CREATE TABLE tpch_1.partsupp
+CREATE TABLE tpch.partsupp
 (
     ps_partkey     BIGINT,
     ps_suppkey     BIGINT,
@@ -141,7 +158,7 @@ CREATE TABLE tpch_1.partsupp
 
     connection.query_drop(
         "\
-CREATE TABLE tpch_1.customer
+CREATE TABLE tpch.customer
 (
     c_custkey    BIGINT,
     c_name       TEXT,
@@ -157,7 +174,7 @@ CREATE TABLE tpch_1.customer
 
     connection.query_drop(
         "\
-CREATE TABLE tpch_1.orders
+CREATE TABLE tpch.orders
 (
     o_orderkey       BIGINT,
     o_custkey        BIGINT,
@@ -173,7 +190,7 @@ CREATE TABLE tpch_1.orders
 
     connection.query_drop(
         "\
-CREATE TABLE tpch_1.lineitem
+CREATE TABLE tpch.lineitem
 (
     l_orderkey       BIGINT,
     l_partkey        BIGINT,
@@ -197,7 +214,7 @@ CREATE TABLE tpch_1.lineitem
 
     connection.query_drop(
         "\
-CREATE TABLE tpch_1.nation
+CREATE TABLE tpch.nation
 (
     n_nationkey   INTEGER,
     n_name        TEXT,
@@ -209,7 +226,7 @@ CREATE TABLE tpch_1.nation
 
     connection.query_drop(
         "\
-CREATE TABLE tpch_1.region
+CREATE TABLE tpch.region
 (
     r_regionkey   INTEGER,
     r_name        TEXT,
@@ -221,11 +238,12 @@ CREATE TABLE tpch_1.region
     Ok(())
 }
 
-fn load_tables(connection: &mut Conn) -> Result<(), Box<dyn Error>> {
+fn load_tables(connection: &mut Conn, data_dir: &str) -> Result<(), Box<dyn Error>> {
     load_table(
         connection,
-        r#"
-INSERT INTO tpch_1.part
+        &format!(
+            r#"
+INSERT INTO tpch.part
 SELECT
   CAST(data->>"$[0]" AS BIGINT) as p_partkey,
   data->>"$[1]" as p_name,
@@ -236,15 +254,18 @@ SELECT
   data->>"$[6]" as p_container,
   CAST(data->>"$[7]" AS DECIMAL(12,2)) as p_retailprice,
   data->>"$[8]" as p_comment
-FROM directory "target/dbgen_s1/part.tbl" with(delimiter="|")
+FROM directory "{}/part.tbl" with(delimiter="|")
     "#,
+            data_dir
+        ),
         "part",
     )?;
 
     load_table(
         connection,
-        r#"
-INSERT INTO tpch_1.supplier
+        &format!(
+            r#"
+INSERT INTO tpch.supplier
 SELECT
   CAST(data->>"$[0]" AS BIGINT) as s_suppkey,
   data->>"$[1]" as s_name,
@@ -253,30 +274,36 @@ SELECT
   data->>"$[4]" as s_phone,
   CAST(data->>"$[5]" AS DECIMAL(12,2)) as s_acctbal,
   data->>"$[6]" as s_comment
-FROM directory "target/dbgen_s1/supplier.tbl" with(delimiter="|")
+FROM directory "{}/supplier.tbl" with(delimiter="|")
     "#,
+            data_dir
+        ),
         "supplier",
     )?;
 
     load_table(
         connection,
-        r#"
-INSERT INTO tpch_1.partsupp
+        &format!(
+            r#"
+INSERT INTO tpch.partsupp
 SELECT
   CAST(data->>"$[0]" AS BIGINT) as ps_partkey,
   CAST(data->>"$[1]" AS BIGINT) as ps_suppkey,
   CAST(data->>"$[2]" as INTEGER) as ps_availqty,
   CAST(data->>"$[3]" as DECIMAL(12,2)) as ps_supplycost,
   data->>"$[4]" as ps_comment
-FROM directory "target/dbgen_s1/partsupp.tbl" with(delimiter="|")
+FROM directory "{}/partsupp.tbl" with(delimiter="|")
     "#,
+            data_dir
+        ),
         "partsupp",
     )?;
 
     load_table(
         connection,
-        r#"
-INSERT INTO tpch_1.customer
+        &format!(
+            r#"
+INSERT INTO tpch.customer
 SELECT
   CAST(data->>"$[0]" AS BIGINT) as c_custkey,
   data->>"$[1]" as c_name,
@@ -286,15 +313,18 @@ SELECT
   CAST(data->>"$[5]" AS DECIMAL(12,2)) as c_acctbal,
   data->>"$[6]" as c_mkcsegment,
   data->>"$[7]" as c_comment
-FROM directory "target/dbgen_s1/customer.tbl" with(delimiter="|")
+FROM directory "{}/customer.tbl" with(delimiter="|")
     "#,
+            data_dir
+        ),
         "customer",
     )?;
 
     load_table(
         connection,
-        r#"
-INSERT INTO tpch_1.orders
+        &format!(
+            r#"
+INSERT INTO tpch.orders
 SELECT
   CAST(data->>"$[0]" AS BIGINT) as o_orderkey,
   CAST(data->>"$[1]" AS BIGINT) as o_custkey,
@@ -304,15 +334,18 @@ SELECT
   data->>"$[5]" as o_clerk,
   CAST(data->>"$[6]" AS INTEGER) as o_shippriority,
   data->>"$[7]" as o_comment
-FROM directory "target/dbgen_s1/orders.tbl" with(delimiter="|")
+FROM directory "{}/orders.tbl" with(delimiter="|")
     "#,
+            data_dir
+        ),
         "orders",
     )?;
 
     load_table(
         connection,
-        r#"
-INSERT INTO tpch_1.lineitem
+        &format!(
+            r#"
+INSERT INTO tpch.lineitem
 SELECT
   CAST(data->>"$[0]" AS BIGINT) as l_orderkey,
   CAST(data->>"$[1]" AS BIGINT) as l_partkey,
@@ -330,37 +363,77 @@ SELECT
   data->>"$[13]" as l_shipinstruct,
   data->>"$[14]" as l_shipmode,
   data->>"$[15]" as l_comment
-FROM directory "target/dbgen_s1/lineitem.tbl" with(delimiter="|")
+FROM directory "{}/lineitem.tbl" with(delimiter="|")
     "#,
+            data_dir
+        ),
         "lineitem",
     )?;
 
     load_table(
         connection,
-        r#"
-INSERT INTO tpch_1.nation
+        &format!(
+            r#"
+INSERT INTO tpch.nation
 SELECT
   CAST(data->>"$[0]" AS INTEGER) as n_nationkey,
   data->>"$[1]" as n_name,
   CAST(data->>"$[2]" AS INTEGER) as n_regionkey,
   data->>"$[3]" as n_comment
-FROM directory "target/dbgen_s1/nation.tbl" with(delimiter="|")
+FROM directory "{}/nation.tbl" with(delimiter="|")
     "#,
+            data_dir
+        ),
         "nation",
     )?;
 
     load_table(
         connection,
-        r#"
-INSERT INTO tpch_1.region
+        &format!(
+            r#"
+INSERT INTO tpch.region
 SELECT
   CAST(data->>"$[0]" AS INTEGER) as r_regionkey,
   data->>"$[1]" as r_name,
   data->>"$[2]" as r_comment
-FROM directory "target/dbgen_s1/region.tbl" with(delimiter="|")
+FROM directory "{}/region.tbl" with(delimiter="|")
     "#,
+            data_dir
+        ),
         "region",
     )?;
+    Ok(())
+}
+
+fn run_queries(connection: &mut Conn) -> Result<(), Box<dyn Error>> {
+    run_query(
+        connection,
+        "Query 1",
+        r#"
+select
+    l_returnflag,
+    l_linestatus,
+    sum(l_quantity) as sum_qty,
+    sum(l_extendedprice) as sum_base_price,
+    sum(l_extendedprice*(1-l_discount)) as sum_disc_price,
+    sum(l_extendedprice*(1-l_discount)*(1+l_tax)) as sum_charge,
+    avg(l_quantity) as avg_qty,
+    avg(l_extendedprice) as avg_price,
+    avg(l_discount) as avg_disc,
+    count(*) as count_order
+from
+    tpch.lineitem
+where
+    l_shipdate <= date_sub(date '1998-12-01', 90)
+group by
+    l_returnflag,
+    l_linestatus
+order by
+    l_returnflag,
+    l_linestatus;
+    "#,
+    )?;
+
     Ok(())
 }
 
@@ -372,11 +445,19 @@ fn load_table(
     eprintln!("Loading {}", table_name);
     let start = Instant::now();
     connection.query_drop(load_script)?;
-    println!("  {} load in {:?}", table_name, start.elapsed());
+    println!("  load in         {:?}", start.elapsed());
 
     let compaction_start = Instant::now();
-    connection.query_drop(&format!("COMPACT TABLE tpch_1.{}", table_name))?;
-    println!("  compaction in {:?}", compaction_start.elapsed());
-    println!("  {} total_load in  {:?}", table_name, start.elapsed());
+    connection.query_drop(&format!("COMPACT TABLE tpch.{}", table_name))?;
+    println!("  compaction in:  {:?}", compaction_start.elapsed());
+    println!("  total_load in:  {:?}", start.elapsed());
+    Ok(())
+}
+
+fn run_query(connection: &mut Conn, query_name: &str, query: &str) -> Result<(), Box<dyn Error>> {
+    eprintln!("Running query {}", query_name);
+    let start = Instant::now();
+    connection.query_drop(query)?;
+    println!("  total_time: {:?}", start.elapsed());
     Ok(())
 }
