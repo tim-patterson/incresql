@@ -27,6 +27,7 @@ pub fn register_builtins(registry: &mut Registry) {
         DataType::BigInt,
         DataType::Decimal(0, 0),
         DataType::Text,
+        DataType::Date,
     ] {
         registry.register_function(FunctionDefinition::new(
             "=",
