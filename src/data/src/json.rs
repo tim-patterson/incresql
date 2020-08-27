@@ -270,13 +270,15 @@ impl<'a> Json<'a> {
     /// This function is for the iters for arrays and objects where we've got a
     /// json that actually contains a bunch of objects end to end, this function
     /// splits off first item and returns the rest.
-    fn split_first(&self) -> (Json<'a>, Json<'a>) {
+    /// Size is passed in here as its not cheap to calculate and in most cases
+    /// we already have evaluated in the calling function.
+    fn split_first(&self, size: usize) -> (Json<'a>, Json<'a>) {
         (
             Json {
-                bytes: &self.bytes[..self.size()],
+                bytes: &self.bytes[..size],
             },
             Json {
-                bytes: &self.bytes[self.size()..],
+                bytes: &self.bytes[size..],
             },
         )
     }
@@ -301,10 +303,11 @@ impl<'a> Iterator for JsonIter<'a> {
     type Item = Json<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.json.size() == 0 {
+        let size = self.json.size();
+        if size == 0 {
             None
         } else {
-            let (next, rest) = self.json.split_first();
+            let (next, rest) = self.json.split_first(size);
             self.json = rest;
             Some(next)
         }
