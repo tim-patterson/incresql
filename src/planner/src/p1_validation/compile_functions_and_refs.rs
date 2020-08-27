@@ -1,4 +1,4 @@
-use crate::utils::expr::type_for_expression;
+use crate::utils::expr::{assemble_compound_function, type_for_expression};
 use crate::utils::logical::source_fields_for_operator;
 use crate::{Field, FieldResolutionError, PlannerError};
 use ast::expr::*;
@@ -63,7 +63,15 @@ fn compile_functions_in_expr(
                         signature: Box::new(signature),
                     })
                 }
-                FunctionType::Compound(_) => unimplemented!(),
+                FunctionType::Compound(compound_function) => {
+                    let mut exploded_expr = assemble_compound_function(&compound_function, &args);
+                    compile_functions_in_expr(
+                        &mut exploded_expr,
+                        source_fields,
+                        function_registry,
+                    )?;
+                    exploded_expr
+                }
             };
         }
         Expression::Cast(cast) => {
