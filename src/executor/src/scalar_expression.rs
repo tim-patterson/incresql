@@ -80,7 +80,7 @@ mod tests {
     use ast::expr::CompiledFunctionCall;
     use data::DataType;
     use functions::registry::Registry;
-    use functions::{FunctionSignature, FunctionType};
+    use functions::FunctionSignature;
 
     #[test]
     fn test_eval_scalar_literal() {
@@ -100,11 +100,7 @@ mod tests {
             .resolve_function(&mut signature)
             .unwrap();
 
-        let function = if let FunctionType::Scalar(f) = function_type {
-            f
-        } else {
-            panic!()
-        };
+        let function = function_type.as_scalar();
 
         let mut expression = Expression::CompiledFunctionCall(CompiledFunctionCall {
             function,

@@ -115,7 +115,7 @@ impl Registry {
                     ret,
                 };
 
-                Ok((return_signature, candidate.function))
+                Ok((return_signature, candidate.function.clone()))
             } else {
                 Err(FunctionResolutionError::MatchingSignatureNotFound(
                     function_signature.name.to_string(),
