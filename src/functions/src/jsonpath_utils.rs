@@ -4,11 +4,9 @@ use nom::bytes::complete::escaped_transform;
 use nom::bytes::complete::{is_not, tag, tag_no_case, take, take_while};
 use nom::combinator::{all_consuming, cut, map, map_res, opt, recognize, value};
 use nom::error::context;
-use nom::lib::std::iter::once;
 use nom::multi::many0;
 use nom::sequence::{delimited, pair, preceded};
 use nom::{AsChar, IResult};
-use std::iter::empty;
 
 /// Jsonpath utils.
 /// Jsonpath expressions start at a single root and with each path section the expression
@@ -39,20 +37,20 @@ impl JsonPathExpression {
             .any(|selector| selector == &JsonPathSelector::Wildcard)
     }
 
-    /// Evaluates the given jsonpath and returns an iterator over the matches
-    pub(crate) fn evaluate<'a, 'b: 'a>(
-        &'a self,
-        json: Json<'b>,
-    ) -> Box<dyn Iterator<Item = Json<'b>> + 'a> {
-        let root: Box<dyn Iterator<Item = Json>> = Box::from(once(json));
-        self.selectors.iter().fold(root, |input, selector| {
-            Box::from(input.flat_map(move |node| selector.evaluate(node)))
-        })
+    /// Evaluates the given jsonpath and calls a call back for each match.
+    pub(crate) fn evaluate<'a, 'b: 'a, F: FnMut(Json<'b>)>(&'a self, json: Json<'b>, f: &mut F) {
+        if self.selectors.is_empty() {
+            f(json)
+        } else {
+            self.selectors[0].evaluate(json, &self.selectors[1..], f);
+        }
     }
 
     /// Returns the first match if one exists
     pub(crate) fn evaluate_single<'b>(&self, json: Json<'b>) -> Option<Json<'b>> {
-        self.evaluate(json).next()
+        let mut result = None;
+        self.evaluate(json, &mut (|j| result = Some(j)));
+        result
     }
 }
 
@@ -64,35 +62,50 @@ enum JsonPathSelector {
 }
 
 impl JsonPathSelector {
-    pub fn evaluate<'a, 'b: 'a>(
+    /// Evaluate the given selector, calling the call back function on any matches.
+    pub fn evaluate<'a, 'b: 'a, F: FnMut(Json<'b>)>(
         &'a self,
         input: Json<'b>,
-    ) -> Box<dyn Iterator<Item = Json<'b>> + 'a> {
+        rest: &[JsonPathSelector],
+        f: &mut F,
+    ) {
         match input.json_type() {
             JsonType::Object => {
                 let kv_iter = input.iter_object().unwrap();
                 match self {
-                    JsonPathSelector::Wildcard => Box::from(kv_iter.map(|(_k, v)| v)),
-                    JsonPathSelector::StringIdentifier(str) => {
-                        Box::from(kv_iter.filter_map(move |(k, v)| {
-                            if k.eq_ignore_ascii_case(str) {
-                                Some(v)
+                    JsonPathSelector::Wildcard => {
+                        for (_, v) in kv_iter {
+                            if rest.is_empty() {
+                                f(v);
                             } else {
-                                None
+                                rest[0].evaluate(v, &rest[1..], f);
                             }
-                        }))
+                        }
+                    }
+                    JsonPathSelector::StringIdentifier(str) => {
+                        for (k, v) in kv_iter {
+                            if k.eq_ignore_ascii_case(str) {
+                                if rest.is_empty() {
+                                    f(v);
+                                } else {
+                                    rest[0].evaluate(v, &rest[1..], f);
+                                }
+                            }
+                        }
                     }
                     JsonPathSelector::NumericIdentifier(idx) => {
                         // This seems to match the behaviour of of other jsonpath implementations.
                         // I think its because in JS arrays are semantically objects with the indexes
                         // as keys
-                        Box::from(kv_iter.filter_map(move |(k, v)| {
+                        for (k, v) in kv_iter {
                             if k.eq(&idx.to_string()) {
-                                Some(v)
-                            } else {
-                                None
+                                if rest.is_empty() {
+                                    f(v);
+                                } else {
+                                    rest[0].evaluate(v, &rest[1..], f);
+                                }
                             }
-                        }))
+                        }
                     }
                 }
             }
@@ -100,40 +113,46 @@ impl JsonPathSelector {
                 let v_iter = input.iter_array().unwrap();
 
                 match self {
-                    JsonPathSelector::Wildcard => Box::from(v_iter),
+                    JsonPathSelector::Wildcard => {
+                        for v in v_iter {
+                            if rest.is_empty() {
+                                f(v);
+                            } else {
+                                rest[0].evaluate(v, &rest[1..], f);
+                            }
+                        }
+                    }
                     JsonPathSelector::StringIdentifier(s) => {
                         if let Ok(i) = s.parse::<i64>() {
-                            if i < 0 {
-                                Box::from(empty())
-                            } else {
-                                Box::from(v_iter.enumerate().filter_map(move |(idx, v)| {
+                            if i >= 0 {
+                                for (idx, v) in v_iter.enumerate() {
                                     if idx == i as usize {
-                                        Some(v)
-                                    } else {
-                                        None
+                                        if rest.is_empty() {
+                                            f(v);
+                                        } else {
+                                            rest[0].evaluate(v, &rest[1..], f);
+                                        }
                                     }
-                                }))
+                                }
                             }
-                        } else {
-                            Box::from(empty())
                         }
                     }
                     JsonPathSelector::NumericIdentifier(i) => {
-                        if *i < 0 {
-                            Box::from(empty())
-                        } else {
-                            Box::from(v_iter.enumerate().filter_map(move |(idx, v)| {
+                        if *i >= 0 {
+                            for (idx, v) in v_iter.enumerate() {
                                 if idx == *i as usize {
-                                    Some(v)
-                                } else {
-                                    None
+                                    if rest.is_empty() {
+                                        f(v);
+                                    } else {
+                                        rest[0].evaluate(v, &rest[1..], f);
+                                    }
                                 }
-                            }))
+                            }
                         }
                     }
                 }
             }
-            _ => Box::from(empty()),
+            _ => {}
         }
     }
 }

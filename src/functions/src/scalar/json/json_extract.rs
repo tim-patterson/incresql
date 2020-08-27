@@ -20,9 +20,7 @@ impl Function for JsonExtract {
             if let Some(expr) = JsonPathExpression::parse(json_path) {
                 if expr.could_return_many() {
                     let json = JsonBuilder::default().array(|array| {
-                        for json_match in expr.evaluate(json) {
-                            array.push_json(json_match);
-                        }
+                        expr.evaluate(json, &mut (|json_match| array.push_json(json_match)))
                     });
                     Datum::from(json)
                 } else {
