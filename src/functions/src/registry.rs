@@ -1,4 +1,7 @@
-use crate::{register_builtins, FunctionDefinition, FunctionSignature, FunctionType};
+use crate::{
+    register_builtins, CompoundFunction, CompoundFunctionArg, FunctionDefinition,
+    FunctionSignature, FunctionType,
+};
 use data::DataType;
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
@@ -63,7 +66,7 @@ impl Registry {
     ) -> Result<(FunctionSignature<'static>, FunctionType), FunctionResolutionError> {
         if let Some(candidates) = self.functions.get(function_signature.name) {
             // Rank and filter candidates.
-            let top_candidate = candidates
+            let mut matching_candidates: Vec<_> = candidates
                 .iter()
                 .filter_map(|candidate| {
                     if candidate.signature.args.len() == function_signature.args.len() {
@@ -72,50 +75,76 @@ impl Registry {
                             .args
                             .iter()
                             .zip(function_signature.args.iter())
-                            .map(Registry::datatype_rank)
-                            .fold(Some(0_u32), |a,b|
-                                if let (Some(a), Some(b)) =(a,b) {
+                            .map(|(to, from)| Registry::datatype_rank(*from, *to))
+                            .fold(Some(0_u32), |a, b| {
+                                if let (Some(a), Some(b)) = (a, b) {
                                     Some(a + b)
                                 } else {
                                     None
                                 }
-                            ).map(|rank| (rank, candidate))
+                            })
+                            .map(|rank| (rank, candidate))
                     } else {
                         None
                     }
-                }).next();
+                })
+                .collect();
 
-            if let Some((_rank, candidate)) = top_candidate {
-                // TODO we've hit a blocker here, we'd need to either
-                // 1. accept the list of input expressions so we can mutate the casts in.
-                // 2. return all candidates to the caller and let them handle it.
-                // 3. figure out how to represent compound functions and return them instead.
-                // #3 would support us representing regex functions as a compiler function
-                // wrapped in an evaluator and if the regex was a constant then the constant
-                // folding would automagically handle that for us. The same applies to jsonpath
-                // expressions.
-                panic!();
-                function_signature.args.iter().zip(&candidate.signature.args);
+            matching_candidates.sort_by_key(|(rank, _)| *rank);
 
-                // Calculate return type,
-                // There's 3 paths here.
-                // 1. A return type is specified in the function signature, used for cast(foo as decimal(2,3)),
-                // 2. A custom_return_type_resolver from the function def is used to calculate the return type based on the input args
-                // 3. A hardcoded return type from the function is used.
-                let ret = if function_signature.ret != DataType::Null {
-                    function_signature.ret
-                } else if let Some(type_resolver) = candidate.custom_return_type_resolver {
-                    type_resolver(&function_signature.args)
+            if let Some((rank, candidate)) = matching_candidates.first() {
+                // Rank 0 means our function is good as is.
+                if *rank != 0 {
+                    let compound_args = function_signature
+                        .args
+                        .iter()
+                        .zip(&candidate.signature.args)
+                        .enumerate()
+                        .map(|(idx, (from, to))| {
+                            if Registry::datatype_rank(*from, *to) == Some(0) {
+                                CompoundFunctionArg::Input(idx)
+                            } else {
+                                CompoundFunctionArg::Function(CompoundFunction {
+                                    function_name: to.cast_function(),
+                                    args: vec![CompoundFunctionArg::Input(idx)],
+                                })
+                            }
+                        })
+                        .collect();
+
+                    let compound_function = CompoundFunction {
+                        function_name: candidate.signature.name,
+                        args: compound_args,
+                    };
+
+                    // The function signature won't actually be used here...
+                    // The planner will re-resolve the sub functions and use the expressions from
+                    // them.
+                    Ok((
+                        candidate.signature.clone(),
+                        FunctionType::Compound(compound_function),
+                    ))
                 } else {
-                    candidate.signature.ret
-                };
-                let return_signature = FunctionSignature {
-                    name: candidate.signature.name,
-                    args: function_signature.args.clone(),
-                    ret,
-                };
+                    // Calculate return type,
+                    // There's 3 paths here.
+                    // 1. A return type is specified in the function signature, used for cast(foo as decimal(2,3)),
+                    // 2. A custom_return_type_resolver from the function def is used to calculate the return type based on the input args
+                    // 3. A hardcoded return type from the function is used.
+                    let ret = if function_signature.ret != DataType::Null {
+                        function_signature.ret
+                    } else if let Some(type_resolver) = candidate.custom_return_type_resolver {
+                        type_resolver(&function_signature.args)
+                    } else {
+                        candidate.signature.ret
+                    };
+                    let return_signature = FunctionSignature {
+                        name: candidate.signature.name,
+                        args: function_signature.args.clone(),
+                        ret,
+                    };
 
-                Ok((return_signature, candidate.function.clone()))
+                    Ok((return_signature, candidate.function.clone()))
+                }
             } else {
                 Err(FunctionResolutionError::MatchingSignatureNotFound(
                     function_signature.name.to_string(),
@@ -142,19 +171,19 @@ impl Registry {
     /// int -> int.
     fn datatype_rank(from: DataType, to: DataType) -> Option<u32> {
         if from == to || from == DataType::Null || to == DataType::Null {
-            return Some(0)
+            return Some(0);
         }
 
         match (from, to) {
             // Special case for decimal, functions that accept decimal
             // accept any sized decimals.
-            (DataType::Decimal(_,_), DataType::Decimal(_,_)) => Some(0),
+            (DataType::Decimal(_, _), DataType::Decimal(_, _)) => Some(0),
             // Int can be cast to bigint and decimal safely
             (DataType::Integer, DataType::BigInt) => Some(1),
-            (DataType::Integer, DataType::Decimal(_,_)) => Some(2),
+            (DataType::Integer, DataType::Decimal(_, _)) => Some(2),
             // Bigint can be cast to decimal safely
-            (DataType::BigInt, DataType::Decimal(_,_)) => Some(1),
-            _ => None
+            (DataType::BigInt, DataType::Decimal(_, _)) => Some(1),
+            _ => None,
         }
     }
 }
@@ -225,5 +254,38 @@ mod tests {
         let (computed_signature, _function) = registry.resolve_function(&mut sig).unwrap();
 
         assert_eq!(computed_signature.ret, DataType::Decimal(28, 7));
+    }
+
+    #[test]
+    fn test_registry_resolve_upcast() {
+        let registry = Registry::new(true);
+
+        let mut sig = FunctionSignature {
+            name: "+",
+            args: vec![DataType::Integer, DataType::BigInt],
+            ret: DataType::Null,
+        };
+
+        let (_function_sig, function) = registry.resolve_function(&mut sig).unwrap();
+
+        let compound_function = if let FunctionType::Compound(c) = function {
+            c
+        } else {
+            panic!()
+        };
+
+        assert_eq!(
+            compound_function,
+            CompoundFunction {
+                function_name: "+",
+                args: vec![
+                    CompoundFunctionArg::Function(CompoundFunction {
+                        function_name: "to_bigint",
+                        args: vec![CompoundFunctionArg::Input(0)]
+                    }),
+                    CompoundFunctionArg::Input(1)
+                ]
+            }
+        );
     }
 }

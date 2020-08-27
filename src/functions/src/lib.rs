@@ -36,13 +36,13 @@ pub enum FunctionType {
     Compound(CompoundFunction),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CompoundFunction {
     pub function_name: &'static str,
     pub args: Vec<CompoundFunctionArg>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CompoundFunctionArg {
     Function(CompoundFunction),
     Input(usize),
