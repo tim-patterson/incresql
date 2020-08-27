@@ -25,10 +25,27 @@ pub struct FunctionDefinition {
     pub function: FunctionType,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub enum FunctionType {
     Scalar(&'static dyn Function),
     Aggregate(&'static dyn AggregateFunction),
+    // A compound function is one where we actually just do type checking for,
+    // and we then return this structure of sub-functions that the planner will
+    // substitute in in place of the original function call and then redo the
+    // function resolution as per normal.
+    Compound(CompoundFunction),
+}
+
+#[derive(Clone, Debug)]
+pub struct CompoundFunction {
+    pub function_name: &'static str,
+    pub args: Vec<CompoundFunctionArg>,
+}
+
+#[derive(Clone, Debug)]
+pub enum CompoundFunctionArg {
+    Function(CompoundFunction),
+    Input(usize),
 }
 
 impl FunctionType {
