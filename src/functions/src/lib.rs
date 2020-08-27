@@ -19,10 +19,11 @@ pub struct FunctionSignature<'a> {
 }
 
 /// The definition of a function, enough info for resolving types etc
+
 pub struct FunctionDefinition {
     pub signature: FunctionSignature<'static>,
     pub custom_return_type_resolver: Option<fn(&[DataType]) -> DataType>,
-    pub function: FunctionType,
+    pub function: CompoundFunction,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -65,10 +66,11 @@ impl FunctionDefinition {
         ret: DataType,
         function: FunctionType,
     ) -> Self {
+        let signature = FunctionSignature { name, args, ret };
         FunctionDefinition {
-            signature: FunctionSignature { name, args, ret },
+            signature: signature.clone(),
             custom_return_type_resolver: None,
-            function,
+            function: CompoundFunction::from_single(function, signature),
         }
     }
 
@@ -79,10 +81,49 @@ impl FunctionDefinition {
         function: FunctionType,
     ) -> Self {
         let ret = return_type_resolver(&args);
+        let signature = FunctionSignature { name, args, ret };
         FunctionDefinition {
-            signature: FunctionSignature { name, args, ret },
+            signature: signature.clone(),
             custom_return_type_resolver: Some(return_type_resolver),
+            function: CompoundFunction::from_single(function, signature),
+        }
+    }
+}
+
+/// We want the ability to define functions in terms of other functions.
+/// ->> should be defined as json_unquote(json_extract(x))
+/// To support functions with more than one input we need to somehow represent
+/// the composition as a tree with placeholders for the inputs.
+/// The planner would then walk this structure to build up the actual expression
+/// tree.
+#[derive(Clone, Debug)]
+pub struct CompoundFunction {
+    pub signature: FunctionSignature<'static>,
+    pub function: FunctionType,
+    pub args: Vec<CompoundFunctionArg>,
+}
+
+#[derive(Clone, Debug)]
+pub enum CompoundFunctionArg {
+    Function(CompoundFunction),
+    Input(usize),
+}
+
+impl CompoundFunction {
+    pub(crate) fn from_single(
+        function: FunctionType,
+        signature: FunctionSignature<'static>,
+    ) -> Self {
+        let args = signature
+            .args
+            .iter()
+            .enumerate()
+            .map(|(idx, _)| CompoundFunctionArg::Input(idx))
+            .collect();
+        CompoundFunction {
+            signature,
             function,
+            args,
         }
     }
 }

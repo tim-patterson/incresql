@@ -41,7 +41,10 @@ fn compile_functions_in_expr(
                 ret: DataType::Null,
             };
 
-            let (signature, function) = function_registry.resolve_function(&lookup_sig)?;
+            let compound_function = function_registry.resolve_function(&lookup_sig)?;
+
+            let function = compound_function.function;
+            let signature = compound_function.signature;
 
             let mut args = Vec::new();
             std::mem::swap(&mut args, &mut function_call.args);
@@ -88,7 +91,9 @@ fn compile_functions_in_expr(
                 ret: cast.datatype,
             };
 
-            let (signature, function) = function_registry.resolve_function(&lookup_sig)?;
+            let compound_function = function_registry.resolve_function(&lookup_sig)?;
+            let function = compound_function.function;
+            let signature = compound_function.signature;
 
             // Just an "empty" value to swap
             let mut expr = Expression::Constant(Datum::Null, DataType::Null);

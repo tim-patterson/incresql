@@ -161,7 +161,7 @@ mod tests {
         let source = Box::from(ValuesExecutor::new(Box::from(values.into_iter()), 1));
 
         // Lookup sum function
-        let (sig, sum_function) = Registry::default()
+        let function = Registry::default()
             .resolve_function(&FunctionSignature {
                 name: "sum",
                 args: vec![DataType::Integer],
@@ -176,7 +176,7 @@ mod tests {
                 datatype: DataType::Text,
             }),
             Expression::CompiledAggregate(CompiledAggregate {
-                function: sum_function.as_aggregate(),
+                function: function.function.as_aggregate(),
                 args: vec![Expression::CompiledColumnReference(
                     CompiledColumnReference {
                         offset: 1,
@@ -185,7 +185,7 @@ mod tests {
                 )]
                 .into_boxed_slice(),
                 expr_buffer: vec![].into_boxed_slice(),
-                signature: Box::new(sig),
+                signature: Box::new(function.signature),
             }),
         ];
 
@@ -217,7 +217,7 @@ mod tests {
         let source = Box::from(ValuesExecutor::new(Box::from(values.into_iter()), 1));
 
         // Lookup count function
-        let (sig, count_function) = Registry::default()
+        let function = Registry::default()
             .resolve_function(&FunctionSignature {
                 name: "count",
                 args: vec![],
@@ -227,10 +227,10 @@ mod tests {
 
         // Select count()
         let expressions = vec![Expression::CompiledAggregate(CompiledAggregate {
-            function: count_function.as_aggregate(),
+            function: function.function.as_aggregate(),
             args: vec![].into_boxed_slice(),
             expr_buffer: vec![].into_boxed_slice(),
-            signature: Box::new(sig),
+            signature: Box::new(function.signature),
         })];
 
         let mut executor = SortedGroupExecutor::new(source, session, 0, expressions);

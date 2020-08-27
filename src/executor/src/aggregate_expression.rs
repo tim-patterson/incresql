@@ -305,9 +305,9 @@ mod tests {
             args: vec![DataType::Integer],
             ret: DataType::Null,
         };
-        let (sig, function) = Registry::default().resolve_function(&signature).unwrap();
+        let function = Registry::default().resolve_function(&signature).unwrap();
         let expression = Expression::CompiledAggregate(CompiledAggregate {
-            function: function.as_aggregate(),
+            function: function.function.as_aggregate(),
             args: vec![Expression::CompiledColumnReference(
                 CompiledColumnReference {
                     offset: 0,
@@ -316,7 +316,7 @@ mod tests {
             )]
             .into_boxed_slice(),
             expr_buffer: vec![].into_boxed_slice(),
-            signature: Box::new(sig),
+            signature: Box::new(function.signature),
         });
         let session = Session::new(1);
 
@@ -339,16 +339,16 @@ mod tests {
             args: vec![DataType::Integer, DataType::Integer],
             ret: DataType::Null,
         };
-        let (sig, function) = Registry::default().resolve_function(&signature).unwrap();
+        let function = Registry::default().resolve_function(&signature).unwrap();
         let expression = Expression::CompiledFunctionCall(CompiledFunctionCall {
-            function: function.as_scalar(),
+            function: function.function.as_scalar(),
             args: vec![
                 Expression::Constant(Datum::from(1), DataType::Integer),
                 Expression::Constant(Datum::from(3), DataType::Integer),
             ]
             .into_boxed_slice(),
             expr_buffer: vec![].into_boxed_slice(),
-            signature: Box::new(sig),
+            signature: Box::new(function.signature),
         });
         let session = Session::new(1);
 

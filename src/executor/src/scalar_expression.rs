@@ -80,7 +80,7 @@ mod tests {
     use ast::expr::CompiledFunctionCall;
     use data::DataType;
     use functions::registry::Registry;
-    use functions::{FunctionSignature, FunctionType};
+    use functions::FunctionSignature;
 
     #[test]
     fn test_eval_scalar_literal() {
@@ -96,19 +96,15 @@ mod tests {
             args: vec![DataType::Integer, DataType::Integer],
             ret: DataType::Null,
         };
-        let (computed_signature, function_type) = Registry::new(true)
+        let function = Registry::new(true)
             .resolve_function(&mut signature)
             .unwrap();
 
-        let function = if let FunctionType::Scalar(f) = function_type {
-            f
-        } else {
-            panic!()
-        };
+        let scalar_function = function.function.as_scalar();
 
         let mut expression = Expression::CompiledFunctionCall(CompiledFunctionCall {
-            function,
-            signature: Box::from(computed_signature),
+            function: scalar_function,
+            signature: Box::from(function.signature),
             expr_buffer: Box::from(vec![]),
             args: Box::from(vec![Expression::from(3), Expression::from(4)]),
         });

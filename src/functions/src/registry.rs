@@ -1,4 +1,4 @@
-use crate::{register_builtins, FunctionDefinition, FunctionSignature, FunctionType};
+use crate::{register_builtins, CompoundFunction, FunctionDefinition, FunctionSignature};
 use data::DataType;
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
@@ -60,7 +60,7 @@ impl Registry {
     pub fn resolve_function(
         &self,
         function_signature: &FunctionSignature,
-    ) -> Result<(FunctionSignature<'static>, FunctionType), FunctionResolutionError> {
+    ) -> Result<CompoundFunction, FunctionResolutionError> {
         if let Some(candidates) = self.functions.get(function_signature.name) {
             // Filter candidates
             let candidate_list: Vec<_> = candidates
@@ -106,8 +106,10 @@ impl Registry {
                     args: function_signature.args.clone(),
                     ret,
                 };
+                let mut resolved_function = candidate.function.clone();
+                resolved_function.signature = return_signature;
 
-                Ok((return_signature, candidate.function))
+                Ok(resolved_function)
             } else {
                 Err(FunctionResolutionError::MatchingSignatureNotFound(
                     function_signature.name.to_string(),
@@ -143,9 +145,9 @@ mod tests {
             ret: DataType::Null,
         };
 
-        let (function_sig, _function) = registry.resolve_function(&mut sig).unwrap();
+        let function = registry.resolve_function(&mut sig).unwrap();
 
-        assert_eq!(function_sig.ret, DataType::BigInt);
+        assert_eq!(function.signature.ret, DataType::BigInt);
     }
 
     #[test]
@@ -176,9 +178,9 @@ mod tests {
             ret: DataType::Null,
         };
 
-        let (function_sig, _function) = registry.resolve_function(&mut sig).unwrap();
+        let function = registry.resolve_function(&mut sig).unwrap();
 
-        assert_eq!(function_sig.ret, DataType::BigInt);
+        assert_eq!(function.signature.ret, DataType::BigInt);
     }
 
     #[test]
@@ -191,8 +193,8 @@ mod tests {
             ret: DataType::Null,
         };
 
-        let (computed_signature, _function) = registry.resolve_function(&mut sig).unwrap();
+        let function = registry.resolve_function(&mut sig).unwrap();
 
-        assert_eq!(computed_signature.ret, DataType::Decimal(28, 7));
+        assert_eq!(function.signature.ret, DataType::Decimal(28, 7));
     }
 }

@@ -90,7 +90,7 @@ mod tests {
             args: vec![DataType::Integer, DataType::Integer],
             ret: DataType::Integer,
         };
-        let (_, add_function) = function_registry.resolve_function(&add_signature).unwrap();
+        let add_function = function_registry.resolve_function(&add_signature).unwrap();
 
         // 1 + (2 + 3)
         let mut operator = LogicalOperator::Project(Project {
@@ -98,11 +98,11 @@ mod tests {
             expressions: vec![NamedExpression {
                 alias: None,
                 expression: Expression::CompiledFunctionCall(CompiledFunctionCall {
-                    function: add_function.as_scalar(),
+                    function: add_function.function.as_scalar(),
                     args: Box::from(vec![
                         Expression::from(1),
                         Expression::CompiledFunctionCall(CompiledFunctionCall {
-                            function: add_function.as_scalar(),
+                            function: add_function.function.as_scalar(),
                             args: Box::from(vec![Expression::from(2), Expression::from(3)]),
                             expr_buffer: Box::from(vec![]),
                             signature: Box::new(add_signature.clone()),
