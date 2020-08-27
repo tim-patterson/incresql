@@ -63,6 +63,7 @@ fn compile_functions_in_expr(
                         signature: Box::new(signature),
                     })
                 }
+                FunctionType::Compound(_) => unimplemented!(),
             };
         }
         Expression::Cast(cast) => {

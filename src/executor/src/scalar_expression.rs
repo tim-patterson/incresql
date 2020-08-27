@@ -100,11 +100,7 @@ mod tests {
             .resolve_function(&mut signature)
             .unwrap();
 
-        let function = if let FunctionType::Scalar(f) = function_type {
-            f
-        } else {
-            panic!()
-        };
+        let function = function_type.as_scalar();
 
         let mut expression = Expression::CompiledFunctionCall(CompiledFunctionCall {
             function,
