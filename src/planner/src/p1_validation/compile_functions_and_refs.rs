@@ -79,17 +79,7 @@ fn compile_functions_in_expr(
 
             let expr_type = type_for_expression(&cast.expr);
 
-            let function_name = match cast.datatype {
-                DataType::Null => panic!("Attempted cast to null"),
-                DataType::Boolean => "to_bool",
-                DataType::Integer => "to_int",
-                DataType::BigInt => "to_bigint",
-                DataType::Decimal(..) => "to_decimal",
-                DataType::Text => "to_text",
-                DataType::ByteA => "to_bytes",
-                DataType::Json => "to_json",
-                DataType::Date => "to_date",
-            };
+            let function_name = cast.datatype.cast_function();
 
             let lookup_sig = FunctionSignature {
                 name: function_name,

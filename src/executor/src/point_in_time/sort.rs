@@ -137,7 +137,7 @@ impl SortExecutor {
         }
 
         let sort_buffer = &mut self.sort_buffer;
-        sort_indexes.sort_by(|(start1, end1), (start2, end2)| {
+        sort_indexes.sort_unstable_by(|(start1, end1), (start2, end2)| {
             let a = &sort_buffer[(*start1 as usize)..(*end1 as usize)];
             let b = &sort_buffer[(*start2 as usize)..(*end2 as usize)];
             a.cmp(b)

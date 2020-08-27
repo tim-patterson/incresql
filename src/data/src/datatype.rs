@@ -20,6 +20,22 @@ pub enum DataType {
 pub const DECIMAL_MAX_PRECISION: u8 = 28;
 pub const DECIMAL_MAX_SCALE: u8 = 14;
 
+impl DataType {
+    pub fn cast_function(&self) -> &'static str {
+        match self {
+            DataType::Null => panic!("Attempted cast to null"),
+            DataType::Boolean => "to_bool",
+            DataType::Integer => "to_int",
+            DataType::BigInt => "to_bigint",
+            DataType::Decimal(..) => "to_decimal",
+            DataType::Text => "to_text",
+            DataType::ByteA => "to_bytes",
+            DataType::Json => "to_json",
+            DataType::Date => "to_date",
+        }
+    }
+}
+
 impl Display for DataType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
