@@ -32,7 +32,7 @@ fn test_auto_convert_project() {
         );
 
         connection.query(
-            r#"select c1, count(*), count(c2), sum(c2) from test group by c1"#,
+            r#"select c1, count(*), count(c2), sum(c2) from test group by c1 order by c1"#,
             "
             |a|2|2|3|
             |b|2|1|3|

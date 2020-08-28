@@ -1,11 +1,11 @@
-use crate::utils::expr::{move_column_references, type_for_expression};
+use crate::utils::expr::move_column_references;
 use crate::utils::logical::fields_for_operator;
 use crate::{Field, Planner, PlannerError};
 use ast::expr::*;
 use ast::rel::logical::*;
 use ast::rel::point_in_time;
-use ast::rel::point_in_time::{PointInTimeOperator, SortedGroup};
-use data::{LogicalTimestamp, Session, SortOrder};
+use ast::rel::point_in_time::{Group, PointInTimeOperator};
+use data::{LogicalTimestamp, Session};
 
 pub struct PointInTimePlan {
     pub fields: Vec<Field>,
@@ -46,7 +46,7 @@ fn build_operator(query: LogicalOperator) -> PointInTimeOperator {
             source,
         }) => {
             if key_expressions.is_empty() {
-                PointInTimeOperator::SortedGroup(SortedGroup {
+                PointInTimeOperator::SortedGroup(Group {
                     source: Box::new(build_operator(*source)),
                     expressions: expressions.into_iter().map(|ne| ne.expression).collect(),
                     key_len: 0,
@@ -70,25 +70,6 @@ fn build_operator(query: LogicalOperator) -> PointInTimeOperator {
                     source: Box::new(build_operator(*source)),
                 };
 
-                // Now we create a sort that just sorts by the first key_expressions columns
-
-                let sort_exprs = project.expressions[0..key_len]
-                    .iter()
-                    .enumerate()
-                    .map(|(idx, expr)| SortExpression {
-                        ordering: SortOrder::Asc,
-                        expression: Expression::CompiledColumnReference(CompiledColumnReference {
-                            offset: idx,
-                            datatype: type_for_expression(expr),
-                        }),
-                    })
-                    .collect();
-
-                let sort = PointInTimeOperator::Sort(point_in_time::Sort {
-                    sort_expressions: sort_exprs,
-                    source: Box::new(PointInTimeOperator::Project(project)),
-                });
-
                 let group_exprs = expressions
                     .into_iter()
                     .map(|mut ne| {
@@ -97,8 +78,8 @@ fn build_operator(query: LogicalOperator) -> PointInTimeOperator {
                     })
                     .collect();
 
-                PointInTimeOperator::SortedGroup(SortedGroup {
-                    source: Box::new(sort),
+                PointInTimeOperator::HashGroup(Group {
+                    source: Box::new(PointInTimeOperator::Project(project)),
                     expressions: group_exprs,
                     key_len,
                 })
