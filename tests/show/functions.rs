@@ -6,6 +6,7 @@ fn show_functions() {
         r#"SHOW FUNCTIONS"#,
         "
         |!=|
+        |$$compile_jsonpath|
         |*|
         |+|
         |-|

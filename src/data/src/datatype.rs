@@ -15,6 +15,7 @@ pub enum DataType {
     ByteA,
     Json,
     Date,
+    CompiledJsonPath,
 }
 
 pub const DECIMAL_MAX_PRECISION: u8 = 28;
@@ -32,6 +33,7 @@ impl DataType {
             DataType::ByteA => "to_bytes",
             DataType::Json => "to_json",
             DataType::Date => "to_date",
+            DataType::CompiledJsonPath => panic!(),
         }
     }
 }
@@ -48,6 +50,7 @@ impl Display for DataType {
             DataType::ByteA => f.write_str("BYTEA"),
             DataType::Json => f.write_str("JSON"),
             DataType::Date => f.write_str("DATE"),
+            DataType::CompiledJsonPath => f.write_str("Compiled Jsonpath"),
         }
     }
 }

@@ -16,6 +16,7 @@ use serde::export::Formatter;
 pub use session::Session;
 use std::fmt::Display;
 pub use tuple_iter::*;
+pub mod jsonpath_utils;
 
 #[macro_use]
 extern crate lazy_static;

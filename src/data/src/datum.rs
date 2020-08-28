@@ -1,10 +1,12 @@
 use crate::json::{Json, OwnedJson};
+use crate::jsonpath_utils::JsonPathExpression;
 use crate::DataType;
 use chrono::{Datelike, NaiveDate};
 use rust_decimal::Decimal;
 use std::cmp::Ordering;
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::{Hash, Hasher};
+use std::ops::Deref;
 
 /// Datum - in memory representation of sql value.
 /// The same datum may be able to be interpreted as multiple different
@@ -24,15 +26,19 @@ pub enum Datum<'a> {
     Integer(i32),
     BigInt(i64),
     Decimal(Decimal),
+
+    // Compiled Datum types
+    CompiledJsonpath(Box<JsonPathExpression>),
+    CompiledJsonpathRef(&'a JsonPathExpression),
 }
 
 impl<'a> Datum<'a> {
     /// Like clone but instead of cloning Datum::TextOwned etc it will just take a reference
     pub fn ref_clone(&'a self) -> Datum<'a> {
-        if let Datum::ByteAOwned(s) = self {
-            Datum::ByteARef(&s)
-        } else {
-            self.clone()
+        match self {
+            Datum::ByteAOwned(s) => Datum::ByteARef(&s),
+            Datum::CompiledJsonpath(jp) => Datum::CompiledJsonpathRef(&jp),
+            _ => self.clone(),
         }
     }
 
@@ -57,6 +63,10 @@ impl<'a> Datum<'a> {
                 } else {
                     Datum::ByteAOwned(Box::from(*s))
                 }
+            }
+            Datum::CompiledJsonpath(expr) => Datum::CompiledJsonpath(expr.clone()),
+            Datum::CompiledJsonpathRef(expr) => {
+                Datum::CompiledJsonpath(Box::new(expr.deref().clone()))
             }
         }
     }
@@ -84,6 +94,10 @@ impl<'a> Datum<'a> {
                     Datum::ByteAOwned(Box::from(s))
                 }
             }
+            Datum::CompiledJsonpath(expr) => Datum::CompiledJsonpath(expr),
+            Datum::CompiledJsonpathRef(expr) => {
+                Datum::CompiledJsonpath(Box::new(expr.deref().clone()))
+            }
         }
     }
 
@@ -109,6 +123,8 @@ impl<'a> Datum<'a> {
             Datum::ByteAOwned(_) | Datum::ByteAInline(..) | Datum::ByteARef(_) => {
                 self.as_maybe_text() == other.as_maybe_text()
             }
+            Datum::CompiledJsonpath(_) => false,
+            Datum::CompiledJsonpathRef(_) => false,
         }
     }
 }
@@ -169,6 +185,8 @@ impl Ord for Datum<'_> {
                     Ordering::Greater
                 }
             }
+            Datum::CompiledJsonpath(_) => panic!(),
+            Datum::CompiledJsonpathRef(_) => panic!(),
         }
     }
 }
@@ -313,6 +331,8 @@ impl Display for TypedDatum<'_> {
                     Display::fmt(d, f)
                 }
             }
+            Datum::CompiledJsonpath(expr) => Debug::fmt(expr, f),
+            Datum::CompiledJsonpathRef(expr) => Debug::fmt(expr, f),
         }
     }
 }
@@ -433,6 +453,14 @@ impl<'a> Datum<'a> {
     pub fn as_boolean(&self) -> bool {
         self.as_maybe_boolean().unwrap()
     }
+
+    pub fn as_maybe_compiled_json_path(&self) -> Option<&JsonPathExpression> {
+        match self {
+            Datum::CompiledJsonpath(j) => Some(&j),
+            Datum::CompiledJsonpathRef(j) => Some(*j),
+            _ => None,
+        }
+    }
 }
 
 /// Hash implementation on datum. Allows us to use hashmaps etc.
@@ -447,6 +475,7 @@ impl Hash for Datum<'_> {
             Datum::ByteAOwned(_) | Datum::ByteAInline(_, _) | Datum::ByteARef(_) => {
                 self.as_bytea().hash(state)
             }
+            Datum::CompiledJsonpath(_) | Datum::CompiledJsonpathRef(_) => state.write_u8(0),
         }
     }
 }

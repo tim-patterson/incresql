@@ -63,6 +63,8 @@ impl Datum<'_> {
                 }
                 self.as_bytea().write_sortable_bytes(sort_order, buffer)
             }
+            Datum::CompiledJsonpath(_) => panic!(),
+            Datum::CompiledJsonpathRef(_) => panic!(),
         }
     }
 

@@ -300,6 +300,7 @@ pub fn write_column_packet(
         }
         DataType::ByteA => MYSQL_TYPE_BLOB,
         DataType::Json => MYSQL_TYPE_VAR_STRING,
+        DataType::CompiledJsonPath => panic!(),
     };
 
     if (capabilities & CAPABILITY_CLIENT_PROTOCOL_41) != 0 {

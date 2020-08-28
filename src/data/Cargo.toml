@@ -12,3 +12,4 @@ regex = "1"
 rust_decimal = "1.7.0"
 serde = "1.0.115"
 serde_json = { version="1.0", features=["arbitrary_precision"] }
+nom = "5.1.2"

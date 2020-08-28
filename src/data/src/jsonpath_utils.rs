@@ -1,4 +1,4 @@
-use data::json::{Json, JsonType};
+use crate::json::{Json, JsonType};
 use nom::branch::alt;
 use nom::bytes::complete::escaped_transform;
 use nom::bytes::complete::{is_not, tag, tag_no_case, take, take_while};
@@ -14,14 +14,14 @@ use nom::{AsChar, IResult};
 /// vector of these selectors with the root node being implicit.
 
 #[derive(Clone, Eq, PartialEq, Debug)]
-pub(crate) struct JsonPathExpression {
+pub struct JsonPathExpression {
     selectors: Vec<JsonPathSelector>,
 }
 
 impl JsonPathExpression {
     /// Parse the given expression and if valid returns the "compiled"
     /// expression
-    pub(crate) fn parse(expression: &str) -> Option<JsonPathExpression> {
+    pub fn parse(expression: &str) -> Option<JsonPathExpression> {
         parse_expression(expression)
             .ok()
             .map(|(_rest, selectors)| JsonPathExpression { selectors })
@@ -31,14 +31,14 @@ impl JsonPathExpression {
     /// this will return true. Needed as the mysql behaviour for functions like json_extract
     /// is to return values wrapped in a json array if this is true, otherwise to return
     /// the singular value (or null)
-    pub(crate) fn could_return_many(&self) -> bool {
+    pub fn could_return_many(&self) -> bool {
         self.selectors
             .iter()
             .any(|selector| selector == &JsonPathSelector::Wildcard)
     }
 
     /// Evaluates the given jsonpath and calls a call back for each match.
-    pub(crate) fn evaluate<'a, 'b: 'a, F: FnMut(Json<'b>)>(&'a self, json: Json<'b>, f: &mut F) {
+    pub fn evaluate<'a, 'b: 'a, F: FnMut(Json<'b>)>(&'a self, json: Json<'b>, f: &mut F) {
         if self.selectors.is_empty() {
             f(json)
         } else {
@@ -47,7 +47,7 @@ impl JsonPathExpression {
     }
 
     /// Returns the first match if one exists
-    pub(crate) fn evaluate_single<'b>(&self, json: Json<'b>) -> Option<Json<'b>> {
+    pub fn evaluate_single<'b>(&self, json: Json<'b>) -> Option<Json<'b>> {
         let mut result = None;
         self.evaluate(json, &mut (|j| result = Some(j)));
         result
@@ -219,7 +219,7 @@ pub fn integer(input: &str) -> ParserResult<i64> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use data::json::OwnedJson;
+    use crate::json::OwnedJson;
 
     #[test]
     fn test_root_only() {
