@@ -8,7 +8,10 @@ vulnerability = "deny"
 unmaintained = "deny"
 yanked = "deny"
 notice = "warn"
-ignore = []
+ignore = [
+    # mysql-common uses this (which we only use for benchmarking)
+    "RUSTSEC-2020-0036",
+]
 
 [bans]
 # Lint level for when multiple versions of the same crate are detected

@@ -15,6 +15,7 @@ pub enum DataType {
     ByteA,
     Json,
     Date,
+    JsonPath,
 }
 
 pub const DECIMAL_MAX_PRECISION: u8 = 28;
@@ -32,6 +33,7 @@ impl DataType {
             DataType::ByteA => "to_bytes",
             DataType::Json => "to_json",
             DataType::Date => "to_date",
+            DataType::JsonPath => "to_jsonpath",
         }
     }
 }
@@ -48,6 +50,7 @@ impl Display for DataType {
             DataType::ByteA => f.write_str("BYTEA"),
             DataType::Json => f.write_str("JSON"),
             DataType::Date => f.write_str("DATE"),
+            DataType::JsonPath => f.write_str("JSONPATH"),
         }
     }
 }
@@ -70,6 +73,7 @@ impl TryFrom<&str> for DataType {
             "TEXT" => Ok(DataType::Text),
             "BYTEA" => Ok(DataType::ByteA),
             "JSON" => Ok(DataType::Json),
+            "JSONPATH" => Ok(DataType::JsonPath),
             "DATE" => Ok(DataType::Date),
             _ => DECIMAL_RE
                 .captures(value)

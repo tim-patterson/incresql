@@ -30,6 +30,7 @@ fn show_functions() {
         |to_decimal|
         |to_int|
         |to_json|
+        |to_jsonpath|
         |to_text|
         |type_of|
         ",

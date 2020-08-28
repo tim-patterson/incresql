@@ -1,4 +1,5 @@
 use crate::encoding_core::SortableEncoding;
+use crate::jsonpath_utils::JsonPathExpression;
 use crate::{Datum, SortOrder};
 use rust_decimal::prelude::Zero;
 use rust_decimal::Decimal;
@@ -63,6 +64,17 @@ impl Datum<'_> {
                 }
                 self.as_bytea().write_sortable_bytes(sort_order, buffer)
             }
+            Datum::Jsonpath(_) | Datum::JsonpathRef(_) => {
+                if sort_order.is_asc() {
+                    buffer.push(8)
+                } else {
+                    buffer.push(!8)
+                }
+                self.as_jsonpath()
+                    .original()
+                    .as_bytes()
+                    .write_sortable_bytes(sort_order, buffer)
+            }
         }
     }
 
@@ -114,6 +126,18 @@ impl Datum<'_> {
                 let mut str_buffer = Vec::new();
                 let rem = str_buffer.read_sortable_bytes(sort_order, rem);
                 *self = Datum::ByteAOwned(Box::from(str_buffer));
+                rem
+            }
+            8 | 247 => {
+                // TODO there's no need to allocate here as above
+                let mut str_buffer = Vec::new();
+                let rem = str_buffer.read_sortable_bytes(sort_order, rem);
+                *self = Datum::Jsonpath(Box::from(
+                    JsonPathExpression::parse(unsafe {
+                        std::str::from_utf8_unchecked(&str_buffer)
+                    })
+                    .unwrap(),
+                ));
                 rem
             }
             _ => panic!("Got unexpected datum encoding {}", buffer[0]),

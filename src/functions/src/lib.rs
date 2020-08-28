@@ -1,5 +1,4 @@
 mod aggregate;
-mod jsonpath_utils;
 pub mod registry;
 mod scalar;
 

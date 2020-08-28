@@ -284,7 +284,7 @@ pub fn write_column_packet(
 
     let column_type = match data_type {
         DataType::Null => MYSQL_TYPE_NULL,
-        DataType::Text => {
+        DataType::Text | DataType::Json | DataType::JsonPath => {
             decimals = 0x1f;
             MYSQL_TYPE_VAR_STRING
         }
@@ -299,7 +299,6 @@ pub fn write_column_packet(
             MYSQL_TYPE_NEWDECIMAL
         }
         DataType::ByteA => MYSQL_TYPE_BLOB,
-        DataType::Json => MYSQL_TYPE_VAR_STRING,
     };
 
     if (capabilities & CAPABILITY_CLIENT_PROTOCOL_41) != 0 {
