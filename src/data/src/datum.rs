@@ -28,8 +28,8 @@ pub enum Datum<'a> {
     Decimal(Decimal),
 
     // Compiled Datum types
-    CompiledJsonpath(Box<JsonPathExpression>),
-    CompiledJsonpathRef(&'a JsonPathExpression),
+    Jsonpath(Box<JsonPathExpression>),
+    JsonpathRef(&'a JsonPathExpression),
 }
 
 impl<'a> Datum<'a> {
@@ -37,7 +37,7 @@ impl<'a> Datum<'a> {
     pub fn ref_clone(&'a self) -> Datum<'a> {
         match self {
             Datum::ByteAOwned(s) => Datum::ByteARef(&s),
-            Datum::CompiledJsonpath(jp) => Datum::CompiledJsonpathRef(&jp),
+            Datum::Jsonpath(jp) => Datum::JsonpathRef(&jp),
             _ => self.clone(),
         }
     }
@@ -64,10 +64,8 @@ impl<'a> Datum<'a> {
                     Datum::ByteAOwned(Box::from(*s))
                 }
             }
-            Datum::CompiledJsonpath(expr) => Datum::CompiledJsonpath(expr.clone()),
-            Datum::CompiledJsonpathRef(expr) => {
-                Datum::CompiledJsonpath(Box::new(expr.deref().clone()))
-            }
+            Datum::Jsonpath(expr) => Datum::Jsonpath(expr.clone()),
+            Datum::JsonpathRef(expr) => Datum::Jsonpath(Box::new(expr.deref().clone())),
         }
     }
 
@@ -94,10 +92,8 @@ impl<'a> Datum<'a> {
                     Datum::ByteAOwned(Box::from(s))
                 }
             }
-            Datum::CompiledJsonpath(expr) => Datum::CompiledJsonpath(expr),
-            Datum::CompiledJsonpathRef(expr) => {
-                Datum::CompiledJsonpath(Box::new(expr.deref().clone()))
-            }
+            Datum::Jsonpath(expr) => Datum::Jsonpath(expr),
+            Datum::JsonpathRef(expr) => Datum::Jsonpath(Box::new(expr.deref().clone())),
         }
     }
 
@@ -123,8 +119,9 @@ impl<'a> Datum<'a> {
             Datum::ByteAOwned(_) | Datum::ByteAInline(..) | Datum::ByteARef(_) => {
                 self.as_maybe_text() == other.as_maybe_text()
             }
-            Datum::CompiledJsonpath(_) => false,
-            Datum::CompiledJsonpathRef(_) => false,
+            Datum::Jsonpath(_) | Datum::JsonpathRef(_) => {
+                self.as_maybe_jsonpath() == other.as_maybe_jsonpath()
+            }
         }
     }
 }
@@ -185,8 +182,13 @@ impl Ord for Datum<'_> {
                     Ordering::Greater
                 }
             }
-            Datum::CompiledJsonpath(_) => panic!(),
-            Datum::CompiledJsonpathRef(_) => panic!(),
+            Datum::Jsonpath(_) | Datum::JsonpathRef(_) => {
+                if let Some(t) = other.as_maybe_jsonpath() {
+                    self.as_jsonpath().cmp(t)
+                } else {
+                    Ordering::Greater
+                }
+            }
         }
     }
 }
@@ -331,8 +333,7 @@ impl Display for TypedDatum<'_> {
                     Display::fmt(d, f)
                 }
             }
-            Datum::CompiledJsonpath(expr) => Debug::fmt(expr, f),
-            Datum::CompiledJsonpathRef(expr) => Debug::fmt(expr, f),
+            Datum::Jsonpath(_) | Datum::JsonpathRef(_) => Display::fmt(self.datum.as_jsonpath(), f),
         }
     }
 }
@@ -454,12 +455,16 @@ impl<'a> Datum<'a> {
         self.as_maybe_boolean().unwrap()
     }
 
-    pub fn as_maybe_compiled_json_path(&self) -> Option<&JsonPathExpression> {
+    pub fn as_maybe_jsonpath(&self) -> Option<&JsonPathExpression> {
         match self {
-            Datum::CompiledJsonpath(j) => Some(&j),
-            Datum::CompiledJsonpathRef(j) => Some(*j),
+            Datum::Jsonpath(j) => Some(&j),
+            Datum::JsonpathRef(j) => Some(*j),
             _ => None,
         }
+    }
+
+    pub fn as_jsonpath(&self) -> &JsonPathExpression {
+        self.as_maybe_jsonpath().unwrap()
     }
 }
 
@@ -475,7 +480,7 @@ impl Hash for Datum<'_> {
             Datum::ByteAOwned(_) | Datum::ByteAInline(_, _) | Datum::ByteARef(_) => {
                 self.as_bytea().hash(state)
             }
-            Datum::CompiledJsonpath(_) | Datum::CompiledJsonpathRef(_) => state.write_u8(0),
+            Datum::Jsonpath(_) | Datum::JsonpathRef(_) => self.as_jsonpath().original().hash(state),
         }
     }
 }

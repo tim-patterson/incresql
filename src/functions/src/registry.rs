@@ -183,6 +183,7 @@ impl Registry {
             (DataType::Integer, DataType::Decimal(_, _)) => Some(2),
             // Bigint can be cast to decimal safely
             (DataType::BigInt, DataType::Decimal(_, _)) => Some(1),
+            (DataType::Text, DataType::JsonPath) => Some(1),
             _ => None,
         }
     }

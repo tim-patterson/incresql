@@ -4,9 +4,12 @@ use nom::bytes::complete::escaped_transform;
 use nom::bytes::complete::{is_not, tag, tag_no_case, take, take_while};
 use nom::combinator::{all_consuming, cut, map, map_res, opt, recognize, value};
 use nom::error::context;
+use nom::lib::std::cmp::Ordering;
+use nom::lib::std::fmt::Formatter;
 use nom::multi::many0;
 use nom::sequence::{delimited, pair, preceded};
 use nom::{AsChar, IResult};
+use std::fmt::Display;
 
 /// Jsonpath utils.
 /// Jsonpath expressions start at a single root and with each path section the expression
@@ -16,6 +19,7 @@ use nom::{AsChar, IResult};
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct JsonPathExpression {
     selectors: Vec<JsonPathSelector>,
+    original: String,
 }
 
 impl JsonPathExpression {
@@ -24,7 +28,10 @@ impl JsonPathExpression {
     pub fn parse(expression: &str) -> Option<JsonPathExpression> {
         parse_expression(expression)
             .ok()
-            .map(|(_rest, selectors)| JsonPathExpression { selectors })
+            .map(|(_rest, selectors)| JsonPathExpression {
+                selectors,
+                original: expression.to_string(),
+            })
     }
 
     /// If the json path expression could return more than one value when evaluated then
@@ -51,6 +58,28 @@ impl JsonPathExpression {
         let mut result = None;
         self.evaluate(json, &mut (|j| result = Some(j)));
         result
+    }
+
+    pub fn original(&self) -> &str {
+        &self.original
+    }
+}
+
+impl Display for JsonPathExpression {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("'{}'", self.original))
+    }
+}
+
+impl Ord for JsonPathExpression {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.original.cmp(&other.original)
+    }
+}
+
+impl PartialOrd for JsonPathExpression {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 
@@ -224,7 +253,13 @@ mod tests {
     #[test]
     fn test_root_only() {
         let expr = JsonPathExpression::parse("$").unwrap();
-        assert_eq!(expr, JsonPathExpression { selectors: vec![] });
+        assert_eq!(
+            expr,
+            JsonPathExpression {
+                selectors: vec![],
+                original: "$".to_string()
+            }
+        );
         assert_eq!(expr.could_return_many(), false);
 
         let input = OwnedJson::parse("123").unwrap();
@@ -237,7 +272,8 @@ mod tests {
         assert_eq!(
             expr,
             JsonPathExpression {
-                selectors: vec![JsonPathSelector::NumericIdentifier(1)]
+                selectors: vec![JsonPathSelector::NumericIdentifier(1)],
+                original: "$[1]".to_string()
             }
         );
         assert_eq!(expr.could_return_many(), false);
@@ -257,7 +293,8 @@ mod tests {
         assert_eq!(
             expr,
             JsonPathExpression {
-                selectors: vec![JsonPathSelector::NumericIdentifier(1)]
+                selectors: vec![JsonPathSelector::NumericIdentifier(1)],
+                original: "$.1".to_string()
             }
         );
         assert_eq!(expr.could_return_many(), false);
@@ -276,7 +313,8 @@ mod tests {
         assert_eq!(
             expr,
             JsonPathExpression {
-                selectors: vec![JsonPathSelector::StringIdentifier("hello".to_string())]
+                selectors: vec![JsonPathSelector::StringIdentifier("hello".to_string())],
+                original: "$.hello".to_string()
             }
         );
         assert_eq!(expr.could_return_many(), false);
@@ -304,7 +342,8 @@ mod tests {
         assert_eq!(
             expr,
             JsonPathExpression {
-                selectors: vec![JsonPathSelector::StringIdentifier("hello".to_string())]
+                selectors: vec![JsonPathSelector::StringIdentifier("hello".to_string())],
+                original: r#"$["hello"]"#.to_string()
             }
         );
         assert_eq!(expr.could_return_many(), false);
@@ -316,7 +355,8 @@ mod tests {
         assert_eq!(
             expr,
             JsonPathExpression {
-                selectors: vec![JsonPathSelector::Wildcard]
+                selectors: vec![JsonPathSelector::Wildcard],
+                original: "$.*".to_string()
             }
         );
         assert_eq!(expr.could_return_many(), true);
@@ -335,7 +375,8 @@ mod tests {
         assert_eq!(
             expr,
             JsonPathExpression {
-                selectors: vec![JsonPathSelector::Wildcard]
+                selectors: vec![JsonPathSelector::Wildcard],
+                original: "$[*]".to_string()
             }
         );
         assert_eq!(expr.could_return_many(), true);
@@ -362,7 +403,8 @@ mod tests {
                     JsonPathSelector::NumericIdentifier(1),
                     JsonPathSelector::Wildcard,
                     JsonPathSelector::Wildcard
-                ]
+                ],
+                original: r#"$.one["two"][2].1.*[*]"#.to_string()
             }
         );
         assert_eq!(expr.could_return_many(), true);

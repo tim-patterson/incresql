@@ -1,8 +1,5 @@
 use crate::registry::Registry;
-use crate::{
-    CompoundFunction, CompoundFunctionArg, Function, FunctionDefinition, FunctionSignature,
-    FunctionType,
-};
+use crate::{Function, FunctionDefinition, FunctionSignature, FunctionType};
 use data::json::JsonBuilder;
 use data::{DataType, Datum, Session};
 
@@ -18,10 +15,7 @@ impl Function for JsonExtract {
         _signature: &FunctionSignature,
         args: &'a [Datum<'a>],
     ) -> Datum<'a> {
-        if let (Some(json), Some(expr)) = (
-            args[0].as_maybe_json(),
-            args[1].as_maybe_compiled_json_path(),
-        ) {
+        if let (Some(json), Some(expr)) = (args[0].as_maybe_json(), args[1].as_maybe_jsonpath()) {
             if expr.could_return_many() {
                 let json = JsonBuilder::default().array(|array| {
                     expr.evaluate(json, &mut (|json_match| array.push_json(json_match)))
@@ -41,46 +35,15 @@ impl Function for JsonExtract {
 pub fn register_builtins(registry: &mut Registry) {
     registry.register_function(FunctionDefinition::new(
         "json_extract",
-        vec![DataType::Json, DataType::CompiledJsonPath],
+        vec![DataType::Json, DataType::JsonPath],
         DataType::Json,
         FunctionType::Scalar(&JsonExtract {}),
     ));
     registry.register_function(FunctionDefinition::new(
         "->",
-        vec![DataType::Json, DataType::CompiledJsonPath],
+        vec![DataType::Json, DataType::JsonPath],
         DataType::Json,
         FunctionType::Scalar(&JsonExtract {}),
-    ));
-
-    registry.register_function(FunctionDefinition::new(
-        "json_extract",
-        vec![DataType::Json, DataType::Text],
-        DataType::Json,
-        FunctionType::Compound(CompoundFunction {
-            function_name: "json_extract",
-            args: vec![
-                CompoundFunctionArg::Input(0),
-                CompoundFunctionArg::Function(CompoundFunction {
-                    function_name: "$$compile_jsonpath",
-                    args: vec![CompoundFunctionArg::Input(1)],
-                }),
-            ],
-        }),
-    ));
-    registry.register_function(FunctionDefinition::new(
-        "->",
-        vec![DataType::Json, DataType::Text],
-        DataType::Json,
-        FunctionType::Compound(CompoundFunction {
-            function_name: "json_extract",
-            args: vec![
-                CompoundFunctionArg::Input(0),
-                CompoundFunctionArg::Function(CompoundFunction {
-                    function_name: "$$compile_jsonpath",
-                    args: vec![CompoundFunctionArg::Input(1)],
-                }),
-            ],
-        }),
     ));
 }
 
@@ -111,8 +74,7 @@ mod tests {
     #[test]
     fn test_single_path() {
         let json = OwnedJson::parse(r#"{"a": [1,2,3] }"#).unwrap();
-        let json_path =
-            Datum::CompiledJsonpath(Box::new(JsonPathExpression::parse("$.a[1]").unwrap()));
+        let json_path = Datum::Jsonpath(Box::new(JsonPathExpression::parse("$.a[1]").unwrap()));
         let expected_json = OwnedJson::parse(r#"2"#).unwrap();
 
         assert_eq!(
@@ -128,8 +90,7 @@ mod tests {
     #[test]
     fn test_wildcard_path() {
         let json = OwnedJson::parse(r#"{"a": [1,2], "b": [3,4] }"#).unwrap();
-        let json_path =
-            Datum::CompiledJsonpath(Box::new(JsonPathExpression::parse("$.*[0]").unwrap()));
+        let json_path = Datum::Jsonpath(Box::new(JsonPathExpression::parse("$.*[0]").unwrap()));
         let expected_json = OwnedJson::parse(r#"[1,3]"#).unwrap();
 
         assert_eq!(
