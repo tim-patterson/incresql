@@ -54,6 +54,39 @@ pub fn comma_sep_expressions(input: &str) -> ParserResult<Vec<Expression>> {
 }
 
 fn expression_0(input: &str) -> ParserResult<Expression> {
+    // Conceptually you can use between for boolean expressions but then the parsing
+    // gets a little weird.
+    // ie select a between b and c and d and e
+    // How would we parse that. you could also nest the betweens, ie
+    // SELECT a between b between c and d and c between d and e
+    // Again just crazy so we wont bother with these edge cases for now.
+    alt((
+        map(
+            tuple((
+                expression_1,
+                ws_0,
+                kw("BETWEEN"),
+                cut(tuple((
+                    ws_0,
+                    expression_1,
+                    ws_0,
+                    kw("AND"),
+                    ws_0,
+                    expression_1,
+                ))),
+            )),
+            |(e1, _, _, (_, e2, _, _, _, e3))| {
+                Expression::FunctionCall(FunctionCall {
+                    function_name: "between".to_string(),
+                    args: vec![e1, e2, e3],
+                })
+            },
+        ),
+        expression_1,
+    ))(input)
+}
+
+fn expression_1(input: &str) -> ParserResult<Expression> {
     infix_many(
         (
             tag("="),
@@ -63,23 +96,23 @@ fn expression_0(input: &str) -> ParserResult<Expression> {
             tag("<="),
             tag("<"),
         ),
-        expression_1,
+        expression_2,
     )(input)
 }
 
-fn expression_1(input: &str) -> ParserResult<Expression> {
-    infix_many((tag("+"), tag("-")), expression_2)(input)
-}
-
 fn expression_2(input: &str) -> ParserResult<Expression> {
-    infix_many((tag("*"), tag("/")), expression_3)(input)
+    infix_many((tag("+"), tag("-")), expression_3)(input)
 }
 
 fn expression_3(input: &str) -> ParserResult<Expression> {
-    infix_many((tag("->>"), tag("->")), expression_4)(input)
+    infix_many((tag("*"), tag("/")), expression_4)(input)
 }
 
 fn expression_4(input: &str) -> ParserResult<Expression> {
+    infix_many((tag("->>"), tag("->")), expression_5)(input)
+}
+
+fn expression_5(input: &str) -> ParserResult<Expression> {
     alt((
         count_star,
         function_call,
@@ -339,6 +372,25 @@ mod tests {
                         args: vec![Expression::from(1), Expression::from(2)]
                     }),
                     Expression::from(3)
+                ]
+            })
+        );
+    }
+
+    #[test]
+    fn test_between() {
+        assert_eq!(
+            expression("a between 2 and 3").unwrap().1,
+            Expression::FunctionCall(FunctionCall {
+                function_name: "between".to_string(),
+                args: vec![
+                    Expression::ColumnReference(ColumnReference {
+                        qualifier: None,
+                        alias: "a".to_string(),
+                        star: false
+                    }),
+                    Expression::from(2),
+                    Expression::from(3),
                 ]
             })
         );
