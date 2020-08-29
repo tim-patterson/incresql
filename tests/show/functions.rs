@@ -18,6 +18,8 @@ fn show_functions() {
         |>|
         |>=|
         |avg|
+        |between|
+        |coalesce|
         |count|
         |database|
         |date_sub|
