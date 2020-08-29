@@ -9,7 +9,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 /// A Group by executor that can accept tuples in any order and stores the
-/// partial aggregates in a hashmap
+/// partial aggregates in a hashmap.
+/// This executor doesn't properly handle the case where there's no grouping keys,
+/// sorted_group should be used for that instead.
 pub struct HashGroupExecutor {
     source: BoxedExecutor,
     session: Arc<Session>,
@@ -106,5 +108,83 @@ impl TupleIter for HashGroupExecutor {
 
 #[cfg(test)]
 mod tests {
-    //use super::*;
+    use super::*;
+    use crate::point_in_time::sort::SortExecutor;
+    use crate::point_in_time::values::ValuesExecutor;
+    use ast::expr::{CompiledAggregate, CompiledColumnReference, Expression, SortExpression};
+    use data::DataType;
+    use functions::registry::Registry;
+    use functions::FunctionSignature;
+
+    #[test]
+    fn test_sorted_group_executor() -> Result<(), ExecutionError> {
+        let session = Arc::new(Session::new(1));
+        let values = vec![
+            vec![Datum::from("a"), Datum::from(1)],
+            vec![Datum::from("a"), Datum::from(2)],
+            vec![Datum::from("b"), Datum::from(3)],
+            vec![Datum::from("b"), Datum::from(4)],
+            vec![Datum::from("c"), Datum::from(5)],
+        ];
+
+        let source = Box::from(ValuesExecutor::new(Box::from(values.into_iter()), 1));
+
+        // Lookup sum function
+        let (sig, sum_function) = Registry::default()
+            .resolve_function(&FunctionSignature {
+                name: "sum",
+                args: vec![DataType::Integer],
+                ret: DataType::Null,
+            })
+            .unwrap();
+
+        // Select col1, sum(col2)
+        let expressions = vec![
+            Expression::CompiledColumnReference(CompiledColumnReference {
+                offset: 0,
+                datatype: DataType::Text,
+            }),
+            Expression::CompiledAggregate(CompiledAggregate {
+                function: sum_function.as_aggregate(),
+                args: vec![Expression::CompiledColumnReference(
+                    CompiledColumnReference {
+                        offset: 1,
+                        datatype: DataType::Integer,
+                    },
+                )]
+                .into_boxed_slice(),
+                expr_buffer: vec![].into_boxed_slice(),
+                signature: Box::new(sig),
+            }),
+        ];
+
+        let executor = HashGroupExecutor::new(source, Arc::clone(&session), 1, expressions);
+        let mut sorted = SortExecutor::new(
+            session,
+            Box::from(executor),
+            vec![SortExpression {
+                ordering: SortOrder::Asc,
+                expression: Expression::CompiledColumnReference(CompiledColumnReference {
+                    offset: 0,
+                    datatype: DataType::Text,
+                }),
+            }],
+        );
+
+        assert_eq!(
+            sorted.next()?,
+            Some(([Datum::from("a"), Datum::from(3)].as_ref(), 1))
+        );
+        assert_eq!(
+            sorted.next()?,
+            Some(([Datum::from("b"), Datum::from(7)].as_ref(), 1))
+        );
+        assert_eq!(
+            sorted.next()?,
+            Some(([Datum::from("c"), Datum::from(5)].as_ref(), 1))
+        );
+        assert_eq!(sorted.next()?, None);
+
+        Ok(())
+    }
 }
