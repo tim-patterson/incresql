@@ -54,6 +54,14 @@ pub fn comma_sep_expressions(input: &str) -> ParserResult<Vec<Expression>> {
 }
 
 fn expression_0(input: &str) -> ParserResult<Expression> {
+    infix(kw("OR"), expression_1)(input)
+}
+
+fn expression_1(input: &str) -> ParserResult<Expression> {
+    infix(kw("AND"), expression_2)(input)
+}
+
+fn expression_2(input: &str) -> ParserResult<Expression> {
     // Conceptually you can use between for boolean expressions but then the parsing
     // gets a little weird.
     // ie select a between b and c and d and e
@@ -63,16 +71,16 @@ fn expression_0(input: &str) -> ParserResult<Expression> {
     alt((
         map(
             tuple((
-                expression_1,
+                expression_3,
                 ws_0,
                 kw("BETWEEN"),
                 cut(tuple((
                     ws_0,
-                    expression_1,
+                    expression_3,
                     ws_0,
                     kw("AND"),
                     ws_0,
-                    expression_1,
+                    expression_3,
                 ))),
             )),
             |(e1, _, _, (_, e2, _, _, _, e3))| {
@@ -82,11 +90,11 @@ fn expression_0(input: &str) -> ParserResult<Expression> {
                 })
             },
         ),
-        expression_1,
+        expression_3,
     ))(input)
 }
 
-fn expression_1(input: &str) -> ParserResult<Expression> {
+fn expression_3(input: &str) -> ParserResult<Expression> {
     infix_many(
         (
             tag("="),
@@ -96,23 +104,23 @@ fn expression_1(input: &str) -> ParserResult<Expression> {
             tag("<="),
             tag("<"),
         ),
-        expression_2,
+        expression_4,
     )(input)
 }
 
-fn expression_2(input: &str) -> ParserResult<Expression> {
-    infix_many((tag("+"), tag("-")), expression_3)(input)
-}
-
-fn expression_3(input: &str) -> ParserResult<Expression> {
-    infix_many((tag("*"), tag("/")), expression_4)(input)
-}
-
 fn expression_4(input: &str) -> ParserResult<Expression> {
-    infix_many((tag("->>"), tag("->")), expression_5)(input)
+    infix_many((tag("+"), tag("-")), expression_5)(input)
 }
 
 fn expression_5(input: &str) -> ParserResult<Expression> {
+    infix_many((tag("*"), tag("/")), expression_6)(input)
+}
+
+fn expression_6(input: &str) -> ParserResult<Expression> {
+    infix_many((tag("->>"), tag("->")), expression_7)(input)
+}
+
+fn expression_7(input: &str) -> ParserResult<Expression> {
     alt((
         count_star,
         function_call,
@@ -138,6 +146,26 @@ fn infix_many<'a, List: Alt<&'a str, &'a str, VerboseError<&'a str>>>(
         // These are then left folded together to form
         // (((1 + (2 * 3)) + 5) + 6)
         tuple((higher, many0(tuple((ws_0, alt(operators), ws_0, higher))))),
+        |(start, ops)| {
+            ops.into_iter().fold(start, |acc, (_, op, _, exp2)| {
+                Expression::FunctionCall(FunctionCall {
+                    function_name: op.to_lowercase(),
+                    args: vec![acc, exp2],
+                })
+            })
+        },
+    )
+}
+
+/// Used to reduce boilerplate at each precedence level for infix operators
+/// Takes a tuple of operator tags, and the parser function for the higher precedence layer
+fn infix<'a, Op: Fn(&'a str) -> ParserResult<&'a str>>(
+    operator: Op,
+    higher: fn(&'a str) -> ParserResult<Expression>,
+) -> impl Fn(&'a str) -> ParserResult<Expression> {
+    map(
+        // as per infix many, but as nom doesn't support tuples of size zero...
+        tuple((higher, many0(tuple((ws_0, operator, ws_0, higher))))),
         |(start, ops)| {
             ops.into_iter().fold(start, |acc, (_, op, _, exp2)| {
                 Expression::FunctionCall(FunctionCall {
