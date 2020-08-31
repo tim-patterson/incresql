@@ -1,6 +1,7 @@
 use crate::registry::Registry;
 
 mod and;
+mod between;
 mod eq;
 mod gt;
 mod gte;
@@ -11,6 +12,7 @@ mod or;
 
 pub fn register_builtins(registry: &mut Registry) {
     and::register_builtins(registry);
+    between::register_builtins(registry);
     eq::register_builtins(registry);
     gt::register_builtins(registry);
     gte::register_builtins(registry);

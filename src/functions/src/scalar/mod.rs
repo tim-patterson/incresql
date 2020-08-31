@@ -4,6 +4,7 @@ mod casts;
 mod date;
 mod json;
 mod maths;
+mod misc;
 mod session;
 
 pub fn register_builtins(registry: &mut Registry) {
@@ -12,5 +13,6 @@ pub fn register_builtins(registry: &mut Registry) {
     date::register_builtins(registry);
     json::register_builtins(registry);
     maths::register_builtins(registry);
+    misc::register_builtins(registry);
     session::register_builtins(registry);
 }

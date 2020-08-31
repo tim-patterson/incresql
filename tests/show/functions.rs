@@ -19,6 +19,8 @@ fn show_functions() {
         |>=|
         |and|
         |avg|
+        |between|
+        |coalesce|
         |count|
         |database|
         |date_sub|
