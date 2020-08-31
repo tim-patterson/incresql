@@ -843,6 +843,7 @@ dependencies = [
  "catalog 0.1.0",
  "data 0.1.0",
  "functions 0.1.0",
+ "parser 0.1.0",
  "storage 0.1.0",
 ]
 

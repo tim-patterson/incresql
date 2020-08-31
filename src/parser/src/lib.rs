@@ -1,4 +1,5 @@
 use crate::whitespace::ws_0;
+use ast::expr::Expression;
 use ast::statement::Statement;
 use nom::combinator::all_consuming;
 use nom::error::{convert_error, VerboseError};
@@ -26,6 +27,20 @@ type ParserResult<'a, T> = IResult<&'a str, T, VerboseError<&'a str>>;
 // To give better contextual error messages in the future.
 pub fn parse(input: &str) -> Result<Statement, ParseError> {
     let parser_result = all_consuming(delimited(ws_0, statement::statement, ws_0))(input);
+
+    parser_result.map(|(_, command)| command).map_err(|err| {
+        match err {
+            nom::Err::Error(e) => ParseError::from(convert_error(input, e)),
+            nom::Err::Failure(e) => ParseError::from(convert_error(input, e)),
+            // We should only get an incomplete if we used the streaming parsers
+            nom::Err::Incomplete(_) => ParseError::from(String::from("Incomplete parsing")),
+        }
+    })
+}
+
+/// Parses just an expression, Useful for unit tests etc instead of writing out asts by hand
+pub fn parse_expression(input: &str) -> Result<Expression, ParseError> {
+    let parser_result = all_consuming(delimited(ws_0, expression::expression, ws_0))(input);
 
     parser_result.map(|(_, command)| command).map_err(|err| {
         match err {

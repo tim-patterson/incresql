@@ -1,6 +1,8 @@
-use ast::expr::{Expression, FunctionCall};
+use ast::expr::{CompiledFunctionCall, Expression, FunctionCall};
 use data::DataType;
-use functions::{CompoundFunction, CompoundFunctionArg};
+use functions::registry::Registry;
+use functions::{CompoundFunction, CompoundFunctionArg, FunctionSignature};
+use std::iter::once;
 
 /// Returns the datatype for an expression, will panic if called before query is normalized
 pub(crate) fn type_for_expression(expr: &Expression) -> DataType {
@@ -63,10 +65,56 @@ pub(crate) fn assemble_compound_function(
     })
 }
 
+/// Takes a boolean expression and splits it at all the "ands"
+pub(crate) fn decompose_predicate(predicate: Expression) -> Box<dyn Iterator<Item = Expression>> {
+    match predicate {
+        Expression::CompiledFunctionCall(function) if function.signature.name == "and" => {
+            Box::from(
+                function
+                    .args
+                    .into_vec()
+                    .into_iter()
+                    .flat_map(decompose_predicate),
+            )
+        }
+        Expression::FunctionCall(function) if &function.function_name == "and" => {
+            Box::from(function.args.into_iter().flat_map(decompose_predicate))
+        }
+        p => Box::from(once(p)),
+    }
+}
+
+/// Takes many predicates and combines them with the and function.
+pub(crate) fn combine_predicates<E: IntoIterator<Item = Expression>>(
+    predicates: E,
+    function_registry: Registry,
+) -> Expression {
+    let (and_function_sig, and_function) = function_registry
+        .resolve_function(&FunctionSignature {
+            name: "and",
+            args: vec![DataType::Boolean, DataType::Boolean],
+            ret: DataType::Null,
+        })
+        .unwrap();
+    let mut iter = predicates.into_iter();
+    match iter.next() {
+        Some(first) => iter.fold(first, |a, b| {
+            Expression::CompiledFunctionCall(CompiledFunctionCall {
+                function: and_function.as_scalar(),
+                args: Box::from([a, b]),
+                expr_buffer: Box::from(vec![]),
+                signature: Box::new(and_function_sig.clone()),
+            })
+        }),
+        None => Expression::from(true),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ast::expr::CompiledColumnReference;
+    use ast::expr::{ColumnReference, CompiledColumnReference};
+    use parser::parse_expression;
 
     #[test]
     fn test_move_column_references() {
@@ -84,5 +132,80 @@ mod tests {
                 datatype: DataType::Integer
             })
         );
+    }
+
+    #[test]
+    fn test_decompose_predicate() {
+        let expr = parse_expression("a and (c or d) and e").unwrap();
+
+        let parts: Vec<_> = decompose_predicate(expr).collect();
+
+        assert_eq!(
+            parts,
+            vec![
+                Expression::ColumnReference(ColumnReference {
+                    qualifier: None,
+                    alias: "a".to_string(),
+                    star: false
+                }),
+                Expression::FunctionCall(FunctionCall {
+                    function_name: "or".to_string(),
+                    args: vec![
+                        Expression::ColumnReference(ColumnReference {
+                            qualifier: None,
+                            alias: "c".to_string(),
+                            star: false
+                        }),
+                        Expression::ColumnReference(ColumnReference {
+                            qualifier: None,
+                            alias: "d".to_string(),
+                            star: false
+                        }),
+                    ]
+                }),
+                Expression::ColumnReference(ColumnReference {
+                    qualifier: None,
+                    alias: "e".to_string(),
+                    star: false
+                }),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_combine_predicates() {
+        let registry = Registry::default();
+        let parts = vec![
+            Expression::ColumnReference(ColumnReference {
+                qualifier: None,
+                alias: "a".to_string(),
+                star: false,
+            }),
+            Expression::FunctionCall(FunctionCall {
+                function_name: "or".to_string(),
+                args: vec![
+                    Expression::ColumnReference(ColumnReference {
+                        qualifier: None,
+                        alias: "c".to_string(),
+                        star: false,
+                    }),
+                    Expression::ColumnReference(ColumnReference {
+                        qualifier: None,
+                        alias: "d".to_string(),
+                        star: false,
+                    }),
+                ],
+            }),
+            Expression::ColumnReference(ColumnReference {
+                qualifier: None,
+                alias: "e".to_string(),
+                star: false,
+            }),
+        ];
+
+        assert_eq!(
+            &combine_predicates(parts, registry).to_string(),
+            "and(and(a, or(c, d)), e)"
+        )
     }
 }

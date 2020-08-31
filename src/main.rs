@@ -2,9 +2,9 @@ use runtime::Runtime;
 use server::Server;
 use std::error::Error;
 
+use clap::{App, Arg};
 #[cfg(not(windows))]
 use jemallocator::Jemalloc;
-use clap::{App, Arg};
 
 #[cfg(not(windows))]
 #[global_allocator]
@@ -16,7 +16,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             Arg::with_name("directory")
                 .short("d")
                 .long("directory")
-                .default_value("target/test_db")
+                .default_value("target/test_db"),
         )
         .get_matches();
     let listen_address = "0.0.0.0:3307";

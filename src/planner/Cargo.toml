@@ -11,3 +11,6 @@ catalog = { path = "../catalog" }
 data = { path = "../data" }
 functions = { path = "../functions" }
 storage = { path = "../storage" }
+
+[dev-dependencies]
+parser = { path = "../parser" }
