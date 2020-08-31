@@ -1,6 +1,7 @@
 use crate::utils::expr::type_for_expression;
 use crate::Field;
-use ast::rel::logical::LogicalOperator;
+use ast::expr::{CompiledColumnReference, Expression, NamedExpression};
+use ast::rel::logical::{LogicalOperator, Project};
 use data::DataType;
 use std::iter::{empty, once};
 
@@ -125,6 +126,25 @@ pub(crate) fn source_fields_for_operator(
         | LogicalOperator::TableReference(_)
         | LogicalOperator::FileScan(_)
         | LogicalOperator::ResolvedTable(_) => Box::from(empty()),
+    }
+}
+
+/// Takes an operator and returns a project that wraps it.
+pub(crate) fn create_wrapping_project(operator: LogicalOperator) -> Project {
+    let expressions = fields_for_operator(&operator)
+        .enumerate()
+        .map(|(idx, field)| NamedExpression {
+            alias: Some(field.alias),
+            expression: Expression::CompiledColumnReference(CompiledColumnReference {
+                offset: idx,
+                datatype: field.data_type,
+            }),
+        })
+        .collect();
+    Project {
+        distinct: false,
+        expressions,
+        source: Box::new(operator),
     }
 }
 

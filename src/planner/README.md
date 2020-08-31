@@ -24,3 +24,9 @@ The validation phase makes a few promises about the ast coming out of it.
 `Expression::Cast` or `Expression::ColumnReference`.
 
 2. Only GroupBy nodes will contain `Expression::CompiledAggregate`'s
+
+As well as the above the Common transforms module also guarentees these additional invariants to prevent too much
+duplication in the execution planning phases.
+
+1. For equi-joins, the join keys will be placed in order in the sources and the join keys in the on clause will be
+simple column references

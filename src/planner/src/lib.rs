@@ -1,6 +1,7 @@
 mod p1_validation;
 mod p2_optimization;
-mod p3_pit_planning;
+mod p3_common_transforms;
+mod p4_pit_planning;
 mod utils;
 
 use data::{DataType, Session};
@@ -12,7 +13,7 @@ use ast::rel::logical::LogicalOperator;
 use catalog::Catalog;
 pub use error::*;
 use functions::registry::Registry;
-pub use p3_pit_planning::PointInTimePlan;
+pub use p4_pit_planning::PointInTimePlan;
 use std::sync::RwLock;
 
 #[derive(Debug)]
@@ -43,6 +44,7 @@ impl Planner {
     ) -> Result<(Vec<Field>, LogicalOperator), PlannerError> {
         let query = self.validate(query, session)?;
         let query = self.optimize(query, session)?;
+        let query = self.common_transforms(query, session)?;
         let fields = fields_for_operator(&query).collect();
         Ok((fields, query))
     }

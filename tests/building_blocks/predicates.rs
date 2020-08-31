@@ -35,17 +35,13 @@ fn select_predicate_reference() {
         "
         |PROJECT||||
         | |output_exprs:||||
-        | |  foo|0|INTEGER|<OFFSET 0>|
+        | |  foo|0|INTEGER|1|
         | |source:||||
-        | |  PROJECT||||
-        | |   |output_exprs:||||
-        | |   |  foo|0|INTEGER|1|
+        | |  FILTER||||
+        | |   |predicate:||||
+        | |   |||BOOLEAN|TRUE|
         | |   |source:||||
-        | |   |  FILTER||||
-        | |   |   |predicate:||||
-        | |   |   |||BOOLEAN|TRUE|
-        | |   |   |source:||||
-        | |   |   |  SINGLE||||
+        | |   |  SINGLE||||
         ",
     );
 }
