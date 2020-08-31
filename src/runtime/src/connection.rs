@@ -65,7 +65,11 @@ impl Connection<'_> {
                     .planner
                     .validate(explain.operator, &self.session)?;
                 let optimized = self.runtime.planner.optimize(validated, &self.session)?;
-                self.runtime.planner.explain(&optimized)
+                let normalized = self
+                    .runtime
+                    .planner
+                    .common_transforms(optimized, &self.session)?;
+                self.runtime.planner.explain(&normalized)
             }
             Statement::CreateDatabase(create_database) => {
                 let mut catalog = self.runtime.planner.catalog.write().unwrap();

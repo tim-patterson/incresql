@@ -12,6 +12,7 @@ pub enum LogicalOperator {
     Project(Project),
     GroupBy(GroupBy),
     Filter(Filter),
+    Join(Join),
     Sort(Sort),
     Limit(Limit),
     Values(Values),
@@ -42,6 +43,13 @@ pub struct GroupBy {
     pub expressions: Vec<NamedExpression>,
     pub key_expressions: Vec<Expression>,
     pub source: Box<LogicalOperator>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Join {
+    pub left: Box<LogicalOperator>,
+    pub right: Box<LogicalOperator>,
+    pub on: Expression,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -132,6 +140,7 @@ impl LogicalOperator {
             LogicalOperator::GroupBy(group_by) => Box::from(group_by.expressions.iter()),
             LogicalOperator::Single
             | LogicalOperator::Filter(_)
+            | LogicalOperator::Join(_)
             | LogicalOperator::Limit(_)
             | LogicalOperator::Sort(_)
             | LogicalOperator::Values(_)
@@ -153,6 +162,7 @@ impl LogicalOperator {
             LogicalOperator::GroupBy(group_by) => Box::from(group_by.expressions.iter_mut()),
             LogicalOperator::Single
             | LogicalOperator::Filter(_)
+            | LogicalOperator::Join(_)
             | LogicalOperator::Limit(_)
             | LogicalOperator::Sort(_)
             | LogicalOperator::Values(_)
@@ -188,6 +198,7 @@ impl LogicalOperator {
                     .iter_mut()
                     .map(|se| &mut se.expression),
             ),
+            LogicalOperator::Join(join) => Box::from(once(&mut join.on)),
             LogicalOperator::Single
             | LogicalOperator::Limit(_)
             | LogicalOperator::TableAlias(_)
@@ -216,6 +227,9 @@ impl LogicalOperator {
             ),
             LogicalOperator::UnionAll(union_all) => Box::from(union_all.sources.iter_mut()),
             LogicalOperator::NegateFreq(source) => Box::from(once(source.as_mut())),
+            LogicalOperator::Join(join) => {
+                Box::from(once(join.left.as_mut()).chain(once(join.right.as_mut())))
+            }
             LogicalOperator::Single
             | LogicalOperator::Values(_)
             | LogicalOperator::TableReference(_)

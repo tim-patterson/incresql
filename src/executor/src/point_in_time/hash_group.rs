@@ -15,7 +15,7 @@ use std::sync::Arc;
 pub struct HashGroupExecutor {
     source: BoxedExecutor,
     session: Arc<Session>,
-    key_size: usize,
+    key_len: usize,
     expressions: Vec<AggregateExpression>,
     state: HashMap<Vec<u8>, Vec<Datum<'static>>>,
     state_iter: Option<IntoIter<Vec<u8>, Vec<Datum<'static>>>>,
@@ -28,7 +28,7 @@ impl HashGroupExecutor {
     pub fn new(
         source: BoxedExecutor,
         session: Arc<Session>,
-        key_size: usize,
+        key_len: usize,
         expressions: Vec<Expression>,
     ) -> Self {
         let expressions: Vec<_> = expressions.iter().map(AggregateExpression::from).collect();
@@ -36,7 +36,7 @@ impl HashGroupExecutor {
         HashGroupExecutor {
             source,
             session,
-            key_size,
+            key_len,
             expressions,
             state: HashMap::new(),
             state_iter: None,
@@ -55,7 +55,7 @@ impl TupleIter for HashGroupExecutor {
             let mut key_buf = vec![];
             while let Some((tuple, freq)) = self.source.next()? {
                 key_buf.clear();
-                for datum in &tuple[..(self.key_size)] {
+                for datum in &tuple[..(self.key_len)] {
                     datum.as_sortable_bytes(SortOrder::Asc, &mut key_buf);
                 }
 
@@ -127,7 +127,7 @@ mod tests {
             vec![Datum::from("c"), Datum::from(5)],
         ];
 
-        let source = Box::from(ValuesExecutor::new(Box::from(values.into_iter()), 1));
+        let source = Box::from(ValuesExecutor::new(Box::from(values.into_iter()), 2));
 
         // Lookup sum function
         let (sig, sum_function) = Registry::default()

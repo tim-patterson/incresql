@@ -1,5 +1,6 @@
 mod aliases;
 mod between;
+mod boolean_logic;
 mod eq_ne;
 mod limit;
 mod literals;

@@ -24,6 +24,7 @@ impl ExplainNode for LogicalOperator {
             LogicalOperator::TableInsert(_) => "INSERT".to_string(),
             LogicalOperator::NegateFreq(_) => "NEGATE".to_string(),
             LogicalOperator::FileScan(_) => "FILE_SCAN".to_string(),
+            LogicalOperator::Join(_) => "JOIN".to_string(),
         }
     }
 
@@ -57,6 +58,7 @@ impl ExplainNode for LogicalOperator {
         match self {
             LogicalOperator::TableAlias(table_alias) => table_alias.source.predicate(),
             LogicalOperator::Filter(filter) => Some(&filter.predicate),
+            LogicalOperator::Join(join) => Some(&join.on),
             _ => None,
         }
     }
@@ -84,6 +86,10 @@ impl ExplainNode for LogicalOperator {
                 vec![("source".to_string(), project.source.as_ref())]
             }
             LogicalOperator::Sort(sort) => vec![("source".to_string(), sort.source.as_ref())],
+            LogicalOperator::Join(join) => vec![
+                ("left".to_string(), join.left.as_ref()),
+                ("right".to_string(), join.right.as_ref()),
+            ],
             LogicalOperator::Filter(filter) => vec![("source".to_string(), filter.source.as_ref())],
             LogicalOperator::Limit(limit) => vec![("source".to_string(), limit.source.as_ref())],
             LogicalOperator::TableAlias(table_alias) => table_alias.source.child_nodes(),

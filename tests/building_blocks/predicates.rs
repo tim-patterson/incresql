@@ -16,11 +16,7 @@ fn select_predicate_constant() {
         | |output_exprs:||||
         | |  _col1|0|INTEGER|1|
         | |source:||||
-        | |  FILTER||||
-        | |   |predicate:||||
-        | |   |||BOOLEAN|TRUE|
-        | |   |source:||||
-        | |   |  SINGLE||||
+        | |  SINGLE||||
         ",
     );
 }
@@ -39,17 +35,13 @@ fn select_predicate_reference() {
         "
         |PROJECT||||
         | |output_exprs:||||
-        | |  foo|0|INTEGER|<OFFSET 0>|
+        | |  foo|0|INTEGER|1|
         | |source:||||
         | |  FILTER||||
         | |   |predicate:||||
-        | |   |||BOOLEAN|`=`(<OFFSET 0>, 1)|
+        | |   |||BOOLEAN|TRUE|
         | |   |source:||||
-        | |   |  PROJECT||||
-        | |   |   |output_exprs:||||
-        | |   |   |  foo|0|INTEGER|1|
-        | |   |   |source:||||
-        | |   |   |  SINGLE||||
+        | |   |  SINGLE||||
         ",
     );
 }

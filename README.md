@@ -24,7 +24,7 @@ materialized views.
 - [x] Inserts / Deletes for tables.
 - [x] Basic "point in time" order bys and group bys
 - [x] Data ingestion
-- [ ] Basic "point in time" (inner) joins
+- [x] Basic "point in time" (inner) joins
 - [ ] Basic "point in time" window functions
 - [ ] View support
 - [ ] Basic MysqlWorkbench/Tableau/Datagrip support - This will mostly be creating system views.
@@ -89,6 +89,12 @@ To benchmark run the following command
   # Or to skip the reset/loading phase and rerun with
   # the tables loaded from the previous run
   cargo run --release --example tpch -- --skipload
+```
+
+To manually run queries against the loaded benchmarking tables, run the following
+
+```sh
+cargo run  --release -- --directory target/benchmark_db
 ```
 
 ### Related Work

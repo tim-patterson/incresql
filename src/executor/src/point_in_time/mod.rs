@@ -1,6 +1,7 @@
 use crate::point_in_time::file_scan::FileScanExecutor;
 use crate::point_in_time::filter::FilterExecutor;
 use crate::point_in_time::hash_group::HashGroupExecutor;
+use crate::point_in_time::hash_join::HashJoinExecutor;
 use crate::point_in_time::limit::LimitExecutor;
 use crate::point_in_time::negate_freq::NegateFreqExecutor;
 use crate::point_in_time::project::ProjectExecutor;
@@ -19,6 +20,7 @@ use std::sync::Arc;
 mod file_scan;
 mod filter;
 mod hash_group;
+mod hash_join;
 mod limit;
 mod negate_freq;
 mod project;
@@ -92,6 +94,11 @@ pub fn build_executor(session: &Arc<Session>, plan: &PointInTimeOperator) -> Box
         PointInTimeOperator::FileScan(file_scan) => Box::from(FileScanExecutor::new(
             file_scan.directory.clone(),
             file_scan.serde_options.clone(),
+        )),
+        PointInTimeOperator::HashJoin(join) => Box::from(HashJoinExecutor::new(
+            build_executor(session, &join.left),
+            build_executor(session, &join.right),
+            join.key_len,
         )),
     }
 }

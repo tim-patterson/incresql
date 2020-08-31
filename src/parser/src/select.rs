@@ -4,13 +4,13 @@ use crate::whitespace::ws_0;
 use crate::ParserResult;
 use ast::expr::{Expression, NamedExpression, SortExpression};
 use ast::rel::logical::{
-    FileScan, Filter, GroupBy, Limit, LogicalOperator, Project, SerdeOptions, Sort, TableAlias,
-    TableReference, UnionAll,
+    FileScan, Filter, GroupBy, Join, Limit, LogicalOperator, Project, SerdeOptions, Sort,
+    TableAlias, TableReference, UnionAll,
 };
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::combinator::{cut, map, opt};
-use nom::multi::{many0, separated_list};
+use nom::multi::{many0, separated_list, separated_nonempty_list};
 use nom::sequence::{delimited, pair, preceded, separated_pair, tuple};
 
 /// Parses a select statement, a select statement consists of potentially multiple
@@ -99,7 +99,27 @@ fn comma_sep_named_expressions(input: &str) -> ParserResult<Vec<NamedExpression>
 
 /// Parse the from clause of a query.
 fn from_clause(input: &str) -> ParserResult<LogicalOperator> {
-    preceded(kw("FROM"), cut(preceded(ws_0, from_item)))(input)
+    map(
+        preceded(
+            kw("FROM"),
+            cut(separated_nonempty_list(
+                tuple((ws_0, tag(","), ws_0)),
+                preceded(ws_0, from_item),
+            )),
+        ),
+        |items| {
+            // Grab the first and then cross join with each join as we go.
+            let mut iter = items.into_iter();
+            let first = iter.next().unwrap();
+            iter.fold(first, |left, right| {
+                LogicalOperator::Join(Join {
+                    left: Box::new(left),
+                    right: Box::new(right),
+                    on: Expression::from(true),
+                })
+            })
+        },
+    )(input)
 }
 
 fn from_item(input: &str) -> ParserResult<LogicalOperator> {
@@ -355,6 +375,37 @@ mod tests {
                     star: false
                 })],
                 source: Box::new(LogicalOperator::Single)
+            })
+        );
+    }
+
+    #[test]
+    fn test_old_style_join() {
+        assert_eq!(
+            select("SELECT 1 FROM a, b").unwrap().1,
+            LogicalOperator::Project(Project {
+                distinct: false,
+                expressions: vec![NamedExpression {
+                    expression: Expression::from(1),
+                    alias: None
+                },],
+                source: Box::new(LogicalOperator::Join(Join {
+                    left: Box::new(LogicalOperator::TableAlias(TableAlias {
+                        alias: "a".to_string(),
+                        source: Box::new(LogicalOperator::TableReference(TableReference {
+                            database: None,
+                            table: "a".to_string()
+                        }))
+                    })),
+                    right: Box::new(LogicalOperator::TableAlias(TableAlias {
+                        alias: "b".to_string(),
+                        source: Box::new(LogicalOperator::TableReference(TableReference {
+                            database: None,
+                            table: "b".to_string()
+                        }))
+                    })),
+                    on: Expression::from(true)
+                }))
             })
         );
     }

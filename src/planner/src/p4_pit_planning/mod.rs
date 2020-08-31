@@ -1,4 +1,4 @@
-use crate::utils::expr::move_column_references;
+use crate::utils::expr::{combine_predicates, decompose_predicate, move_column_references};
 use crate::utils::logical::fields_for_operator;
 use crate::{Field, Planner, PlannerError};
 use ast::expr::*;
@@ -6,6 +6,7 @@ use ast::rel::logical::*;
 use ast::rel::point_in_time;
 use ast::rel::point_in_time::{Group, PointInTimeOperator};
 use data::{LogicalTimestamp, Session};
+use functions::registry::Registry;
 
 pub struct PointInTimePlan {
     pub fields: Vec<Field>,
@@ -21,12 +22,12 @@ impl Planner {
         session: &Session,
     ) -> Result<PointInTimePlan, PlannerError> {
         let (fields, operator) = self.plan_common(query, session)?;
-        let operator = build_operator(operator);
+        let operator = build_operator(operator, &self.function_registry);
         Ok(PointInTimePlan { fields, operator })
     }
 }
 
-fn build_operator(query: LogicalOperator) -> PointInTimeOperator {
+fn build_operator(query: LogicalOperator, function_registry: &Registry) -> PointInTimeOperator {
     match query {
         LogicalOperator::Single => PointInTimeOperator::Single,
         LogicalOperator::Project(Project {
@@ -37,7 +38,7 @@ fn build_operator(query: LogicalOperator) -> PointInTimeOperator {
             assert!(!distinct, "Distinct should not be true at this point!");
             PointInTimeOperator::Project(point_in_time::Project {
                 expressions: expressions.into_iter().map(|ne| ne.expression).collect(),
-                source: Box::new(build_operator(*source)),
+                source: Box::new(build_operator(*source, function_registry)),
             })
         }
         LogicalOperator::GroupBy(GroupBy {
@@ -47,7 +48,7 @@ fn build_operator(query: LogicalOperator) -> PointInTimeOperator {
         }) => {
             if key_expressions.is_empty() {
                 PointInTimeOperator::SortedGroup(Group {
-                    source: Box::new(build_operator(*source)),
+                    source: Box::new(build_operator(*source, function_registry)),
                     expressions: expressions.into_iter().map(|ne| ne.expression).collect(),
                     key_len: 0,
                 })
@@ -67,7 +68,7 @@ fn build_operator(query: LogicalOperator) -> PointInTimeOperator {
 
                 let project = point_in_time::Project {
                     expressions: project_exprs,
-                    source: Box::new(build_operator(*source)),
+                    source: Box::new(build_operator(*source, function_registry)),
                 };
 
                 let group_exprs = expressions
@@ -88,7 +89,7 @@ fn build_operator(query: LogicalOperator) -> PointInTimeOperator {
         LogicalOperator::Filter(Filter { predicate, source }) => {
             PointInTimeOperator::Filter(point_in_time::Filter {
                 predicate,
-                source: Box::new(build_operator(*source)),
+                source: Box::new(build_operator(*source, function_registry)),
             })
         }
         LogicalOperator::Limit(Limit {
@@ -98,14 +99,14 @@ fn build_operator(query: LogicalOperator) -> PointInTimeOperator {
         }) => PointInTimeOperator::Limit(point_in_time::Limit {
             offset,
             limit,
-            source: Box::new(build_operator(*source)),
+            source: Box::new(build_operator(*source, function_registry)),
         }),
         LogicalOperator::Sort(Sort {
             sort_expressions,
             source,
         }) => PointInTimeOperator::Sort(point_in_time::Sort {
             sort_expressions,
-            source: Box::new(build_operator(*source)),
+            source: Box::new(build_operator(*source, function_registry)),
         }),
         LogicalOperator::Values(values) => {
             let data = values.data.into_iter().map(|row| {
@@ -125,7 +126,10 @@ fn build_operator(query: LogicalOperator) -> PointInTimeOperator {
         }
         LogicalOperator::UnionAll(UnionAll { sources }) => {
             PointInTimeOperator::UnionAll(point_in_time::UnionAll {
-                sources: sources.into_iter().map(build_operator).collect(),
+                sources: sources
+                    .into_iter()
+                    .map(|o| build_operator(o, function_registry))
+                    .collect(),
             })
         }
         LogicalOperator::ResolvedTable(ResolvedTable { table }) => {
@@ -146,18 +150,54 @@ fn build_operator(query: LogicalOperator) -> PointInTimeOperator {
 
             PointInTimeOperator::TableInsert(point_in_time::TableInsert {
                 table: actual_table,
-                source: Box::new(build_operator(*source)),
+                source: Box::new(build_operator(*source, function_registry)),
             })
         }
         LogicalOperator::NegateFreq(source) => {
-            PointInTimeOperator::NegateFreq(Box::new(build_operator(*source)))
+            PointInTimeOperator::NegateFreq(Box::new(build_operator(*source, function_registry)))
         }
-        LogicalOperator::TableAlias(table_alias) => build_operator(*table_alias.source),
+        LogicalOperator::TableAlias(table_alias) => {
+            build_operator(*table_alias.source, function_registry)
+        }
         LogicalOperator::FileScan(file_scan) => {
             PointInTimeOperator::FileScan(point_in_time::FileScan {
                 directory: file_scan.directory,
                 serde_options: file_scan.serde_options,
             })
+        }
+        LogicalOperator::Join(join) => {
+            let mut non_equi = vec![];
+            let mut equi_count = 0;
+            for expr in decompose_predicate(join.on) {
+                if let Expression::CompiledFunctionCall(function) = &expr {
+                    if function.signature.name == "=" {
+                        if let (
+                            Expression::CompiledColumnReference(_),
+                            Expression::CompiledColumnReference(_),
+                        ) = (&function.args[0], &function.args[1])
+                        {
+                            equi_count += 1;
+                            continue;
+                        }
+                    }
+                }
+                non_equi.push(expr);
+            }
+
+            let join_exec = PointInTimeOperator::HashJoin(point_in_time::Join {
+                left: Box::new(build_operator(*join.left, function_registry)),
+                right: Box::new(build_operator(*join.right, function_registry)),
+                key_len: equi_count,
+            });
+
+            if non_equi.is_empty() {
+                join_exec
+            } else {
+                PointInTimeOperator::Filter(point_in_time::Filter {
+                    predicate: combine_predicates(non_equi, function_registry),
+                    source: Box::new(join_exec),
+                })
+            }
         }
         LogicalOperator::TableReference(_) => panic!(),
     }

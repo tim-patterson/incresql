@@ -14,13 +14,9 @@ fn select_subquery_no_alias() {
         "
         |PROJECT||||
         | |output_exprs:||||
-        | |  foo|0|INTEGER|<OFFSET 0>|
+        | |  foo|0|INTEGER|1|
         | |source:||||
-        | |  PROJECT||||
-        | |   |output_exprs:||||
-        | |   |  foo|0|INTEGER|1|
-        | |   |source:||||
-        | |   |  SINGLE||||
+        | |  SINGLE||||
         ",
     );
 }

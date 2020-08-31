@@ -1,6 +1,9 @@
-use ast::expr::{Expression, FunctionCall};
+use ast::expr::{CompiledFunctionCall, Expression, FunctionCall};
 use data::DataType;
-use functions::{CompoundFunction, CompoundFunctionArg};
+use functions::registry::Registry;
+use functions::{CompoundFunction, CompoundFunctionArg, FunctionSignature};
+use std::cmp::{max, min};
+use std::iter::once;
 
 /// Returns the datatype for an expression, will panic if called before query is normalized
 pub(crate) fn type_for_expression(expr: &Expression) -> DataType {
@@ -63,10 +66,101 @@ pub(crate) fn assemble_compound_function(
     })
 }
 
+/// Takes a boolean expression and splits it at all the "ands".
+/// We take out any true's while we're at it as they don't really add anything.
+pub(crate) fn decompose_predicate(predicate: Expression) -> Box<dyn Iterator<Item = Expression>> {
+    match predicate {
+        Expression::CompiledFunctionCall(function) if function.signature.name == "and" => {
+            Box::from(
+                function
+                    .args
+                    .into_vec()
+                    .into_iter()
+                    .flat_map(decompose_predicate)
+                    .filter(|e| e != &Expression::from(true)),
+            )
+        }
+        Expression::FunctionCall(function) if &function.function_name == "and" => Box::from(
+            function
+                .args
+                .into_iter()
+                .flat_map(decompose_predicate)
+                .filter(|e| e != &Expression::from(true)),
+        ),
+        p => Box::from(once(p).filter(|e| e != &Expression::from(true))),
+    }
+}
+
+/// Takes many predicates and combines them with the and function.
+pub(crate) fn combine_predicates<E: IntoIterator<Item = Expression>>(
+    predicates: E,
+    function_registry: &Registry,
+) -> Expression {
+    let (and_function_sig, and_function) = function_registry
+        .resolve_function(&FunctionSignature {
+            name: "and",
+            args: vec![DataType::Boolean, DataType::Boolean],
+            ret: DataType::Null,
+        })
+        .unwrap();
+    let mut iter = predicates.into_iter();
+    match iter.next() {
+        Some(first) => iter.fold(first, |a, b| {
+            Expression::CompiledFunctionCall(CompiledFunctionCall {
+                function: and_function.as_scalar(),
+                args: Box::from([a, b]),
+                expr_buffer: Box::from(vec![]),
+                signature: Box::new(and_function_sig.clone()),
+            })
+        }),
+        None => Expression::from(true),
+    }
+}
+
+/// Takes an expression and rewrites it so it can instead live in it's source.
+/// Ie this is for pushing an expression down ,not pulling its dependencies up.
+/// This only works on compiled expressions
+pub(crate) fn inline_expression(expression: &mut Expression, source_expressions: &[&Expression]) {
+    match expression {
+        Expression::CompiledColumnReference(column_reference) => {
+            *expression = source_expressions[column_reference.offset].clone()
+        }
+        _ => {
+            for expr in expression.children_mut() {
+                inline_expression(expr, source_expressions);
+            }
+        }
+    }
+}
+
+/// For a given expression returns the (min, max) column reference's that it depends on.
+/// (None if its a constant). Used to figure out if a join condition only depends on one
+/// side of a join etc.
+pub(crate) fn min_max_column_deps_for_expression(
+    expression: &mut Expression,
+) -> Option<(usize, usize)> {
+    match expression {
+        Expression::CompiledColumnReference(column_reference) => {
+            Some((column_reference.offset, column_reference.offset))
+        }
+        _ => expression
+            .children_mut()
+            .filter_map(min_max_column_deps_for_expression)
+            .fold(None, |a, b| {
+                if let Some((min1, max1)) = a {
+                    Some((min(min1, b.0), max(max1, b.1)))
+                } else {
+                    Some(b)
+                }
+            }),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ast::expr::CompiledColumnReference;
+    use ast::expr::{ColumnReference, CompiledColumnReference};
+    use parser::parse_expression;
 
     #[test]
     fn test_move_column_references() {
@@ -84,5 +178,80 @@ mod tests {
                 datatype: DataType::Integer
             })
         );
+    }
+
+    #[test]
+    fn test_decompose_predicate() {
+        let expr = parse_expression("a and (c or d) and e").unwrap();
+
+        let parts: Vec<_> = decompose_predicate(expr).collect();
+
+        assert_eq!(
+            parts,
+            vec![
+                Expression::ColumnReference(ColumnReference {
+                    qualifier: None,
+                    alias: "a".to_string(),
+                    star: false
+                }),
+                Expression::FunctionCall(FunctionCall {
+                    function_name: "or".to_string(),
+                    args: vec![
+                        Expression::ColumnReference(ColumnReference {
+                            qualifier: None,
+                            alias: "c".to_string(),
+                            star: false
+                        }),
+                        Expression::ColumnReference(ColumnReference {
+                            qualifier: None,
+                            alias: "d".to_string(),
+                            star: false
+                        }),
+                    ]
+                }),
+                Expression::ColumnReference(ColumnReference {
+                    qualifier: None,
+                    alias: "e".to_string(),
+                    star: false
+                }),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_combine_predicates() {
+        let registry = Registry::default();
+        let parts = vec![
+            Expression::ColumnReference(ColumnReference {
+                qualifier: None,
+                alias: "a".to_string(),
+                star: false,
+            }),
+            Expression::FunctionCall(FunctionCall {
+                function_name: "or".to_string(),
+                args: vec![
+                    Expression::ColumnReference(ColumnReference {
+                        qualifier: None,
+                        alias: "c".to_string(),
+                        star: false,
+                    }),
+                    Expression::ColumnReference(ColumnReference {
+                        qualifier: None,
+                        alias: "d".to_string(),
+                        star: false,
+                    }),
+                ],
+            }),
+            Expression::ColumnReference(ColumnReference {
+                qualifier: None,
+                alias: "e".to_string(),
+                star: false,
+            }),
+        ];
+
+        assert_eq!(
+            &combine_predicates(parts, &registry).to_string(),
+            "and(and(a, or(c, d)), e)"
+        )
     }
 }
