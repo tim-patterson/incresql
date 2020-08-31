@@ -17,12 +17,14 @@ fn show_functions() {
         |=|
         |>|
         |>=|
+        |and|
         |avg|
         |count|
         |database|
         |date_sub|
         |json_extract|
         |json_unquote|
+        |or|
         |sum|
         |to_bigint|
         |to_bool|
