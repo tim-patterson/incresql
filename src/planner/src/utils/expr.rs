@@ -87,7 +87,7 @@ pub(crate) fn decompose_predicate(predicate: Expression) -> Box<dyn Iterator<Ite
 /// Takes many predicates and combines them with the and function.
 pub(crate) fn combine_predicates<E: IntoIterator<Item = Expression>>(
     predicates: E,
-    function_registry: Registry,
+    function_registry: &Registry,
 ) -> Expression {
     let (and_function_sig, and_function) = function_registry
         .resolve_function(&FunctionSignature {
@@ -204,7 +204,7 @@ mod tests {
         ];
 
         assert_eq!(
-            &combine_predicates(parts, registry).to_string(),
+            &combine_predicates(parts, &registry).to_string(),
             "and(and(a, or(c, d)), e)"
         )
     }

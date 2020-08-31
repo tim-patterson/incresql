@@ -13,7 +13,7 @@ impl Planner {
         session: &Session,
     ) -> Result<LogicalOperator, PlannerError> {
         fold_constants::fold_constants(&mut query, session);
-        filter_pushdown::filter_pushdown(&mut query);
+        filter_pushdown::filter_pushdown(&mut query, &self.function_registry);
         Ok(query)
     }
 }
