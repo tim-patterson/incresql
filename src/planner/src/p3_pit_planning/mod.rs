@@ -159,6 +159,18 @@ fn build_operator(query: LogicalOperator) -> PointInTimeOperator {
                 serde_options: file_scan.serde_options,
             })
         }
+        LogicalOperator::Join(join) => {
+            let join_exec = PointInTimeOperator::HashJoin(point_in_time::Join {
+                left: Box::new(build_operator(*join.left)),
+                right: Box::new(build_operator(*join.right)),
+                key_len: 0,
+            });
+
+            PointInTimeOperator::Filter(point_in_time::Filter {
+                predicate: join.on,
+                source: Box::new(join_exec),
+            })
+        }
         LogicalOperator::TableReference(_) => panic!(),
     }
 }

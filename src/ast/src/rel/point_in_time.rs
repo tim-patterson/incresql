@@ -17,6 +17,7 @@ pub enum PointInTimeOperator {
     NegateFreq(Box<PointInTimeOperator>),
     SortedGroup(Group),
     HashGroup(Group),
+    HashJoin(Join),
     FileScan(FileScan),
 }
 
@@ -79,6 +80,13 @@ pub struct Sort {
 pub struct Group {
     pub source: Box<PointInTimeOperator>,
     pub expressions: Vec<Expression>,
+    pub key_len: usize,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Join {
+    pub left: Box<PointInTimeOperator>,
+    pub right: Box<PointInTimeOperator>,
     pub key_len: usize,
 }
 

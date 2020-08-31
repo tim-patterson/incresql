@@ -10,7 +10,7 @@ use std::slice::Iter;
 /// by a downstream filter executor.
 /// The right input will be fully consumed first to populate the hashtable.
 /// The output rows will be a combination of left and right.
-pub struct HashJoin {
+pub struct HashJoinExecutor {
     left: BoxedExecutor,
     right: BoxedExecutor,
     key_len: usize,
@@ -24,10 +24,10 @@ pub struct HashJoin {
 
 type Bucket = Vec<(Vec<Datum<'static>>, i64)>;
 
-impl HashJoin {
+impl HashJoinExecutor {
     pub fn new(left: BoxedExecutor, right: BoxedExecutor, key_len: usize) -> Self {
         let tuple_buf = right_size_new_to(left.column_count() + right.column_count());
-        HashJoin {
+        HashJoinExecutor {
             left,
             right,
             key_len,
@@ -41,7 +41,7 @@ impl HashJoin {
     }
 }
 
-impl TupleIter for HashJoin {
+impl TupleIter for HashJoinExecutor {
     type E = ExecutionError;
 
     fn advance(&mut self) -> Result<(), ExecutionError> {
@@ -157,7 +157,7 @@ mod tests {
         let left_source = Box::from(ValuesExecutor::new(Box::from(left_values.into_iter()), 2));
         let right_source = Box::from(ValuesExecutor::new(Box::from(right_values.into_iter()), 2));
 
-        let executor = HashJoin::new(left_source, right_source, 1);
+        let executor = HashJoinExecutor::new(left_source, right_source, 1);
 
         // Sort on the two numeric columns
         let mut sorted = SortExecutor::new(

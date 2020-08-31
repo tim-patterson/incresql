@@ -50,6 +50,9 @@ pub(crate) fn fields_for_operator(
             data_type: DataType::Json,
         })),
         LogicalOperator::TableReference(_) => panic!(),
+        LogicalOperator::Join(join) => {
+            Box::from(fields_for_operator(&join.left).chain(fields_for_operator(&join.right)))
+        }
     }
 }
 
@@ -90,6 +93,9 @@ pub(crate) fn fieldnames_for_operator(
         LogicalOperator::NegateFreq(source) => fieldnames_for_operator(source),
         LogicalOperator::FileScan(_) => Box::from(once((None, "data"))),
         LogicalOperator::Single | LogicalOperator::TableInsert(_) => Box::from(empty()),
+        LogicalOperator::Join(join) => Box::from(
+            fieldnames_for_operator(&join.left).chain(fieldnames_for_operator(&join.right)),
+        ),
         LogicalOperator::TableReference(_) => panic!(),
     }
 }
@@ -112,6 +118,8 @@ pub(crate) fn source_fields_for_operator(
         }
         LogicalOperator::TableInsert(table_insert) => fields_for_operator(&table_insert.source),
         LogicalOperator::NegateFreq(source) => fields_for_operator(source),
+        // The on clause see's the columns the same as the operators above do.
+        LogicalOperator::Join(_) => fields_for_operator(operator),
         LogicalOperator::Values(_)
         | LogicalOperator::Single
         | LogicalOperator::TableReference(_)
