@@ -2,6 +2,7 @@ use ast::expr::{CompiledFunctionCall, Expression, FunctionCall};
 use data::DataType;
 use functions::registry::Registry;
 use functions::{CompoundFunction, CompoundFunctionArg, FunctionSignature};
+use std::cmp::{max, min};
 use std::iter::once;
 
 /// Returns the datatype for an expression, will panic if called before query is normalized
@@ -65,7 +66,8 @@ pub(crate) fn assemble_compound_function(
     })
 }
 
-/// Takes a boolean expression and splits it at all the "ands"
+/// Takes a boolean expression and splits it at all the "ands".
+/// We take out any true's while we're at it as they don't really add anything.
 pub(crate) fn decompose_predicate(predicate: Expression) -> Box<dyn Iterator<Item = Expression>> {
     match predicate {
         Expression::CompiledFunctionCall(function) if function.signature.name == "and" => {
@@ -74,13 +76,18 @@ pub(crate) fn decompose_predicate(predicate: Expression) -> Box<dyn Iterator<Ite
                     .args
                     .into_vec()
                     .into_iter()
-                    .flat_map(decompose_predicate),
+                    .flat_map(decompose_predicate)
+                    .filter(|e| e != &Expression::from(true)),
             )
         }
-        Expression::FunctionCall(function) if &function.function_name == "and" => {
-            Box::from(function.args.into_iter().flat_map(decompose_predicate))
-        }
-        p => Box::from(once(p)),
+        Expression::FunctionCall(function) if &function.function_name == "and" => Box::from(
+            function
+                .args
+                .into_iter()
+                .flat_map(decompose_predicate)
+                .filter(|e| e != &Expression::from(true)),
+        ),
+        p => Box::from(once(p).filter(|e| e != &Expression::from(true))),
     }
 }
 
@@ -107,6 +114,45 @@ pub(crate) fn combine_predicates<E: IntoIterator<Item = Expression>>(
             })
         }),
         None => Expression::from(true),
+    }
+}
+
+/// Takes an expression and rewrites it so it can instead live in it's source.
+/// Ie this is for pushing an expression down ,not pulling its dependencies up.
+/// This only works on compiled expressions
+pub(crate) fn inline_expression(expression: &mut Expression, source_expressions: &[&Expression]) {
+    match expression {
+        Expression::CompiledColumnReference(column_reference) => {
+            *expression = source_expressions[column_reference.offset].clone()
+        }
+        _ => {
+            for expr in expression.children_mut() {
+                inline_expression(expr, source_expressions);
+            }
+        }
+    }
+}
+
+/// For a given expression returns the (min, max) column reference's that it depends on.
+/// (None if its a constant). Used to figure out if a join condition only depends on one
+/// side of a join etc.
+pub(crate) fn min_max_column_deps_for_expression(
+    expression: &mut Expression,
+) -> Option<(usize, usize)> {
+    match expression {
+        Expression::CompiledColumnReference(column_reference) => {
+            Some((column_reference.offset, column_reference.offset))
+        }
+        _ => expression
+            .children_mut()
+            .filter_map(min_max_column_deps_for_expression)
+            .fold(None, |a, b| {
+                if let Some((min1, max1)) = a {
+                    Some((min(min1, b.0), max(max1, b.1)))
+                } else {
+                    Some(b)
+                }
+            }),
     }
 }
 

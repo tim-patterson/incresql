@@ -58,6 +58,7 @@ impl ExplainNode for LogicalOperator {
         match self {
             LogicalOperator::TableAlias(table_alias) => table_alias.source.predicate(),
             LogicalOperator::Filter(filter) => Some(&filter.predicate),
+            LogicalOperator::Join(join) => Some(&join.on),
             _ => None,
         }
     }
