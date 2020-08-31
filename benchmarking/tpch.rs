@@ -21,7 +21,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let client_url = "mysql://root:password@localhost:3308";
     let path = "target/benchmark_db";
 
-    let matches = App::new("My Super Program")
+    let matches = App::new("TPCH")
         .arg(
             Arg::with_name("scale")
                 .short("s")
@@ -178,7 +178,7 @@ CREATE TABLE tpch.customer
     c_nationkey  INTEGER,
     c_phone      TEXT,
     c_acctbal    DECIMAL(12,2),
-    c_mkcsegment TEXT,
+    c_mktsegment TEXT,
     c_comment    TEXT
 )
     ",
@@ -192,6 +192,7 @@ CREATE TABLE tpch.orders
     o_custkey        BIGINT,
     o_orderstatus    TEXT,
     o_totalprice     DECIMAL(12,2),
+    o_orderdate      DATE,
     o_orderpriority  TEXT,
     o_clerk          TEXT,
     o_shippriority   INTEGER,
@@ -212,8 +213,8 @@ CREATE TABLE tpch.lineitem
     l_extendedprice  DECIMAL(12,2),
     l_discount       DECIMAL(12,2),
     l_tax            DECIMAL(12,2),
-    l_returnflag     BOOLEAN,
-    l_linestatus     BOOLEAN,
+    l_returnflag     TEXT,
+    l_linestatus     TEXT,
     l_shipdate       DATE,
     l_commitdate     DATE,
     l_receiptdate    DATE,
@@ -323,7 +324,7 @@ SELECT
   CAST(data->>"$[3]" AS INTEGER) as c_nationkey,
   data->>"$[4]" as c_phone,
   CAST(data->>"$[5]" AS DECIMAL(12,2)) as c_acctbal,
-  data->>"$[6]" as c_mkcsegment,
+  data->>"$[6]" as c_mktsegment,
   data->>"$[7]" as c_comment
 FROM directory "{}/customer.tbl" with(delimiter="|")
     "#,
@@ -342,10 +343,11 @@ SELECT
   CAST(data->>"$[1]" AS BIGINT) as o_custkey,
   data->>"$[2]" as o_orderstatus,
   CAST(data->>"$[3]" AS DECIMAL(12,2)) as o_totalprice,
-  data->>"$[4]" as o_orderpriority,
-  data->>"$[5]" as o_clerk,
-  CAST(data->>"$[6]" AS INTEGER) as o_shippriority,
-  data->>"$[7]" as o_comment
+  CAST(data->>"$[4]" AS DATE) as o_orderdate,
+  data->>"$[5]" as o_orderpriority,
+  data->>"$[6]" as o_clerk,
+  CAST(data->>"$[7]" AS INTEGER) as o_shippriority,
+  data->>"$[8]" as o_comment
 FROM directory "{}/orders.tbl" with(delimiter="|")
     "#,
             data_dir
@@ -367,8 +369,8 @@ SELECT
   CAST(data->>"$[5]" AS DECIMAL(12,2)) as l_extendedprice,
   CAST(data->>"$[6]" AS DECIMAL(12,2)) as l_discount,
   CAST(data->>"$[7]" AS DECIMAL(12,2)) as l_tax,
-  CAST(data->>"$[8]" AS BOOLEAN) as l_returnflag,
-  CAST(data->>"$[9]" AS BOOLEAN) as l_linestatus,
+  data->>"$[8]" as l_returnflag,
+  data->>"$[9]" as l_linestatus,
   CAST(data->>"$[10]" AS DATE) as l_shipdate,
   CAST(data->>"$[11]" AS DATE) as l_commitdate,
   CAST(data->>"$[12]" AS DATE) as l_receiptdate,
@@ -418,6 +420,7 @@ FROM directory "{}/region.tbl" with(delimiter="|")
 }
 
 fn run_queries(connection: &mut Conn) -> Result<(), Box<dyn Error>> {
+    connection.query_drop("use tpch")?;
     run_query(
         connection,
         "Query 1",
@@ -434,7 +437,7 @@ select
     avg(l_discount) as avg_disc,
     count(*) as count_order
 from
-    tpch.lineitem
+    lineitem
 where
     l_shipdate <= date_sub(date '1998-12-01', 90)
 group by

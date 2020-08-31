@@ -91,6 +91,12 @@ To benchmark run the following command
   cargo run --release --example tpch -- --skipload
 ```
 
+To manually run queries against the loaded benchmarking tables, run the following
+
+```sh
+cargo run  --release -- --directory target/benchmark_db
+```
+
 ### Related Work
 Other similar projects are
 * https://github.com/mit-pdos/noria - More academic in nature, focusing more on traditional transactional apps used prepared statements.
