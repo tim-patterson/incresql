@@ -19,6 +19,7 @@ use std::sync::Arc;
 mod file_scan;
 mod filter;
 mod hash_group;
+mod hash_join;
 mod limit;
 mod negate_freq;
 mod project;

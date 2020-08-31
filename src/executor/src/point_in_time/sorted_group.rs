@@ -17,7 +17,7 @@ use std::sync::Arc;
 pub struct SortedGroupExecutor {
     source: PeekableIter<dyn TupleIter<E = ExecutionError>>,
     session: Arc<Session>,
-    key_size: usize,
+    key_len: usize,
     expressions: Vec<AggregateExpression>,
     current_state: Vec<Datum<'static>>,
     output_tuple: Vec<Datum<'static>>,
@@ -35,7 +35,7 @@ impl SortedGroupExecutor {
     pub fn new(
         source: BoxedExecutor,
         session: Arc<Session>,
-        key_size: usize,
+        key_len: usize,
         expressions: Vec<Expression>,
     ) -> Self {
         let expressions: Vec<_> = expressions.iter().map(AggregateExpression::from).collect();
@@ -44,7 +44,7 @@ impl SortedGroupExecutor {
         SortedGroupExecutor {
             source: PeekableIter::from(source),
             session,
-            key_size,
+            key_len,
             expressions,
             current_state,
             output_tuple,
@@ -67,7 +67,7 @@ impl TupleIter for SortedGroupExecutor {
         }
 
         // Special case where key size is 0
-        if self.key_size == 0 && self.state == State::Initial {
+        if self.key_len == 0 && self.state == State::Initial {
             self.expressions.reset(&mut self.current_state);
             while let Some((tuple, freq)) = self.source.next()? {
                 self.expressions
@@ -79,7 +79,7 @@ impl TupleIter for SortedGroupExecutor {
                 transmute_muf_buf(&mut self.output_tuple),
             );
             self.state = State::Processing;
-        } else if self.key_size == 0 && self.state == State::Processing {
+        } else if self.key_len == 0 && self.state == State::Processing {
             self.state = State::Done;
         } else {
             // Standard grouping logic
@@ -88,7 +88,7 @@ impl TupleIter for SortedGroupExecutor {
                 self.expressions.reset(&mut self.current_state);
                 self.expressions
                     .apply(&self.session, tuple, freq, &mut self.current_state);
-                hash_tuple(tuple, self.key_size)
+                hash_tuple(tuple, self.key_len)
             } else {
                 self.state = State::Done;
                 return Ok(());
@@ -96,7 +96,7 @@ impl TupleIter for SortedGroupExecutor {
 
             loop {
                 if let Some((tuple, freq)) = self.source.peek()? {
-                    let hash = hash_tuple(tuple, self.key_size);
+                    let hash = hash_tuple(tuple, self.key_len);
                     if hash != group_hash {
                         // We've stepped into the next tuple, finalize the row and break
                         self.expressions.finalize(
