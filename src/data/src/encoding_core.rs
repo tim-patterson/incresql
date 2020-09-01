@@ -69,6 +69,8 @@ impl SortableEncoding for [u8] {
 }
 
 lazy_static! {
+    // If we're bigger than this one we actually need to divide by 10
+    static ref DECIMAL_LARGEST: Decimal = Decimal::from_i128_with_scale(10_000_000_000_000_000_000_000_000_000,0);
     // 1 Bigger than the largest allowable decimal /10.
     static ref DECIMAL_THRESHOLD_1: Decimal = Decimal::from_i128_with_scale(1_000_000_000_000_000_000_000_000_000,0);
     static ref DECIMAL_THRESHOLD_1_MUT: Decimal = Decimal::new(10, 0);
@@ -124,6 +126,14 @@ impl SortableEncoding for Decimal {
             d *= *DECIMAL_THRESHOLD_1_MUT;
             scale += 1;
         }
+
+        // After doing math etc on the decimals they can end up bigger than we
+        // we expected
+        while d >= *DECIMAL_LARGEST {
+            d /= *DECIMAL_THRESHOLD_1_MUT;
+            scale -= 1;
+        }
+
         // Invert the scale so that it sorts correctly.
         scale = 100 - scale;
 
@@ -706,6 +716,8 @@ mod tests {
             Decimal::new(-1234, 3),
             Decimal::new(-13, 1),
             Decimal::new(-14567, 4),
+            Decimal::new(1038995, 1),
+            Decimal::new(7342352455, 4),
         ];
         let mut asc_byte_arrays = vec![];
         let mut desc_byte_arrays = vec![];
