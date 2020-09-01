@@ -119,6 +119,7 @@ impl JsonPathSelector {
                                 } else {
                                     rest[0].evaluate(v, &rest[1..], f);
                                 }
+                                break;
                             }
                         }
                     }
@@ -133,6 +134,7 @@ impl JsonPathSelector {
                                 } else {
                                     rest[0].evaluate(v, &rest[1..], f);
                                 }
+                                break;
                             }
                         }
                     }
@@ -161,6 +163,7 @@ impl JsonPathSelector {
                                         } else {
                                             rest[0].evaluate(v, &rest[1..], f);
                                         }
+                                        break;
                                     }
                                 }
                             }
@@ -175,6 +178,7 @@ impl JsonPathSelector {
                                     } else {
                                         rest[0].evaluate(v, &rest[1..], f);
                                     }
+                                    break;
                                 }
                             }
                         }
