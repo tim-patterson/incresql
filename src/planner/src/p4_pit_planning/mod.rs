@@ -189,7 +189,7 @@ fn build_operator(query: LogicalOperator, function_registry: &Registry) -> Point
                 right: Box::new(build_operator(*join.right, function_registry)),
                 key_len: equi_count,
                 non_equi_condition: combine_predicates(non_equi, function_registry),
-                join_type: JoinType::Inner,
+                join_type: join.join_type,
             })
         }
         LogicalOperator::TableReference(_) => panic!(),

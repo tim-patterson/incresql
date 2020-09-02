@@ -4,7 +4,7 @@ use crate::whitespace::ws_0;
 use crate::ParserResult;
 use ast::expr::{Expression, NamedExpression, SortExpression};
 use ast::rel::logical::{
-    FileScan, Filter, GroupBy, Join, Limit, LogicalOperator, Project, SerdeOptions, Sort,
+    FileScan, Filter, GroupBy, Join, JoinType, Limit, LogicalOperator, Project, SerdeOptions, Sort,
     TableAlias, TableReference, UnionAll,
 };
 use nom::branch::alt;
@@ -132,6 +132,7 @@ fn from_clause(input: &str) -> ParserResult<LogicalOperator> {
                     left: Box::new(left),
                     right: Box::new(right),
                     on: Expression::from(true),
+                    join_type: JoinType::Inner,
                 })
             })
         },
@@ -156,6 +157,7 @@ fn join(input: &str) -> ParserResult<LogicalOperator> {
                     left: Box::new(left),
                     right: Box::new(right),
                     on: condition,
+                    join_type: JoinType::Inner,
                 })
             })
         },
@@ -444,7 +446,8 @@ mod tests {
                             table: "b".to_string()
                         }))
                     })),
-                    on: Expression::from(true)
+                    on: Expression::from(true),
+                    join_type: JoinType::Inner
                 }))
             })
         );
@@ -475,7 +478,8 @@ mod tests {
                             table: "b".to_string()
                         }))
                     })),
-                    on: Expression::from(3)
+                    on: Expression::from(3),
+                    join_type: JoinType::Inner
                 }))
             })
         );
