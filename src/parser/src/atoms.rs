@@ -126,6 +126,7 @@ pub fn identifier_str(input: &str) -> ParserResult<String> {
                     kw("OUTER"),
                     kw("FULL"),
                     kw("ON"),
+                    kw("IS"),
                 )))),
                 pair(
                     take_while_m_n(1, 1, |c: char| {

@@ -48,7 +48,7 @@ fn and_or() {
 }
 
 #[test]
-fn and_or_precedence() {
+fn and_or_not_precedence() {
     with_connection(|connection| {
         // This is how it should be parsed
         connection.query(
@@ -63,6 +63,58 @@ fn and_or_precedence() {
             r#"SELECT true and false or false, false or false and true"#,
             "
         |FALSE|FALSE|
+        ",
+        );
+
+        // check not
+        connection.query(
+            r#"SELECT not true, not not true"#,
+            "
+        |FALSE|TRUE|
+        ",
+        );
+
+        // check "not" binds tighter than "or"
+        connection.query(
+            r#"SELECT not true or true"#,
+            "
+        |TRUE|
+        ",
+        );
+
+        // Check "not" binds tighter than "and"
+        connection.query(
+            r#"SELECT not false and false"#,
+            "
+        |FALSE|
+        ",
+        );
+    });
+}
+
+#[test]
+fn test_is() {
+    with_connection(|connection| {
+        connection.query(
+            r#"SELECT 1=1 is true, 1=2 is true, 1=null is true"#,
+            "
+        |TRUE|FALSE|FALSE|
+        ",
+        );
+
+        connection.query(
+            r#"SELECT 1=1 is not true, 1=2 is not true, 1=null is not true"#,
+            "
+        |FALSE|TRUE|TRUE|
+        ",
+        );
+
+        // Should be parsed as
+        // (((1=1) is false) = false) is true
+        connection.query(
+            r#"SELECT 1=1 is false = false is true"#,
+            "
+        |TRUE|
         ",
         );
     });
