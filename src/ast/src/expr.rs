@@ -21,6 +21,12 @@ pub enum Expression {
     CompiledColumnReference(CompiledColumnReference),
 }
 
+impl Default for Expression {
+    fn default() -> Self {
+        Expression::Constant(Datum::Null, DataType::Null)
+    }
+}
+
 /// Represents a function call straight from the parser.
 /// Ie the function isn't actually resolved by this point
 #[derive(Debug, PartialEq, Eq, Clone)]

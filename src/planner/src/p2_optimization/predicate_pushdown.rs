@@ -4,7 +4,7 @@ use crate::utils::expr::{
 };
 use crate::utils::logical::fieldnames_for_operator;
 use ast::expr::Expression;
-use ast::rel::logical::{Filter, LogicalOperator};
+use ast::rel::logical::{Filter, JoinType, LogicalOperator};
 use functions::registry::Registry;
 
 /// Decomposes filters by splitting them at "ands" and then pushing each fragment down
@@ -29,18 +29,14 @@ fn pushdown_predicates_from_above(
     // As we push all the predicates out of a filter, filters should actually be removed.
     match operator {
         LogicalOperator::Filter(filter) => {
-            let mut predicate = Expression::from(true);
-            std::mem::swap(&mut predicate, &mut filter.predicate);
+            let predicate = std::mem::take(&mut filter.predicate);
             let predicates = decompose_predicate(predicate).collect();
 
             // Push down filters
             pushdown_predicates_from_above(filter.source.as_mut(), predicates, function_registry);
 
             // Remove the now useless filter.
-            let mut source = LogicalOperator::default();
-            std::mem::swap(&mut source, &mut filter.source);
-
-            *operator = source
+            *operator = std::mem::take(&mut filter.source)
         }
 
         // We can always transparently push through these operators
@@ -75,41 +71,97 @@ fn pushdown_predicates_from_above(
         }
 
         LogicalOperator::Join(join) => {
-            // We should always be able to push a filter into a join but deciding what
-            // we can push down further is a little trickier.
-            let mut join_predicate = Expression::from(true);
-            std::mem::swap(&mut join_predicate, &mut join.on);
+            // Joins are a little tricky.
+            // Inner joins are simple enough, any pushed down filters act like join conditions
+            // and conditions are just like filters so can be pushed down too.
 
-            // This is now all the conditions we can apply to the join.
-            // We can bucket these into 4 buckets, predicates that depend on the
-            // left table, the right table, both tables, no tables(constant)
-            predicates.extend(decompose_predicate(join_predicate));
+            // When thinking about outer joins the join condition is not a
+            // filter just a join condition.
+            // So for a left outer join, none of the left rows are filtered,
+            // the condition solely about matching to the right side.
+            // For predicates coming from above this means for the left side we
+            // can push them into the source (but we must skip over the join condition).
+            // For predicates that filter the right side, these can't be pushed down
+            // But as for pushing down the conditions, well we already know we can't push
+            // down any that touch the left or both sides.
+            // but right only conditions can be pushed down as can constants.
+
+            let join_predicates = decompose_predicate(std::mem::take(&mut join.on));
             let left_len = fieldnames_for_operator(&join.left).count();
+            // What we'll push down to the left and right sides, what we'll keep in
+            // the join condition and what we'll put in a filter wrapping the join
             let mut left = vec![];
             let mut right = vec![];
-            let mut both = vec![];
+            let mut keep = vec![];
+            let mut wrap = vec![];
 
-            for mut predicate in predicates {
-                match min_max_column_deps_for_expression(&mut predicate) {
-                    None => {
-                        // Constant, push it down both sides
-                        left.push(predicate.clone());
-                        right.push(predicate)
+            if join.join_type == JoinType::Inner {
+                // Bring in predicates and merge them with join condition.
+                predicates.extend(join_predicates);
+
+                for mut predicate in predicates {
+                    match min_max_column_deps_for_expression(&mut predicate) {
+                        None => {
+                            // Constant, push it down both sides
+                            left.push(predicate.clone());
+                            right.push(predicate)
+                        }
+                        Some((_min, max)) if max < left_len => left.push(predicate),
+                        Some((min, _max)) if min >= left_len => right.push(predicate),
+                        _ => keep.push(predicate),
                     }
-                    Some((_min, max)) if max < left_len => left.push(predicate),
-                    Some((min, _max)) if min >= left_len => right.push(predicate),
-                    _ => both.push(predicate),
                 }
+            } else if join.join_type == JoinType::LeftOuter {
+                for mut predicate in predicates {
+                    match min_max_column_deps_for_expression(&mut predicate) {
+                        None => {
+                            // Constant, push it down both sides (either we filter out
+                            // everything or nothing....)
+                            left.push(predicate.clone());
+                            right.push(predicate)
+                        }
+                        // Push down the predicates filtering the left side
+                        Some((_min, max)) if max < left_len => left.push(predicate),
+                        _ => wrap.push(predicate),
+                    }
+                }
+
+                for mut condition in join_predicates {
+                    match min_max_column_deps_for_expression(&mut condition) {
+                        None => {
+                            // Constant, push it down right side only
+                            right.push(condition)
+                        }
+                        // Push down conditions to the right.
+                        Some((min, _max)) if min >= left_len => right.push(condition),
+                        _ => keep.push(condition),
+                    }
+                }
+            } else {
+                // Default implementation to play it safe for newly added join types
+                keep.extend(join_predicates);
+                wrap = predicates;
             }
+
             // Fix up the indexes for the right side.
             for expr in right.iter_mut() {
                 move_column_references(expr, -(left_len as isize));
             }
             // Put back join condition bits that we can't push down.
-            join.on = combine_predicates(both, function_registry);
+            join.on = combine_predicates(keep, function_registry);
             // Push down each side
             pushdown_predicates_from_above(&mut join.left, left, function_registry);
             pushdown_predicates_from_above(&mut join.right, right, function_registry);
+
+            // Wrap ourselves in the filters we didnt manage to push down
+            if !wrap.is_empty() {
+                let source = std::mem::take(operator);
+
+                *operator = LogicalOperator::Filter(Filter {
+                    predicate: combine_predicates(wrap, function_registry),
+                    source: Box::new(source),
+                });
+            }
         }
 
         // The remaining operators we can never push through, (we technically could with
@@ -119,8 +171,7 @@ fn pushdown_predicates_from_above(
         // depend on the grouping keys.
         _ => {
             if !predicates.is_empty() {
-                let mut source = LogicalOperator::default();
-                std::mem::swap(&mut source, operator);
+                let source = std::mem::take(operator);
 
                 *operator = LogicalOperator::Filter(Filter {
                     predicate: combine_predicates(predicates, function_registry),
