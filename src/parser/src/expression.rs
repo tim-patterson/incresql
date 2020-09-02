@@ -62,6 +62,20 @@ fn expression_1(input: &str) -> ParserResult<Expression> {
 }
 
 fn expression_2(input: &str) -> ParserResult<Expression> {
+    // For unary operators we don't need to do the whole fold thing we can simply recurse,
+    // back to the same level.
+    alt((
+        map(preceded(pair(kw("NOT"), ws_0), expression_2), |expr| {
+            Expression::FunctionCall(FunctionCall {
+                function_name: "not".to_string(),
+                args: vec![expr],
+            })
+        }),
+        expression_3,
+    ))(input)
+}
+
+fn expression_3(input: &str) -> ParserResult<Expression> {
     // Conceptually you can use between for boolean expressions but then the parsing
     // gets a little weird.
     // ie select a between b and c and d and e
@@ -71,16 +85,16 @@ fn expression_2(input: &str) -> ParserResult<Expression> {
     alt((
         map(
             tuple((
-                expression_3,
+                expression_4,
                 ws_0,
                 kw("BETWEEN"),
                 cut(tuple((
                     ws_0,
-                    expression_3,
+                    expression_4,
                     ws_0,
                     kw("AND"),
                     ws_0,
-                    expression_3,
+                    expression_4,
                 ))),
             )),
             |(e1, _, _, (_, e2, _, _, _, e3))| {
@@ -90,11 +104,11 @@ fn expression_2(input: &str) -> ParserResult<Expression> {
                 })
             },
         ),
-        expression_3,
+        expression_4,
     ))(input)
 }
 
-fn expression_3(input: &str) -> ParserResult<Expression> {
+fn expression_4(input: &str) -> ParserResult<Expression> {
     infix_many(
         (
             tag("="),
@@ -104,23 +118,23 @@ fn expression_3(input: &str) -> ParserResult<Expression> {
             tag("<="),
             tag("<"),
         ),
-        expression_4,
+        expression_5,
     )(input)
 }
 
-fn expression_4(input: &str) -> ParserResult<Expression> {
-    infix_many((tag("+"), tag("-")), expression_5)(input)
-}
-
 fn expression_5(input: &str) -> ParserResult<Expression> {
-    infix_many((tag("*"), tag("/")), expression_6)(input)
+    infix_many((tag("+"), tag("-")), expression_6)(input)
 }
 
 fn expression_6(input: &str) -> ParserResult<Expression> {
-    infix_many((tag("->>"), tag("->")), expression_7)(input)
+    infix_many((tag("*"), tag("/")), expression_7)(input)
 }
 
 fn expression_7(input: &str) -> ParserResult<Expression> {
+    infix_many((tag("->>"), tag("->")), expression_8)(input)
+}
+
+fn expression_8(input: &str) -> ParserResult<Expression> {
     alt((
         count_star,
         function_call,
@@ -420,6 +434,24 @@ mod tests {
                     Expression::from(2),
                     Expression::from(3),
                 ]
+            })
+        );
+    }
+
+    #[test]
+    fn test_not() {
+        assert_eq!(
+            expression("not not a").unwrap().1,
+            Expression::FunctionCall(FunctionCall {
+                function_name: "not".to_string(),
+                args: vec![Expression::FunctionCall(FunctionCall {
+                    function_name: "not".to_string(),
+                    args: vec![Expression::ColumnReference(ColumnReference {
+                        qualifier: None,
+                        alias: "a".to_string(),
+                        star: false
+                    }),]
+                })]
             })
         );
     }

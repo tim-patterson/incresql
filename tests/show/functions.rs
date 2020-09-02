@@ -26,6 +26,7 @@ fn show_functions() {
         |date_sub|
         |json_extract|
         |json_unquote|
+        |not|
         |or|
         |sum|
         |to_bigint|

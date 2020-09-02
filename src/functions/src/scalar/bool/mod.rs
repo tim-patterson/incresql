@@ -8,6 +8,7 @@ mod gte;
 mod lt;
 mod lte;
 mod ne;
+mod not;
 mod or;
 
 pub fn register_builtins(registry: &mut Registry) {
@@ -19,5 +20,6 @@ pub fn register_builtins(registry: &mut Registry) {
     lt::register_builtins(registry);
     lte::register_builtins(registry);
     ne::register_builtins(registry);
+    not::register_builtins(registry);
     or::register_builtins(registry);
 }
