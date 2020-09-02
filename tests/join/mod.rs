@@ -1,7 +1,7 @@
 use crate::runner::*;
 
 #[test]
-fn test_joins() {
+fn test_inner_joins() {
     with_connection(|connection| {
         connection.query(r#"CREATE TABLE t_left (l_id INT, l_text TEXT)"#, "");
 
@@ -125,6 +125,126 @@ fn test_joins() {
         |2|lc|1|rb|
         |2|ld|1|ra|
         |2|ld|1|rb|
+        "#,
+        );
+    });
+}
+
+#[test]
+fn test_left_joins() {
+    with_connection(|connection| {
+        connection.query(r#"CREATE TABLE t_left (l_id INT, l_text TEXT)"#, "");
+
+        connection.query(
+            r#"INSERT INTO t_left VALUES
+        (1, "la"), (1, "lb"),
+        (2, "lc"), (2, "ld"),
+        (3, "le"), (3, "lf"),
+        (null, "lg"), (null, "lh")
+        "#,
+            "",
+        );
+
+        connection.query(r#"CREATE TABLE t_right (r_id INT, r_text TEXT)"#, "");
+
+        connection.query(
+            r#"INSERT INTO t_right VALUES
+        (1, "ra"), (1, "rb"),
+        (2, "rc"), (2, "rd"),
+        (4, "re"), (4, "rf"),
+        (null, "rg"), (null, "rh")
+        "#,
+            "",
+        );
+
+        // Test basic
+        connection.query(
+            r#"SELECT * FROM t_left left outer join t_right
+        on l_id = t_right.r_id
+        ORDER BY l_text, r_id
+        "#,
+            r#"
+        |1|la|1|ra|
+        |1|la|1|rb|
+        |1|lb|1|ra|
+        |1|lb|1|rb|
+        |2|lc|2|rc|
+        |2|lc|2|rd|
+        |2|ld|2|rc|
+        |2|ld|2|rd|
+        |3|le|NULL|NULL|
+        |3|lf|NULL|NULL|
+        |NULL|lg|NULL|NULL|
+        |NULL|lh|NULL|NULL|
+        "#,
+        );
+
+        // Test non_equi
+        connection.query(
+            r#"SELECT * FROM t_left left outer join t_right
+        on l_id + t_right.r_id = 3
+        ORDER BY l_text, r_id
+        "#,
+            r#"
+        |1|la|2|rc|
+        |1|la|2|rd|
+        |1|lb|2|rc|
+        |1|lb|2|rd|
+        |2|lc|1|ra|
+        |2|lc|1|rb|
+        |2|ld|1|ra|
+        |2|ld|1|rb|
+        |3|le|NULL|NULL|
+        |3|lf|NULL|NULL|
+        |NULL|lg|NULL|NULL|
+        |NULL|lh|NULL|NULL|
+        "#,
+        );
+
+        // Test constant (no joins succeed)
+        connection.query(
+            r#"SELECT * FROM t_left left outer join t_right
+        on false
+        ORDER BY l_text, r_id
+        "#,
+            r#"
+        |1|la|NULL|NULL|
+        |1|lb|NULL|NULL|
+        |2|lc|NULL|NULL|
+        |2|ld|NULL|NULL|
+        |3|le|NULL|NULL|
+        |3|lf|NULL|NULL|
+        |NULL|lg|NULL|NULL|
+        |NULL|lh|NULL|NULL|
+        "#,
+        );
+
+        // test filters after joins
+        connection.query(
+            r#"SELECT * FROM t_left left outer join t_right
+        on l_id = t_right.r_id
+        WHERE l_id = 1
+        ORDER BY l_text, r_id
+        "#,
+            r#"
+        |1|la|1|ra|
+        |1|la|1|rb|
+        |1|lb|1|ra|
+        |1|lb|1|rb|
+        "#,
+        );
+
+        connection.query(
+            r#"SELECT * FROM t_left left outer join t_right
+        on l_id = t_right.r_id
+        WHERE r_id = 1
+        ORDER BY l_text, r_id
+        "#,
+            r#"
+        |1|la|1|ra|
+        |1|la|1|rb|
+        |1|lb|1|ra|
+        |1|lb|1|rb|
         "#,
         );
     });

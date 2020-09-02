@@ -9,7 +9,7 @@ use ast::rel::logical::{
 };
 use nom::branch::alt;
 use nom::bytes::complete::tag;
-use nom::combinator::{cut, map, opt};
+use nom::combinator::{cut, map, opt, value};
 use nom::multi::{many0, separated_list, separated_nonempty_list};
 use nom::sequence::{delimited, pair, preceded, separated_pair, tuple};
 
@@ -144,24 +144,36 @@ fn join(input: &str) -> ParserResult<LogicalOperator> {
         pair(
             join_item,
             many0(pair(
-                preceded(
-                    tuple((ws_0, opt(pair(kw("INNER"), ws_0)), kw("JOIN"), ws_0)),
-                    join_item,
-                ),
+                pair(delimited(ws_0, join_type, ws_0), join_item),
                 preceded(tuple((ws_0, kw("ON"), ws_0)), expression),
             )),
         ),
         |(first, joins)| {
-            joins.into_iter().fold(first, |left, (right, condition)| {
-                LogicalOperator::Join(Join {
-                    left: Box::new(left),
-                    right: Box::new(right),
-                    on: condition,
-                    join_type: JoinType::Inner,
+            joins
+                .into_iter()
+                .fold(first, |left, ((join_type, right), condition)| {
+                    LogicalOperator::Join(Join {
+                        left: Box::new(left),
+                        right: Box::new(right),
+                        on: condition,
+                        join_type,
+                    })
                 })
-            })
         },
     )(input)
+}
+
+fn join_type(input: &str) -> ParserResult<JoinType> {
+    alt((
+        value(
+            JoinType::Inner,
+            pair(opt(pair(kw("INNER"), ws_0)), kw("JOIN")),
+        ),
+        value(
+            JoinType::LeftOuter,
+            tuple((kw("LEFT"), ws_0, opt(pair(kw("OUTER"), ws_0)), kw("JOIN"))),
+        ),
+    ))(input)
 }
 
 fn join_item(input: &str) -> ParserResult<LogicalOperator> {
