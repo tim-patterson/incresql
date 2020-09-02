@@ -247,5 +247,20 @@ fn test_left_joins() {
         |1|lb|1|rb|
         "#,
         );
+
+        // Test emulating a minus
+        connection.query(
+            r#"SELECT t_left.* FROM t_left left outer join t_right
+        on l_id = t_right.r_id
+        WHERE r_id IS NULL
+        ORDER BY l_text
+        "#,
+            r#"
+        |3|le|
+        |3|lf|
+        |NULL|lg|
+        |NULL|lh|
+        "#,
+        );
     });
 }
