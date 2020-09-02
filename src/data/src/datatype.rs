@@ -15,6 +15,7 @@ pub enum DataType {
     ByteA,
     Json,
     Date,
+    Timestamp,
     JsonPath,
 }
 
@@ -33,6 +34,7 @@ impl DataType {
             DataType::ByteA => "to_bytes",
             DataType::Json => "to_json",
             DataType::Date => "to_date",
+            DataType::Timestamp => "to_timestamp",
             DataType::JsonPath => "to_jsonpath",
         }
     }
@@ -50,6 +52,7 @@ impl Display for DataType {
             DataType::ByteA => f.write_str("BYTEA"),
             DataType::Json => f.write_str("JSON"),
             DataType::Date => f.write_str("DATE"),
+            DataType::Timestamp => f.write_str("TIMESTAMP"),
             DataType::JsonPath => f.write_str("JSONPATH"),
         }
     }
@@ -75,6 +78,7 @@ impl TryFrom<&str> for DataType {
             "JSON" => Ok(DataType::Json),
             "JSONPATH" => Ok(DataType::JsonPath),
             "DATE" => Ok(DataType::Date),
+            "TIMESTAMP" => Ok(DataType::Timestamp),
             _ => DECIMAL_RE
                 .captures(value)
                 .map(|d_match| {

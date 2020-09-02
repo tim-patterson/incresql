@@ -40,6 +40,7 @@ fn show_functions() {
         |to_json|
         |to_jsonpath|
         |to_text|
+        |to_timestamp|
         |type_of|
         ",
     );

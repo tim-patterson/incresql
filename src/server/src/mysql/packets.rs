@@ -299,6 +299,10 @@ pub fn write_column_packet(
             MYSQL_TYPE_NEWDECIMAL
         }
         DataType::ByteA => MYSQL_TYPE_BLOB,
+        // It seems mysql's timestamp type can only represent a narrow
+        // band of times for years 1970-2038 while the datetime is a bigger
+        // type representing times for years 1000-9999
+        DataType::Timestamp => MYSQL_TYPE_DATETIME,
     };
 
     if (capabilities & CAPABILITY_CLIENT_PROTOCOL_41) != 0 {
