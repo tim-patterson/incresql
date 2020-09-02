@@ -24,6 +24,9 @@ fn show_functions() {
         |count|
         |database|
         |date_sub|
+        |isfalse|
+        |isnull|
+        |istrue|
         |json_extract|
         |json_unquote|
         |not|

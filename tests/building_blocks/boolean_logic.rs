@@ -91,3 +91,31 @@ fn and_or_not_precedence() {
         );
     });
 }
+
+#[test]
+fn test_is() {
+    with_connection(|connection| {
+        connection.query(
+            r#"SELECT 1=1 is true, 1=2 is true, 1=null is true"#,
+            "
+        |TRUE|FALSE|FALSE|
+        ",
+        );
+
+        connection.query(
+            r#"SELECT 1=1 is not true, 1=2 is not true, 1=null is not true"#,
+            "
+        |FALSE|TRUE|TRUE|
+        ",
+        );
+
+        // Should be parsed as
+        // (((1=1) is false) = false) is true
+        connection.query(
+            r#"SELECT 1=1 is false = false is true"#,
+            "
+        |TRUE|
+        ",
+        );
+    });
+}

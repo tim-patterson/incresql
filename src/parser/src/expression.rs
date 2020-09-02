@@ -6,7 +6,7 @@ use ast::expr::{Cast, ColumnReference, Expression, FunctionCall, NamedExpression
 use data::SortOrder;
 use nom::branch::{alt, Alt};
 use nom::bytes::complete::tag;
-use nom::combinator::{cut, map, value};
+use nom::combinator::{cut, map, opt, value};
 use nom::error::VerboseError;
 use nom::multi::{many0, separated_list};
 use nom::sequence::{delimited, pair, preceded, separated_pair, tuple};
@@ -85,16 +85,16 @@ fn expression_3(input: &str) -> ParserResult<Expression> {
     alt((
         map(
             tuple((
-                expression_4,
+                expression_5,
                 ws_0,
                 kw("BETWEEN"),
                 cut(tuple((
                     ws_0,
-                    expression_4,
+                    expression_5,
                     ws_0,
                     kw("AND"),
                     ws_0,
-                    expression_4,
+                    expression_5,
                 ))),
             )),
             |(e1, _, _, (_, e2, _, _, _, e3))| {
@@ -104,37 +104,91 @@ fn expression_3(input: &str) -> ParserResult<Expression> {
                 })
             },
         ),
-        expression_4,
+        expression_5,
     ))(input)
 }
 
-fn expression_4(input: &str) -> ParserResult<Expression> {
-    infix_many(
-        (
-            tag("="),
-            tag("!="),
-            tag(">="),
-            tag(">"),
-            tag("<="),
-            tag("<"),
-        ),
-        expression_5,
+fn expression_5(input: &str) -> ParserResult<Expression> {
+    // These operators + the "is [not] true|false|null" operators
+    let operators = (
+        tag("="),
+        tag("!="),
+        tag(">="),
+        tag(">"),
+        tag("<="),
+        tag("<"),
+    );
+
+    // Parser to support the is [not] true|false|null
+    let is = preceded(
+        kw("IS"),
+        cut(tuple((
+            ws_0,
+            opt(pair(kw("NOT"), ws_0)),
+            alt((
+                value(None, kw("NULL")),
+                value(Some(true), kw("TRUE")),
+                value(Some(false), kw("FALSE")),
+            )),
+        ))),
+    );
+
+    // These will return function_name: &str, not: bool, right_operator: Option<expr>
+    let op_parser = map(
+        tuple((ws_0, alt(operators), ws_0, expression_6)),
+        |(_, op, _, right)| (op, false, Some(right)),
+    );
+    let is_parser = map(preceded(ws_0, is), |(_, not, like)| {
+        let function_name = match like {
+            Some(true) => "istrue",
+            Some(false) => "isfalse",
+            None => "isnull",
+        };
+        (function_name, not.is_some(), None)
+    });
+
+    // Hacked up version of infix_many to also support the is null etc operators
+    map(
+        tuple((expression_6, many0(alt((op_parser, is_parser))))),
+        |(start, ops)| {
+            ops.into_iter().fold(start, |acc, (op, not, right)| {
+                let args = if let Some(r) = right {
+                    vec![acc, r]
+                } else {
+                    vec![acc]
+                };
+
+                let funct = Expression::FunctionCall(FunctionCall {
+                    function_name: op.to_lowercase(),
+                    args,
+                });
+
+                if not {
+                    Expression::FunctionCall(FunctionCall {
+                        function_name: "not".to_string(),
+                        args: vec![funct],
+                    })
+                } else {
+                    funct
+                }
+            })
+        },
     )(input)
 }
 
-fn expression_5(input: &str) -> ParserResult<Expression> {
-    infix_many((tag("+"), tag("-")), expression_6)(input)
-}
-
 fn expression_6(input: &str) -> ParserResult<Expression> {
-    infix_many((tag("*"), tag("/")), expression_7)(input)
+    infix_many((tag("+"), tag("-")), expression_7)(input)
 }
 
 fn expression_7(input: &str) -> ParserResult<Expression> {
-    infix_many((tag("->>"), tag("->")), expression_8)(input)
+    infix_many((tag("*"), tag("/")), expression_8)(input)
 }
 
 fn expression_8(input: &str) -> ParserResult<Expression> {
+    infix_many((tag("->>"), tag("->")), expression_9)(input)
+}
+
+fn expression_9(input: &str) -> ParserResult<Expression> {
     alt((
         count_star,
         function_call,
@@ -451,6 +505,27 @@ mod tests {
                         alias: "a".to_string(),
                         star: false
                     }),]
+                })]
+            })
+        );
+    }
+
+    #[test]
+    fn test_is() {
+        assert_eq!(
+            expression("a is null is not true").unwrap().1,
+            Expression::FunctionCall(FunctionCall {
+                function_name: "not".to_string(),
+                args: vec![Expression::FunctionCall(FunctionCall {
+                    function_name: "istrue".to_string(),
+                    args: vec![Expression::FunctionCall(FunctionCall {
+                        function_name: "isnull".to_string(),
+                        args: vec![Expression::ColumnReference(ColumnReference {
+                            qualifier: None,
+                            alias: "a".to_string(),
+                            star: false
+                        }),]
+                    })]
                 })]
             })
         );
