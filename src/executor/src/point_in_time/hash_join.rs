@@ -66,10 +66,15 @@ impl TupleIter for HashJoinExecutor {
         if self.hash_table.is_none() {
             let mut hash_table: HashMap<Vec<Datum<'static>>, Bucket> = HashMap::new();
             while let Some((tuple, freq)) = self.right.next()? {
-                let key = tuple[0..(self.key_len)]
+                let key: Vec<_> = tuple[0..(self.key_len)]
                     .iter()
                     .map(Datum::as_static)
                     .collect();
+                if key.iter().any(Datum::is_null) {
+                    // If any of the join keys are null we don't want to put into
+                    // the join.
+                    continue;
+                }
                 let rest = tuple[(self.key_len)..]
                     .iter()
                     .map(Datum::as_static)
