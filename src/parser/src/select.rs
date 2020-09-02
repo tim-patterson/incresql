@@ -97,6 +97,22 @@ fn comma_sep_named_expressions(input: &str) -> ParserResult<Vec<NamedExpression>
     separated_list(tuple((ws_0, tag(","), ws_0)), named_expression)(input)
 }
 
+// The from clause of a query can get a bit tricky...
+// Consider the following
+// FROM
+//  a,
+//  b as foo,
+//  (select ...) as bar,
+//  c join d as e on c.id = d.id
+//  join f on ...
+//
+//
+// So we can consider the from to be made up of a bunch of
+// comma separated entries, these are cross-joined together
+// Each of these entries is a "join", the join parser takes
+// many "join_item"'s that are aliased entries from the
+// unaliased_join_item which is the lowest atom building block.
+
 /// Parse the from clause of a query.
 fn from_clause(input: &str) -> ParserResult<LogicalOperator> {
     map(
@@ -104,7 +120,7 @@ fn from_clause(input: &str) -> ParserResult<LogicalOperator> {
             kw("FROM"),
             cut(separated_nonempty_list(
                 tuple((ws_0, tag(","), ws_0)),
-                preceded(ws_0, from_item),
+                preceded(ws_0, join),
             )),
         ),
         |items| {
@@ -122,9 +138,33 @@ fn from_clause(input: &str) -> ParserResult<LogicalOperator> {
     )(input)
 }
 
-fn from_item(input: &str) -> ParserResult<LogicalOperator> {
+fn join(input: &str) -> ParserResult<LogicalOperator> {
     map(
-        pair(unaliased_from_item, as_clause),
+        pair(
+            join_item,
+            many0(pair(
+                preceded(
+                    tuple((ws_0, opt(pair(kw("INNER"), ws_0)), kw("JOIN"), ws_0)),
+                    join_item,
+                ),
+                preceded(tuple((ws_0, kw("ON"), ws_0)), expression),
+            )),
+        ),
+        |(first, joins)| {
+            joins.into_iter().fold(first, |left, (right, condition)| {
+                LogicalOperator::Join(Join {
+                    left: Box::new(left),
+                    right: Box::new(right),
+                    on: condition,
+                })
+            })
+        },
+    )(input)
+}
+
+fn join_item(input: &str) -> ParserResult<LogicalOperator> {
+    map(
+        pair(unaliased_join_item, as_clause),
         |(sub_query, alias_opt)| {
             if let Some(alias) = alias_opt {
                 LogicalOperator::TableAlias(TableAlias {
@@ -138,7 +178,7 @@ fn from_item(input: &str) -> ParserResult<LogicalOperator> {
     )(input)
 }
 
-fn unaliased_from_item(input: &str) -> ParserResult<LogicalOperator> {
+fn unaliased_join_item(input: &str) -> ParserResult<LogicalOperator> {
     alt((
         // sub query
         directory_source,
@@ -405,6 +445,37 @@ mod tests {
                         }))
                     })),
                     on: Expression::from(true)
+                }))
+            })
+        );
+    }
+
+    #[test]
+    fn test_new_style_join() {
+        assert_eq!(
+            select("SELECT 1 FROM a join b on 3").unwrap().1,
+            LogicalOperator::Project(Project {
+                distinct: false,
+                expressions: vec![NamedExpression {
+                    expression: Expression::from(1),
+                    alias: None
+                },],
+                source: Box::new(LogicalOperator::Join(Join {
+                    left: Box::new(LogicalOperator::TableAlias(TableAlias {
+                        alias: "a".to_string(),
+                        source: Box::new(LogicalOperator::TableReference(TableReference {
+                            database: None,
+                            table: "a".to_string()
+                        }))
+                    })),
+                    right: Box::new(LogicalOperator::TableAlias(TableAlias {
+                        alias: "b".to_string(),
+                        source: Box::new(LogicalOperator::TableReference(TableReference {
+                            database: None,
+                            table: "b".to_string()
+                        }))
+                    })),
+                    on: Expression::from(3)
                 }))
             })
         );

@@ -5,6 +5,7 @@ mod delete;
 mod file_sources;
 mod group;
 mod insert;
+mod join;
 mod json;
 mod optimize;
 mod runner;
