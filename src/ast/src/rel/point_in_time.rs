@@ -1,5 +1,5 @@
 use crate::expr::{Expression, SortExpression};
-use crate::rel::logical::SerdeOptions;
+use crate::rel::logical::{JoinType, SerdeOptions};
 use data::{Datum, LogicalTimestamp};
 use storage::Table;
 
@@ -88,6 +88,8 @@ pub struct Join {
     pub left: Box<PointInTimeOperator>,
     pub right: Box<PointInTimeOperator>,
     pub key_len: usize,
+    pub non_equi_condition: Expression,
+    pub join_type: JoinType,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]

@@ -99,6 +99,9 @@ pub fn build_executor(session: &Arc<Session>, plan: &PointInTimeOperator) -> Box
             build_executor(session, &join.left),
             build_executor(session, &join.right),
             join.key_len,
+            join.non_equi_condition.clone(),
+            join.join_type,
+            Arc::clone(&session),
         )),
     }
 }
