@@ -184,20 +184,13 @@ fn build_operator(query: LogicalOperator, function_registry: &Registry) -> Point
                 non_equi.push(expr);
             }
 
-            let join_exec = PointInTimeOperator::HashJoin(point_in_time::Join {
+            PointInTimeOperator::HashJoin(point_in_time::Join {
                 left: Box::new(build_operator(*join.left, function_registry)),
                 right: Box::new(build_operator(*join.right, function_registry)),
                 key_len: equi_count,
-            });
-
-            if non_equi.is_empty() {
-                join_exec
-            } else {
-                PointInTimeOperator::Filter(point_in_time::Filter {
-                    predicate: combine_predicates(non_equi, function_registry),
-                    source: Box::new(join_exec),
-                })
-            }
+                non_equi_condition: combine_predicates(non_equi, function_registry),
+                join_type: join.join_type,
+            })
         }
         LogicalOperator::TableReference(_) => panic!(),
     }

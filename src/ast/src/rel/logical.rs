@@ -50,6 +50,12 @@ pub struct Join {
     pub left: Box<LogicalOperator>,
     pub right: Box<LogicalOperator>,
     pub on: Expression,
+    pub join_type: JoinType,
+}
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum JoinType {
+    Inner,
+    LeftOuter,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
