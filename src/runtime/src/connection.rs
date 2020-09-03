@@ -61,16 +61,11 @@ impl Connection<'_> {
             }
             Statement::Query(logical_operator) => logical_operator,
             Statement::Explain(explain) => {
-                let validated = self
+                let (_fields, operator) = self
                     .runtime
                     .planner
-                    .validate(explain.operator, &self.session)?;
-                let optimized = self.runtime.planner.optimize(validated, &self.session)?;
-                let normalized = self
-                    .runtime
-                    .planner
-                    .common_transforms(optimized, &self.session)?;
-                self.runtime.planner.explain(&normalized)
+                    .plan_common(explain.operator, &self.session)?;
+                self.runtime.planner.explain(&operator)
             }
             Statement::CreateDatabase(create_database) => {
                 let mut catalog = self.runtime.planner.catalog.write().unwrap();
@@ -89,6 +84,25 @@ impl Connection<'_> {
                     .unwrap_or_else(|| self.session.current_database.read().unwrap().to_string());
 
                 catalog.create_table(&database, &create_table.name, &create_table.columns)?;
+                return Ok((vec![], empty_tuple_iter()));
+            }
+            Statement::CreateView(create_view) => {
+                // For now we're just doing this to be helpful by throwing errors now rather than
+                // delaying until we use the view for the first time.
+                let (fields, _operator) = self
+                    .runtime
+                    .planner
+                    .plan_common(create_view.query, &self.session)?;
+
+                // Change fields to form expected by catalog...
+                let columns: Vec<_> = fields.into_iter().map(|f| (f.alias, f.data_type)).collect();
+
+                let mut catalog = self.runtime.planner.catalog.write().unwrap();
+                let database = create_view
+                    .database
+                    .unwrap_or_else(|| self.session.current_database.read().unwrap().to_string());
+
+                catalog.create_view(&database, &create_view.name, &columns, &create_view.sql)?;
                 return Ok((vec![], empty_tuple_iter()));
             }
             Statement::CompactTable(compact_table) => {

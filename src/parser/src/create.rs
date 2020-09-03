@@ -1,8 +1,9 @@
-use crate::atoms::{identifier_str, kw, qualified_reference};
+use crate::atoms::{and_recognise, identifier_str, kw, qualified_reference};
 use crate::literals::datatype;
+use crate::select::select;
 use crate::whitespace::ws_0;
 use crate::ParserResult;
-use ast::statement::{CreateDatabase, CreateTable, Statement};
+use ast::statement::{CreateDatabase, CreateTable, CreateView, Statement};
 use data::DataType;
 use nom::branch::alt;
 use nom::bytes::complete::tag;
@@ -12,7 +13,10 @@ use nom::sequence::{pair, preceded, separated_pair, tuple};
 
 /// Parses a create statement
 pub fn create(input: &str) -> ParserResult<Statement> {
-    preceded(kw("CREATE"), cut(alt((create_database, create_table))))(input)
+    preceded(
+        kw("CREATE"),
+        cut(alt((create_database, create_table, create_view))),
+    )(input)
 }
 
 fn create_database(input: &str) -> ParserResult<Statement> {
@@ -48,9 +52,35 @@ fn column_spec(input: &str) -> ParserResult<(String, DataType)> {
     separated_pair(identifier_str, ws_0, datatype)(input)
 }
 
+fn create_view(input: &str) -> ParserResult<Statement> {
+    map(
+        preceded(
+            pair(ws_0, kw("VIEW")),
+            cut(tuple((
+                ws_0,
+                qualified_reference,
+                ws_0,
+                kw("AS"),
+                ws_0,
+                and_recognise(select),
+            ))),
+        ),
+        |(_, (db_name, table_name), _, _, _, (query, query_sql))| {
+            Statement::CreateView(CreateView {
+                database: db_name,
+                name: table_name,
+                sql: query_sql.to_string(),
+                query,
+            })
+        },
+    )(input)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ast::expr::{Expression, NamedExpression};
+    use ast::rel::logical::{LogicalOperator, Project};
 
     #[test]
     fn test_create_database() {
@@ -75,6 +105,26 @@ mod tests {
                     ("c1".to_string(), DataType::Integer),
                     ("c2".to_string(), DataType::Boolean)
                 ]
+            })
+        );
+    }
+
+    #[test]
+    fn test_create_view() {
+        assert_eq!(
+            create("Create view foo.bar as select 1").unwrap().1,
+            Statement::CreateView(CreateView {
+                database: Some("foo".to_string()),
+                name: "bar".to_string(),
+                sql: "select 1".to_string(),
+                query: LogicalOperator::Project(Project {
+                    distinct: false,
+                    expressions: vec![NamedExpression {
+                        alias: None,
+                        expression: Expression::from(1)
+                    }],
+                    source: Box::new(Default::default())
+                })
             })
         );
     }

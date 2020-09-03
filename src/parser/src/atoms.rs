@@ -10,7 +10,7 @@ use nom::character::complete::alphanumeric1;
 use nom::combinator::{cut, map, map_res, not, opt, peek, recognize, value};
 use nom::error::{context, ErrorKind, VerboseError, VerboseErrorKind};
 use nom::sequence::{delimited, pair, preceded, terminated, tuple};
-use nom::AsChar;
+use nom::{AsChar, Offset};
 use std::str::FromStr;
 
 /// String's are double or single quoted
@@ -164,6 +164,23 @@ pub fn qualified_reference(input: &str) -> ParserResult<(Option<String>, String)
     ))(input)
 }
 
+/// Like the built in recognise but also returns the parsers result
+pub fn and_recognise<O, F>(parser: F) -> impl Fn(&str) -> ParserResult<(O, &str)>
+where
+    F: Fn(&str) -> ParserResult<O>,
+{
+    move |input: &str| {
+        let i = input;
+        match parser(i) {
+            Ok((r, o)) => {
+                let index = input.offset(&r);
+                Ok((r, (o, &input[..index])))
+            }
+            Err(e) => Err(e),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -297,6 +314,16 @@ mod tests {
         assert_eq!(
             qualified_reference("foo.bar").unwrap().1,
             (Some("foo".to_string()), "bar".to_string())
+        );
+    }
+
+    #[test]
+    fn test_and_recognise() {
+        assert_eq!(
+            preceded(ws_0, and_recognise(qualified_reference))("  foo.bar")
+                .unwrap()
+                .1,
+            ((Some("foo".to_string()), "bar".to_string()), "foo.bar")
         );
     }
 }
