@@ -1,6 +1,8 @@
+use crate::p1_validation::{column_aliases, sub_in_special_vars};
 use crate::PlannerError;
 use ast::rel::logical::{LogicalOperator, ResolvedTable};
-use catalog::Catalog;
+use ast::statement::Statement;
+use catalog::{Catalog, TableOrView};
 use data::Session;
 
 pub(super) fn resolve_tables(
@@ -17,11 +19,29 @@ pub(super) fn resolve_tables(
         let database = table_ref.database.as_ref().unwrap_or(&current_db);
         let table_name = &table_ref.table;
 
-        let table = catalog.item(database, table_name)?;
-        *operator = LogicalOperator::ResolvedTable(ResolvedTable {
-            columns: table.columns,
-            table: table.table,
-        })
+        let item = catalog.item(database, table_name)?;
+        match item.item {
+            TableOrView::Table(table) => {
+                *operator = LogicalOperator::ResolvedTable(ResolvedTable {
+                    columns: item.columns,
+                    table,
+                })
+            }
+            TableOrView::View(sql) => {
+                if let Statement::Query(view) = parser::parse(&sql).expect("Parse failed for view?")
+                {
+                    *operator = view;
+                    // Run the planner over the subbed-in sql up to the current phase
+                    sub_in_special_vars::sub_in_special_vars(operator);
+                    column_aliases::normalize_column_aliases(operator);
+                    for child in operator.children_mut() {
+                        resolve_tables(catalog, child, session)?;
+                    }
+                } else {
+                    panic!("Bogus view")
+                }
+            }
+        }
     }
 
     Ok(())

@@ -46,14 +46,20 @@ impl TupleIter for TableScanExecutor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use catalog::Catalog;
+    use catalog::{Catalog, TableOrView};
     use storage::Storage;
 
     #[test]
     fn test_table_scan_executor() -> Result<(), ExecutionError> {
         let storage = Storage::new_in_mem()?;
         let catalog = Catalog::new(storage).unwrap();
-        let table = catalog.item("incresql", "databases").unwrap().table;
+        let table = if let TableOrView::Table(table) =
+            catalog.item("incresql", "databases").unwrap().item
+        {
+            table
+        } else {
+            panic!()
+        };
 
         let mut executor = TableScanExecutor::new(table, LogicalTimestamp::MAX);
         assert_eq!(

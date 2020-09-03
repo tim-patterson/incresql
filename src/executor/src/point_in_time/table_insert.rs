@@ -59,7 +59,7 @@ mod tests {
     use super::*;
     use crate::point_in_time::values::ValuesExecutor;
     use crate::ExecutionError;
-    use catalog::Catalog;
+    use catalog::{Catalog, TableOrView};
     use data::DataType;
 
     #[test]
@@ -69,7 +69,12 @@ mod tests {
         catalog
             .create_table("default", "test", &[("a".to_string(), DataType::Integer)])
             .unwrap();
-        let table = catalog.item("default", "test").unwrap().table;
+        let table = if let TableOrView::Table(table) = catalog.item("default", "test").unwrap().item
+        {
+            table
+        } else {
+            panic!()
+        };
 
         let values = vec![
             vec![Datum::from(1)],
@@ -78,10 +83,9 @@ mod tests {
         ];
         let source = Box::from(ValuesExecutor::new(Box::from(values.into_iter()), 2));
 
-        let mut executor = TableInsertExecutor::new(source, table);
+        let mut executor = TableInsertExecutor::new(source, table.clone());
         assert_eq!(executor.next()?, None);
 
-        let table = catalog.item("default", "test").unwrap().table;
         let mut table_iter = table.full_scan(LogicalTimestamp::MAX);
 
         assert_eq!(table_iter.next()?, Some(([Datum::from(1)].as_ref(), 1)));

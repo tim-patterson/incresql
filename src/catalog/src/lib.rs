@@ -27,9 +27,16 @@ pub struct Catalog {
 }
 
 /// Represents an item returned by the catalog
+#[derive(Debug, Eq, PartialEq)]
 pub struct CatalogItem {
     pub columns: Vec<(String, DataType)>,
-    pub table: Table,
+    pub item: TableOrView,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum TableOrView {
+    Table(Table),
+    View(String),
 }
 
 const PREFIX_METADATA_TABLE_ID: u32 = 0;
@@ -76,21 +83,22 @@ impl Catalog {
         }
         let table_type = value[0].as_text();
 
-        match table_type {
+        let columns: Vec<_> = value[3]
+            .as_json()
+            .iter_array()
+            .unwrap()
+            .map(|col| {
+                let mut iter = col.iter_array().unwrap();
+                let col_name = iter.next().unwrap().get_string().unwrap();
+                let col_type =
+                    DataType::try_from(iter.next().unwrap().get_string().unwrap()).unwrap();
+                (col_name.to_string(), col_type)
+            })
+            .collect();
+
+        let item = match table_type {
             "table" => {
                 let id = value[2].as_bigint() as u32;
-                let columns: Vec<_> = value[3]
-                    .as_json()
-                    .iter_array()
-                    .unwrap()
-                    .map(|col| {
-                        let mut iter = col.iter_array().unwrap();
-                        let col_name = iter.next().unwrap().get_string().unwrap();
-                        let col_type =
-                            DataType::try_from(iter.next().unwrap().get_string().unwrap()).unwrap();
-                        (col_name.to_string(), col_type)
-                    })
-                    .collect();
 
                 let prefix_pk = [value[2].clone()];
                 self.prefix_metadata_table
@@ -110,14 +118,13 @@ impl Catalog {
                     })
                     .collect();
 
-                let catalog_item = CatalogItem {
-                    columns: columns.clone(),
-                    table: self.storage.table(id, columns.len(), pk),
-                };
-                Ok(catalog_item)
+                TableOrView::Table(self.storage.table(id, columns.len(), pk))
             }
+            "view" => TableOrView::View(value[1].as_text().to_string()),
             tt => panic!("Unknown table type {}", tt),
-        }
+        };
+
+        Ok(CatalogItem { columns, item })
     }
 
     /// Called to create a database
@@ -157,7 +164,20 @@ impl Catalog {
         self.create_table_impl(database_name, table_name, id, columns, &pk, false)
     }
 
-    /// Drops a table
+    /// Creates a new view
+    pub fn create_view(
+        &mut self,
+        database_name: &str,
+        table_name: &str,
+        columns: &[(String, DataType)],
+        view_sql: &str,
+    ) -> Result<(), CatalogError> {
+        self.check_db_exists(database_name)?;
+        self.check_table_not_exists(database_name, table_name)?;
+        self.create_view_impl(database_name, table_name, columns, view_sql, false)
+    }
+
+    /// Drops a table or a view
     pub fn drop_table(
         &mut self,
         database_name: &str,
@@ -339,7 +359,42 @@ impl Catalog {
         Ok(())
     }
 
-    /// Drops a table but doesn't do any of the pre checks
+    /// Creates a view but doesn't do any checks around name clashes etc
+    fn create_view_impl(
+        &mut self,
+        database_name: &str,
+        table_name: &str,
+        columns: &[(String, DataType)],
+        sql: &str,
+        system: bool,
+    ) -> Result<(), CatalogError> {
+        let timestamp = LogicalTimestamp::now();
+
+        let columns_datum = Datum::from(JsonBuilder::default().array(|array| {
+            for (alias, datatype) in columns {
+                array.push_array(|col_array| {
+                    col_array.push_string(alias);
+                    col_array.push_string(&format!("{:#}", datatype));
+                })
+            }
+        }));
+
+        self.tables_table.atomic_write(|batch| {
+            let tuple = [
+                Datum::from(database_name),
+                Datum::from(table_name),
+                Datum::from("view"),
+                Datum::from(sql),
+                Datum::Null,
+                columns_datum,
+                Datum::from(system),
+            ];
+            batch.write_tuple(&self.tables_table, &tuple, timestamp, 1)
+        })?;
+        Ok(())
+    }
+
+    /// Drops a table or view but doesn't do any of the pre checks
     fn drop_table_impl(
         &mut self,
         database_name: &str,
@@ -352,29 +407,42 @@ impl Catalog {
                 .range_scan(Some(&table_key), Some(&table_key), LogicalTimestamp::MAX);
 
         let (table_tuple, table_freq) = tables_iter.next()?.unwrap();
-
-        let prefix_key = &table_tuple[4..5];
-        let mut prefix_iter = self.prefix_metadata_table.range_scan(
-            Some(&prefix_key),
-            Some(&prefix_key),
-            LogicalTimestamp::MAX,
-        );
-
-        let table_id = prefix_key[0].as_bigint() as u32;
-
-        let (prefix_tuple, prefix_freq) = prefix_iter.next()?.unwrap();
-
-        // first drop the data, then the meta data
-        // TODO we should be able to genericise write batch and write batch WI so we can choose
-        // to opt into/outof read after write vs higher perf(and delete range support!)
-        self.tables_table
-            .atomic_write_without_index::<_, StorageError>(|write_batch| {
-                write_batch.delete_range(table_id.to_be_bytes(), (table_id + 2).to_be_bytes());
-                Ok(())
-            })?;
         self.tables_table.atomic_write::<_, StorageError>(|batch| {
+            match table_tuple[2].as_text() {
+                "table" => {
+                    // first drop the data, then the meta data
+                    // TODO we should be able to genericise write batch and write batch WI so we can choose
+                    // to opt into/outof read after write vs higher perf(and delete range support!)
+                    let prefix_key = &table_tuple[4..5];
+                    let mut prefix_iter = self.prefix_metadata_table.range_scan(
+                        Some(&prefix_key),
+                        Some(&prefix_key),
+                        LogicalTimestamp::MAX,
+                    );
+
+                    let table_id = prefix_key[0].as_bigint() as u32;
+
+                    let (prefix_tuple, prefix_freq) = prefix_iter.next()?.unwrap();
+
+                    self.tables_table
+                        .atomic_write_without_index::<_, StorageError>(|write_batch| {
+                            write_batch
+                                .delete_range(table_id.to_be_bytes(), (table_id + 2).to_be_bytes());
+                            Ok(())
+                        })?;
+                    batch.write_tuple(
+                        &self.prefix_metadata_table,
+                        prefix_tuple,
+                        now,
+                        -prefix_freq,
+                    )?;
+                }
+                "view" => {}
+                tt => panic!("Unknown table type {}", tt),
+            }
+
             batch.write_tuple(&self.tables_table, table_tuple, now, -table_freq)?;
-            batch.write_tuple(&self.prefix_metadata_table, prefix_tuple, now, -prefix_freq)?;
+
             Ok(())
         })?;
         Ok(())
@@ -388,10 +456,13 @@ mod tests {
     #[test]
     fn test_get_table() -> Result<(), CatalogError> {
         let catalog = Catalog::new_for_test()?;
-        let table = catalog.item("incresql", "databases")?;
-
-        let mut iter = table.table.full_scan(LogicalTimestamp::MAX);
-        assert_eq!(iter.next()?, Some(([Datum::from("default")].as_ref(), 1)));
+        let item = catalog.item("incresql", "databases")?;
+        if let TableOrView::Table(table) = item.item {
+            let mut iter = table.full_scan(LogicalTimestamp::MAX);
+            assert_eq!(iter.next()?, Some(([Datum::from("default")].as_ref(), 1)));
+        } else {
+            panic!()
+        }
         Ok(())
     }
 
@@ -402,8 +473,12 @@ mod tests {
 
         catalog.create_database("abc")?;
 
-        let mut iter = dbs_table.table.full_scan(LogicalTimestamp::MAX);
-        assert_eq!(iter.next()?, Some(([Datum::from("abc")].as_ref(), 1)));
+        if let TableOrView::Table(table) = &dbs_table.item {
+            let mut iter = table.full_scan(LogicalTimestamp::MAX);
+            assert_eq!(iter.next()?, Some(([Datum::from("abc")].as_ref(), 1)));
+        } else {
+            panic!()
+        }
 
         assert_eq!(
             catalog.create_database("abc"),
@@ -411,8 +486,13 @@ mod tests {
         );
 
         catalog.drop_database("abc")?;
-        let mut iter = dbs_table.table.full_scan(LogicalTimestamp::MAX);
-        assert_eq!(iter.next()?, Some(([Datum::from("default")].as_ref(), 1)));
+        if let TableOrView::Table(table) = &dbs_table.item {
+            let mut iter = table.full_scan(LogicalTimestamp::MAX);
+            assert_eq!(iter.next()?, Some(([Datum::from("default")].as_ref(), 1)));
+        } else {
+            panic!()
+        }
+
         Ok(())
     }
 
@@ -423,8 +503,24 @@ mod tests {
 
         catalog.create_table("default", "test", &columns)?;
 
-        let table = catalog.item("default", "test")?;
-        assert_eq!(table.columns, columns.as_slice());
+        let item = catalog.item("default", "test")?;
+        assert_eq!(item.columns, columns.as_slice());
+
+        catalog.drop_table("default", "test")?;
+        assert!(catalog.item("default", "test").is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn test_create_view() -> Result<(), CatalogError> {
+        let mut catalog = Catalog::new_for_test()?;
+        let columns = vec![("a".to_string(), DataType::Integer)];
+
+        catalog.create_view("default", "test", &columns, "hello world")?;
+
+        let item = catalog.item("default", "test")?;
+        assert_eq!(item.columns, columns.as_slice());
+        assert_eq!(item.item, TableOrView::View("hello world".to_string()));
 
         catalog.drop_table("default", "test")?;
         assert!(catalog.item("default", "test").is_err());

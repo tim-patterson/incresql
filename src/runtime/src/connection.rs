@@ -2,6 +2,7 @@ use crate::{QueryError, Runtime};
 use ast::expr::Expression;
 use ast::rel::logical::{LogicalOperator, Values};
 use ast::statement::Statement;
+use catalog::TableOrView;
 use data::{empty_tuple_iter, DataType, Session};
 use executor::point_in_time::{build_executor, BoxedExecutor};
 use parser::parse;
@@ -95,12 +96,13 @@ impl Connection<'_> {
                     .database
                     .unwrap_or_else(|| self.session.current_database.read().unwrap().to_string());
 
-                let table = {
+                let item = {
                     let catalog = self.runtime.planner.catalog.read().unwrap();
                     catalog.item(&database, &compact_table.name)?
                 };
-                table.table.force_rocks_compaction();
-
+                if let TableOrView::Table(table) = item.item {
+                    table.force_rocks_compaction();
+                }
                 return Ok((vec![], empty_tuple_iter()));
             }
             Statement::DropTable(drop_table) => {
