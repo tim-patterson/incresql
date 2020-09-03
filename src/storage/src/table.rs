@@ -1,6 +1,6 @@
 use crate::StorageError;
 use data::encoding_core::SortableEncoding;
-use data::{DataType, Datum, LogicalTimestamp, SortOrder, TupleIter};
+use data::{Datum, LogicalTimestamp, SortOrder, TupleIter};
 use rocksdb::prelude::*;
 use rocksdb::{DBRawIterator, WriteBatch, WriteBatchWithIndex};
 use std::convert::TryInto;
@@ -19,7 +19,7 @@ use std::sync::Arc;
 pub struct Table {
     db: Arc<DB>,
     id: u32,
-    columns: Vec<(String, DataType)>,
+    length: usize,
     pk: Vec<SortOrder>,
 }
 
@@ -39,19 +39,9 @@ impl Debug for Table {
 impl Table {
     /// Creates a new table. The pk represents the number of columns in the pk and their sort
     /// orders
-    pub(crate) fn new(
-        db: Arc<DB>,
-        id: u32,
-        columns: Vec<(String, DataType)>,
-        pk: Vec<SortOrder>,
-    ) -> Self {
-        assert!(columns.len() >= pk.len());
-        Table {
-            db,
-            id,
-            columns,
-            pk,
-        }
+    pub(crate) fn new(db: Arc<DB>, id: u32, length: usize, pk: Vec<SortOrder>) -> Self {
+        assert!(length >= pk.len());
+        Table { db, id, length, pk }
     }
 
     /// Returns the id of the table.
@@ -177,11 +167,7 @@ impl Table {
             iter.seek(&self.id.to_be_bytes());
         }
 
-        IndexIter::new(iter, timestamp, self.columns.len())
-    }
-
-    pub fn columns(&self) -> &[(String, DataType)] {
-        &self.columns
+        IndexIter::new(iter, timestamp, self.length)
     }
 }
 
@@ -327,7 +313,7 @@ impl Writer {
         timestamp: LogicalTimestamp,
         mut freq: i64,
     ) -> Result<(), StorageError> {
-        assert_eq!(tuple.len(), table.columns.len());
+        assert_eq!(tuple.len(), table.length);
         // create rocksdb key
         write_index_header_key(table, tuple, &mut self.key_buf);
 
@@ -457,11 +443,7 @@ mod tests {
     #[test]
     fn test_force_rocks_compaction() -> Result<(), StorageError> {
         let storage = Storage::new_in_mem()?;
-        let table = storage.table(
-            1234,
-            vec![("col1".to_string(), DataType::Text)],
-            vec![SortOrder::Asc],
-        );
+        let table = storage.table(1234, 2, vec![SortOrder::Asc]);
         table.force_rocks_compaction();
         Ok(())
     }
@@ -469,12 +451,7 @@ mod tests {
     #[test]
     fn test_system_write_tuple() -> Result<(), StorageError> {
         let storage = Storage::new_in_mem()?;
-        let columns = vec![
-            ("col1".to_string(), DataType::Integer),
-            ("col2".to_string(), DataType::Integer),
-            ("col3".to_string(), DataType::Text),
-        ];
-        let table = storage.table(1234, columns, vec![SortOrder::Asc]);
+        let table = storage.table(1234, 3, vec![SortOrder::Asc]);
         let tuple1 = vec![
             Datum::from(123),
             Datum::Null,
@@ -526,11 +503,7 @@ mod tests {
     #[test]
     fn test_write_tuple() -> Result<(), StorageError> {
         let storage = Storage::new_in_mem()?;
-        let columns = vec![
-            ("col1".to_string(), DataType::Integer),
-            ("col3".to_string(), DataType::Text),
-        ];
-        let table = storage.table(1234, columns, vec![SortOrder::Asc]);
+        let table = storage.table(1234, 2, vec![SortOrder::Asc]);
         let tuple = vec![Datum::from(123), Datum::from("abc".to_string())];
 
         table.atomic_write::<_, StorageError>(|writer| {
@@ -570,8 +543,7 @@ mod tests {
     #[test]
     fn test_range_scan_full_key_forward() -> Result<(), StorageError> {
         let storage = Storage::new_in_mem()?;
-        let columns = vec![("col1".to_string(), DataType::Integer)];
-        let table = storage.table(1234, columns, vec![SortOrder::Asc]);
+        let table = storage.table(1234, 1, vec![SortOrder::Asc]);
 
         table.atomic_write::<_, StorageError>(|writer| {
             writer.write_tuple(&table, &[Datum::from(1)], LogicalTimestamp::new(10), 1)?;
@@ -609,8 +581,7 @@ mod tests {
     #[test]
     fn test_range_scan_full_key_reverse() -> Result<(), StorageError> {
         let storage = Storage::new_in_mem()?;
-        let columns = vec![("col1".to_string(), DataType::Integer)];
-        let table = storage.table(1234, columns, vec![SortOrder::Desc]);
+        let table = storage.table(1234, 1, vec![SortOrder::Desc]);
 
         table.atomic_write::<_, StorageError>(|writer| {
             writer.write_tuple(&table, &[Datum::from(1)], LogicalTimestamp::new(10), 1)?;

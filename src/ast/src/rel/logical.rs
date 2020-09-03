@@ -107,6 +107,7 @@ pub struct TableReference {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct ResolvedTable {
+    pub columns: Vec<(String, DataType)>,
     pub table: Table,
 }
 

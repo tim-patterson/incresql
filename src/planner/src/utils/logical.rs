@@ -37,7 +37,7 @@ pub(crate) fn fields_for_operator(
             fields_for_operator(union_all.sources.first().unwrap())
         }
         LogicalOperator::ResolvedTable(table) => {
-            Box::from(table.table.columns().iter().map(|(alias, datatype)| Field {
+            Box::from(table.columns.iter().map(|(alias, datatype)| Field {
                 qualifier: None,
                 alias: alias.clone(),
                 data_type: *datatype,
@@ -86,8 +86,7 @@ pub(crate) fn fieldnames_for_operator(
         }
         LogicalOperator::ResolvedTable(table) => Box::from(
             table
-                .table
-                .columns()
+                .columns
                 .iter()
                 .map(|(alias, _datatype)| (None, alias.as_str())),
         ),

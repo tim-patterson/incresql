@@ -15,8 +15,7 @@ pub(super) fn validate_values_types(query: &mut LogicalOperator) -> Result<(), P
             (source.as_mut(), table.as_mut())
         {
             values.fields = resolved_tables
-                .table
-                .columns()
+                .columns
                 .iter()
                 .map(|(alias, dt)| (*dt, alias.clone()))
                 .collect();

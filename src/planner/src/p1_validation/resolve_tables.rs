@@ -18,7 +18,10 @@ pub(super) fn resolve_tables(
         let table_name = &table_ref.table;
 
         let table = catalog.item(database, table_name)?;
-        *operator = LogicalOperator::ResolvedTable(ResolvedTable { table: table.table })
+        *operator = LogicalOperator::ResolvedTable(ResolvedTable {
+            columns: table.columns,
+            table: table.table,
+        })
     }
 
     Ok(())

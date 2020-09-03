@@ -40,7 +40,7 @@ impl ExplainNode for LogicalOperator {
     fn table_columns(&self) -> Cow<[(String, DataType)]> {
         match self {
             LogicalOperator::TableAlias(table_alias) => table_alias.source.table_columns(),
-            LogicalOperator::ResolvedTable(table) => Cow::from(table.table.columns()),
+            LogicalOperator::ResolvedTable(table) => Cow::from(&table.columns),
             LogicalOperator::FileScan(_) => Cow::from(vec![("data".to_string(), DataType::Json)]),
             _ => Cow::from(vec![]),
         }

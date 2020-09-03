@@ -39,31 +39,10 @@ const TABLES_TABLE_ID: u32 = 4;
 impl Catalog {
     /// Creates a catalog, wrapping the passed in storage
     pub fn new(storage: Storage) -> Result<Self, CatalogError> {
-        let prefix_metadata_table = storage.table(
-            PREFIX_METADATA_TABLE_ID,
-            vec![
-                ("table_id".to_string(), DataType::BigInt),
-                ("column_len".to_string(), DataType::Integer),
-                ("pks_sorts".to_string(), DataType::Json),
-            ],
-            vec![SortOrder::Asc],
-        );
-        let databases_table = storage.table(
-            DATABASES_TABLE_ID,
-            vec![("name".to_string(), DataType::Text)],
-            vec![SortOrder::Asc],
-        );
-        let tables_table = storage.table(
-            TABLES_TABLE_ID,
-            vec![
-                ("database_name".to_string(), DataType::Text),
-                ("name".to_string(), DataType::Text),
-                ("table_id".to_string(), DataType::BigInt),
-                ("columns".to_string(), DataType::Json),
-                ("system".to_string(), DataType::Boolean),
-            ],
-            vec![SortOrder::Asc, SortOrder::Asc],
-        );
+        let prefix_metadata_table =
+            storage.table(PREFIX_METADATA_TABLE_ID, 3, vec![SortOrder::Asc]);
+        let databases_table = storage.table(DATABASES_TABLE_ID, 1, vec![SortOrder::Asc]);
+        let tables_table = storage.table(TABLES_TABLE_ID, 5, vec![SortOrder::Asc, SortOrder::Asc]);
         let mut catalog = Catalog {
             storage,
             prefix_metadata_table,
@@ -130,7 +109,7 @@ impl Catalog {
 
         let catalog_item = CatalogItem {
             columns: columns.clone(),
-            table: self.storage.table(id, columns, pk),
+            table: self.storage.table(id, columns.len(), pk),
         };
         Ok(catalog_item)
     }
@@ -402,8 +381,6 @@ mod tests {
     fn test_get_table() -> Result<(), CatalogError> {
         let catalog = Catalog::new_for_test()?;
         let table = catalog.item("incresql", "databases")?;
-
-        assert_eq!(table.columns, catalog.databases_table.columns());
 
         let mut iter = table.table.full_scan(LogicalTimestamp::MAX);
         assert_eq!(iter.next()?, Some(([Datum::from("default")].as_ref(), 1)));
