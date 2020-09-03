@@ -17,8 +17,8 @@ pub(super) fn resolve_tables(
         let database = table_ref.database.as_ref().unwrap_or(&current_db);
         let table_name = &table_ref.table;
 
-        let table = catalog.table(database, table_name)?;
-        *operator = LogicalOperator::ResolvedTable(ResolvedTable { table })
+        let table = catalog.item(database, table_name)?;
+        *operator = LogicalOperator::ResolvedTable(ResolvedTable { table: table.table })
     }
 
     Ok(())

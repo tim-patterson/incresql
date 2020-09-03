@@ -97,9 +97,9 @@ impl Connection<'_> {
 
                 let table = {
                     let catalog = self.runtime.planner.catalog.read().unwrap();
-                    catalog.table(&database, &compact_table.name)?
+                    catalog.item(&database, &compact_table.name)?
                 };
-                table.force_rocks_compaction();
+                table.table.force_rocks_compaction();
 
                 return Ok((vec![], empty_tuple_iter()));
             }

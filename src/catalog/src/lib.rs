@@ -26,6 +26,12 @@ pub struct Catalog {
     tables_table: Table,
 }
 
+/// Represents an item returned by the catalog
+pub struct CatalogItem {
+    pub columns: Vec<(String, DataType)>,
+    pub table: Table,
+}
+
 const PREFIX_METADATA_TABLE_ID: u32 = 0;
 const DATABASES_TABLE_ID: u32 = 2;
 const TABLES_TABLE_ID: u32 = 4;
@@ -73,8 +79,8 @@ impl Catalog {
         Catalog::new(Storage::new_in_mem()?)
     }
 
-    /// Returns the table with the given name
-    pub fn table(&self, database: &str, table: &str) -> Result<Table, CatalogError> {
+    /// Returns the catalog item with the given name
+    pub fn item(&self, database: &str, table: &str) -> Result<CatalogItem, CatalogError> {
         let tables_pk = [Datum::from(database), Datum::from(table)];
         let mut key_buf = vec![];
         let mut value = vec![];
@@ -122,7 +128,11 @@ impl Catalog {
             })
             .collect();
 
-        Ok(self.storage.table(id, columns, pk))
+        let catalog_item = CatalogItem {
+            columns: columns.clone(),
+            table: self.storage.table(id, columns, pk),
+        };
+        Ok(catalog_item)
     }
 
     /// Called to create a database
@@ -391,11 +401,11 @@ mod tests {
     #[test]
     fn test_get_table() -> Result<(), CatalogError> {
         let catalog = Catalog::new_for_test()?;
-        let table = catalog.table("incresql", "databases")?;
+        let table = catalog.item("incresql", "databases")?;
 
-        assert_eq!(table.columns(), catalog.databases_table.columns());
+        assert_eq!(table.columns, catalog.databases_table.columns());
 
-        let mut iter = table.full_scan(LogicalTimestamp::MAX);
+        let mut iter = table.table.full_scan(LogicalTimestamp::MAX);
         assert_eq!(iter.next()?, Some(([Datum::from("default")].as_ref(), 1)));
         Ok(())
     }
@@ -403,11 +413,11 @@ mod tests {
     #[test]
     fn test_create_database() -> Result<(), CatalogError> {
         let mut catalog = Catalog::new_for_test()?;
-        let dbs_table = catalog.table("incresql", "databases")?;
+        let dbs_table = catalog.item("incresql", "databases")?;
 
         catalog.create_database("abc")?;
 
-        let mut iter = dbs_table.full_scan(LogicalTimestamp::MAX);
+        let mut iter = dbs_table.table.full_scan(LogicalTimestamp::MAX);
         assert_eq!(iter.next()?, Some(([Datum::from("abc")].as_ref(), 1)));
 
         assert_eq!(
@@ -416,7 +426,7 @@ mod tests {
         );
 
         catalog.drop_database("abc")?;
-        let mut iter = dbs_table.full_scan(LogicalTimestamp::MAX);
+        let mut iter = dbs_table.table.full_scan(LogicalTimestamp::MAX);
         assert_eq!(iter.next()?, Some(([Datum::from("default")].as_ref(), 1)));
         Ok(())
     }
@@ -428,11 +438,11 @@ mod tests {
 
         catalog.create_table("default", "test", &columns)?;
 
-        let table = catalog.table("default", "test")?;
-        assert_eq!(table.columns(), columns.as_slice());
+        let table = catalog.item("default", "test")?;
+        assert_eq!(table.columns, columns.as_slice());
 
         catalog.drop_table("default", "test")?;
-        assert!(catalog.table("default", "test").is_err());
+        assert!(catalog.item("default", "test").is_err());
         Ok(())
     }
 }

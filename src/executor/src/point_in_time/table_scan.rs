@@ -53,7 +53,7 @@ mod tests {
     fn test_table_scan_executor() -> Result<(), ExecutionError> {
         let storage = Storage::new_in_mem()?;
         let catalog = Catalog::new(storage).unwrap();
-        let table = catalog.table("incresql", "databases").unwrap();
+        let table = catalog.item("incresql", "databases").unwrap().table;
 
         let mut executor = TableScanExecutor::new(table, LogicalTimestamp::MAX);
         assert_eq!(
