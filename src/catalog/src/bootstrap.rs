@@ -21,6 +21,7 @@ impl Catalog {
 
         self.create_database_impl("incresql")?;
         self.create_database_impl("default")?;
+
         self.create_table_impl(
             "incresql",
             "prefix_tables",
@@ -33,6 +34,7 @@ impl Catalog {
             &[SortOrder::Asc],
             true,
         )?;
+
         self.create_table_impl(
             "incresql",
             "databases",
@@ -41,6 +43,7 @@ impl Catalog {
             &[SortOrder::Asc],
             true,
         )?;
+
         self.create_table_impl(
             "incresql",
             "tables",
@@ -48,6 +51,8 @@ impl Catalog {
             &[
                 ("database_name".to_string(), DataType::Text),
                 ("name".to_string(), DataType::Text),
+                ("type".to_string(), DataType::Text),
+                ("sql".to_string(), DataType::Text),
                 ("table_id".to_string(), DataType::BigInt),
                 ("columns".to_string(), DataType::Json),
                 ("system".to_string(), DataType::Boolean),
@@ -55,6 +60,7 @@ impl Catalog {
             &[SortOrder::Asc, SortOrder::Asc],
             true,
         )?;
+
         Ok(())
     }
 }

@@ -22,7 +22,7 @@ pub struct Catalog {
     // name:text(pk)
     databases_table: Table,
     // Table listing tables
-    // database_id:text(pk), table_name:text(pk), table_id:bigint, columns:json, system:bool
+    // database_id:text(pk), table_name:text(pk), type:text, sql:text, table_id:bigint, columns:json, system:bool
     tables_table: Table,
 }
 
@@ -42,7 +42,7 @@ impl Catalog {
         let prefix_metadata_table =
             storage.table(PREFIX_METADATA_TABLE_ID, 3, vec![SortOrder::Asc]);
         let databases_table = storage.table(DATABASES_TABLE_ID, 1, vec![SortOrder::Asc]);
-        let tables_table = storage.table(TABLES_TABLE_ID, 5, vec![SortOrder::Asc, SortOrder::Asc]);
+        let tables_table = storage.table(TABLES_TABLE_ID, 7, vec![SortOrder::Asc, SortOrder::Asc]);
         let mut catalog = Catalog {
             storage,
             prefix_metadata_table,
@@ -74,44 +74,50 @@ impl Catalog {
                 table.to_string(),
             ));
         }
+        let table_type = value[0].as_text();
 
-        let id = value[0].as_bigint() as u32;
-        let columns: Vec<_> = value[1]
-            .as_json()
-            .iter_array()
-            .unwrap()
-            .map(|col| {
-                let mut iter = col.iter_array().unwrap();
-                let col_name = iter.next().unwrap().get_string().unwrap();
-                let col_type =
-                    DataType::try_from(iter.next().unwrap().get_string().unwrap()).unwrap();
-                (col_name.to_string(), col_type)
-            })
-            .collect();
+        match table_type {
+            "table" => {
+                let id = value[2].as_bigint() as u32;
+                let columns: Vec<_> = value[3]
+                    .as_json()
+                    .iter_array()
+                    .unwrap()
+                    .map(|col| {
+                        let mut iter = col.iter_array().unwrap();
+                        let col_name = iter.next().unwrap().get_string().unwrap();
+                        let col_type =
+                            DataType::try_from(iter.next().unwrap().get_string().unwrap()).unwrap();
+                        (col_name.to_string(), col_type)
+                    })
+                    .collect();
 
-        let prefix_pk = [value[0].clone()];
-        self.prefix_metadata_table
-            .system_point_lookup(&prefix_pk, &mut key_buf, &mut value)?
-            .unwrap();
+                let prefix_pk = [value[2].clone()];
+                self.prefix_metadata_table
+                    .system_point_lookup(&prefix_pk, &mut key_buf, &mut value)?
+                    .unwrap();
 
-        let pk = value[1]
-            .as_json()
-            .iter_array()
-            .unwrap()
-            .map(|b| {
-                if b.get_boolean().unwrap() {
-                    SortOrder::Desc
-                } else {
-                    SortOrder::Asc
-                }
-            })
-            .collect();
+                let pk = value[1]
+                    .as_json()
+                    .iter_array()
+                    .unwrap()
+                    .map(|b| {
+                        if b.get_boolean().unwrap() {
+                            SortOrder::Desc
+                        } else {
+                            SortOrder::Asc
+                        }
+                    })
+                    .collect();
 
-        let catalog_item = CatalogItem {
-            columns: columns.clone(),
-            table: self.storage.table(id, columns.len(), pk),
-        };
-        Ok(catalog_item)
+                let catalog_item = CatalogItem {
+                    columns: columns.clone(),
+                    table: self.storage.table(id, columns.len(), pk),
+                };
+                Ok(catalog_item)
+            }
+            tt => panic!("Unknown table type {}", tt),
+        }
     }
 
     /// Called to create a database
@@ -315,6 +321,8 @@ impl Catalog {
             let tuple = [
                 Datum::from(database_name),
                 Datum::from(table_name),
+                Datum::from("table"),
+                Datum::Null,
                 Datum::from(table_id as i64),
                 columns_datum,
                 Datum::from(system),
@@ -345,7 +353,7 @@ impl Catalog {
 
         let (table_tuple, table_freq) = tables_iter.next()?.unwrap();
 
-        let prefix_key = &table_tuple[2..3];
+        let prefix_key = &table_tuple[4..5];
         let mut prefix_iter = self.prefix_metadata_table.range_scan(
             Some(&prefix_key),
             Some(&prefix_key),
