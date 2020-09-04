@@ -1,7 +1,7 @@
 use crate::json::{Json, OwnedJson};
 use crate::jsonpath_utils::JsonPathExpression;
 use crate::DataType;
-use chrono::{Datelike, NaiveDate};
+use chrono::{Datelike, NaiveDate, NaiveDateTime};
 use rust_decimal::Decimal;
 use std::cmp::Ordering;
 use std::fmt::{Debug, Display, Formatter};
@@ -236,6 +236,12 @@ impl From<NaiveDate> for Datum<'static> {
     }
 }
 
+impl From<NaiveDateTime> for Datum<'static> {
+    fn from(t: NaiveDateTime) -> Self {
+        Datum::BigInt(t.timestamp_millis())
+    }
+}
+
 impl From<String> for Datum<'static> {
     fn from(s: String) -> Self {
         Datum::ByteAOwned(s.into_boxed_str().into_boxed_bytes())
@@ -325,7 +331,10 @@ impl Display for TypedDatum<'_> {
                 DataType::Date => Display::fmt(&self.datum.as_date(), f),
                 _ => Display::fmt(i, f),
             },
-            Datum::BigInt(i) => Display::fmt(i, f),
+            Datum::BigInt(i) => match self.datatype {
+                DataType::Timestamp => Display::fmt(&self.datum.as_timestamp(), f),
+                _ => Display::fmt(i, f),
+            },
             Datum::Decimal(d) => {
                 if let DataType::Decimal(_p, s) = self.datatype {
                     f.write_fmt(format_args!("{:.*}", s as usize, d))
@@ -441,6 +450,23 @@ impl<'a> Datum<'a> {
 
     pub fn as_date(&self) -> NaiveDate {
         self.as_maybe_date().unwrap()
+    }
+
+    pub fn as_maybe_timestamp(&self) -> Option<NaiveDateTime> {
+        if let Datum::BigInt(i) = self {
+            let seconds = i.div_euclid(1000);
+            let millis = i.rem_euclid(1000);
+            Some(NaiveDateTime::from_timestamp(
+                seconds,
+                millis as u32 * 1000000,
+            ))
+        } else {
+            None
+        }
+    }
+
+    pub fn as_timestamp(&self) -> NaiveDateTime {
+        self.as_maybe_timestamp().unwrap()
     }
 
     pub fn as_maybe_boolean(&self) -> Option<bool> {

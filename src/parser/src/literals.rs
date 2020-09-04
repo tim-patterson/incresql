@@ -49,6 +49,7 @@ pub fn datatype(input: &str) -> ParserResult<DataType> {
         value(DataType::Text, kw("TEXT")),
         value(DataType::Json, kw("JSON")),
         value(DataType::Date, kw("DATE")),
+        value(DataType::Timestamp, kw("TIMESTAMP")),
     ))(input)
 }
 
