@@ -76,10 +76,16 @@ pub fn register_builtins(registry: &mut Registry) {
         "+",
         vec![DataType::Decimal(0, 0), DataType::Decimal(0, 0)],
         |args| {
-            if let (DataType::Decimal(p1, s1), DataType::Decimal(p2, s2)) = (args[0], args[1]) {
-                DataType::Decimal(min(max(p1, p2) + 1, DECIMAL_MAX_PRECISION), max(s1, s2))
-            } else {
-                panic!()
+            match (args[0], args[1]) {
+                (DataType::Decimal(p1, s1), DataType::Decimal(p2, s2)) => {
+                    let s = max(s1, s2);
+                    let p = min(max(p1 - s1, p2 - s2) + s + 1, DECIMAL_MAX_PRECISION);
+                    DataType::Decimal(p, s)
+                }
+                // One side of the expression is a null constant, a bit of a bogus query...
+                (DataType::Decimal(p, s), _) => DataType::Decimal(p, s),
+                (_, DataType::Decimal(p, s)) => DataType::Decimal(p, s),
+                _ => unreachable!(),
             }
         },
         FunctionType::Scalar(&AddDecimal {}),

@@ -70,6 +70,10 @@ mod tests {
             executor.next()?,
             Some(([Datum::from("incresql")].as_ref(), 1))
         );
+        assert_eq!(
+            executor.next()?,
+            Some(([Datum::from("information_schema")].as_ref(), 1))
+        );
         assert_eq!(executor.next()?, None);
         Ok(())
     }

@@ -21,6 +21,7 @@ impl Catalog {
 
         self.create_database_impl("incresql")?;
         self.create_database_impl("default")?;
+        self.create_database_impl("information_schema")?;
 
         self.create_table_impl(
             "incresql",

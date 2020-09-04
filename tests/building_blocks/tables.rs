@@ -7,6 +7,7 @@ fn select_from_table() {
         "
         |default|
         |incresql|
+        |information_schema|
         ",
     );
 
@@ -15,6 +16,7 @@ fn select_from_table() {
         "
         |default|
         |incresql|
+        |information_schema|
         ",
     );
 
@@ -23,6 +25,7 @@ fn select_from_table() {
         "
         |default|
         |incresql|
+        |information_schema|
         ",
     );
 
@@ -31,6 +34,7 @@ fn select_from_table() {
         "
         |default|
         |incresql|
+        |information_schema|
         ",
     );
 }

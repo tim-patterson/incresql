@@ -24,6 +24,7 @@ fn show_functions() {
         |count|
         |database|
         |date_sub|
+        |if|
         |isfalse|
         |isnull|
         |istrue|
