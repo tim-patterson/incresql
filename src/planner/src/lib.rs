@@ -37,7 +37,7 @@ impl Planner {
     }
 
     /// Runs the validation and optimization phases
-    pub(crate) fn plan_common(
+    pub fn plan_common(
         &self,
         query: LogicalOperator,
         session: &Session,

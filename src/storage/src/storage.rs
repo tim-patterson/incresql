@@ -1,7 +1,7 @@
 use crate::error::StorageError;
 use crate::table::Table;
 use data::encoding_core::{SortableEncoding, VARINT_SIGNED_ZERO_ENC};
-use data::{DataType, SortOrder};
+use data::SortOrder;
 use rocksdb::compaction_filter::Decision;
 use rocksdb::{
     BlockBasedOptions, DBCompressionType, Env, MergeOperands, Options, SliceTransform, DB,
@@ -85,9 +85,9 @@ impl Storage {
     }
 
     /// Returns the table for the given id and primary key info.
-    pub fn table(&self, id: u32, columns: Vec<(String, DataType)>, pk: Vec<SortOrder>) -> Table {
+    pub fn table(&self, id: u32, length: usize, pk: Vec<SortOrder>) -> Table {
         assert_eq!(id & 1, 0, "Not a valid table id");
-        Table::new(Arc::clone(&self.db), id, columns, pk)
+        Table::new(Arc::clone(&self.db), id, length, pk)
     }
 
     /// Return the our default rocks db options
@@ -263,7 +263,7 @@ mod tests {
     #[test]
     fn test_get_table() -> Result<(), StorageError> {
         let storage = Storage::new_in_mem()?;
-        let table = storage.table(1234, vec![], vec![]);
+        let table = storage.table(1234, 0, vec![]);
 
         assert_eq!(table.id(), 1234);
         Ok(())

@@ -10,7 +10,6 @@ ast = { path = "../ast" }
 catalog = { path = "../catalog" }
 data = { path = "../data" }
 functions = { path = "../functions" }
-storage = { path = "../storage" }
-
-[dev-dependencies]
+# Parser needed to expand views
 parser = { path = "../parser" }
+storage = { path = "../storage" }

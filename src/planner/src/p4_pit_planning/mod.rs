@@ -132,7 +132,7 @@ fn build_operator(query: LogicalOperator, function_registry: &Registry) -> Point
                     .collect(),
             })
         }
-        LogicalOperator::ResolvedTable(ResolvedTable { table }) => {
+        LogicalOperator::ResolvedTable(ResolvedTable { columns: _, table }) => {
             PointInTimeOperator::TableScan(point_in_time::TableScan {
                 table,
                 // Having a timestamp in the future gives us read after write within the same ms
@@ -142,7 +142,8 @@ fn build_operator(query: LogicalOperator, function_registry: &Registry) -> Point
         }
         LogicalOperator::TableInsert(TableInsert { table, source }) => {
             let actual_table =
-                if let LogicalOperator::ResolvedTable(ResolvedTable { table }) = *table {
+                if let LogicalOperator::ResolvedTable(ResolvedTable { columns: _, table }) = *table
+                {
                     table
                 } else {
                     panic!("Can not insert into anything other than a resolved table")

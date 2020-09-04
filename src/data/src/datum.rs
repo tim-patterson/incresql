@@ -359,6 +359,7 @@ impl<'a> Datum<'a> {
         }
     }
 
+    #[track_caller]
     pub fn as_bytea(&'a self) -> &'a [u8] {
         self.as_maybe_bytea().unwrap()
     }
@@ -368,6 +369,7 @@ impl<'a> Datum<'a> {
             .map(|bytes| unsafe { std::str::from_utf8_unchecked(bytes) })
     }
 
+    #[track_caller]
     pub fn as_text(&'a self) -> &'a str {
         self.as_maybe_text().unwrap()
     }
@@ -376,6 +378,7 @@ impl<'a> Datum<'a> {
         self.as_maybe_bytea().map(Json::from_bytes)
     }
 
+    #[track_caller]
     pub fn as_json(&'a self) -> Json<'a> {
         self.as_maybe_json().unwrap()
     }
@@ -388,10 +391,12 @@ impl<'a> Datum<'a> {
         }
     }
 
+    #[track_caller]
     pub fn as_integer(&self) -> i32 {
         self.as_maybe_integer().unwrap()
     }
 
+    #[track_caller]
     pub fn as_integer_mut(&mut self) -> &mut i32 {
         if let Datum::Integer(i) = self {
             i
@@ -408,10 +413,12 @@ impl<'a> Datum<'a> {
         }
     }
 
+    #[track_caller]
     pub fn as_bigint(&self) -> i64 {
         self.as_maybe_bigint().unwrap()
     }
 
+    #[track_caller]
     pub fn as_bigint_mut(&mut self) -> &mut i64 {
         if let Datum::BigInt(i) = self {
             i
@@ -428,10 +435,12 @@ impl<'a> Datum<'a> {
         }
     }
 
+    #[track_caller]
     pub fn as_decimal(&self) -> Decimal {
         self.as_maybe_decimal().unwrap()
     }
 
+    #[track_caller]
     pub fn as_decimal_mut(&mut self) -> &mut Decimal {
         if let Datum::Decimal(d) = self {
             d
@@ -448,6 +457,7 @@ impl<'a> Datum<'a> {
         }
     }
 
+    #[track_caller]
     pub fn as_date(&self) -> NaiveDate {
         self.as_maybe_date().unwrap()
     }
@@ -477,6 +487,7 @@ impl<'a> Datum<'a> {
         }
     }
 
+    #[track_caller]
     pub fn as_boolean(&self) -> bool {
         self.as_maybe_boolean().unwrap()
     }
@@ -489,6 +500,7 @@ impl<'a> Datum<'a> {
         }
     }
 
+    #[track_caller]
     pub fn as_jsonpath(&self) -> &JsonPathExpression {
         self.as_maybe_jsonpath().unwrap()
     }

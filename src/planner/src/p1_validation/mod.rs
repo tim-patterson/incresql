@@ -21,6 +21,8 @@ impl Planner {
         mut query: LogicalOperator,
         session: &Session,
     ) -> Result<LogicalOperator, PlannerError> {
+        // NOTE if adding phases before the resolve table step you will need to
+        // add them inside the resolve table where it inlines any views.
         // Populate column aliases
         sub_in_special_vars::sub_in_special_vars(&mut query);
         column_aliases::normalize_column_aliases(&mut query);

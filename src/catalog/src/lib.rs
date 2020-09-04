@@ -22,8 +22,27 @@ pub struct Catalog {
     // name:text(pk)
     databases_table: Table,
     // Table listing tables
-    // database_id:text(pk), table_name:text(pk), table_id:bigint, columns:json, system:bool
+    // database_name:text(pk), table_name:text(pk), type:text, sql:text, sql_context:text, table_id:bigint, columns:json, system:bool
     tables_table: Table,
+}
+
+/// Represents an item returned by the catalog
+#[derive(Debug, Eq, PartialEq)]
+pub struct CatalogItem {
+    pub columns: Vec<(String, DataType)>,
+    pub item: TableOrView,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum TableOrView {
+    Table(Table),
+    View(View),
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub struct View {
+    pub sql: String,
+    pub db_context: String,
 }
 
 const PREFIX_METADATA_TABLE_ID: u32 = 0;
@@ -33,31 +52,10 @@ const TABLES_TABLE_ID: u32 = 4;
 impl Catalog {
     /// Creates a catalog, wrapping the passed in storage
     pub fn new(storage: Storage) -> Result<Self, CatalogError> {
-        let prefix_metadata_table = storage.table(
-            PREFIX_METADATA_TABLE_ID,
-            vec![
-                ("table_id".to_string(), DataType::BigInt),
-                ("column_len".to_string(), DataType::Integer),
-                ("pks_sorts".to_string(), DataType::Json),
-            ],
-            vec![SortOrder::Asc],
-        );
-        let databases_table = storage.table(
-            DATABASES_TABLE_ID,
-            vec![("name".to_string(), DataType::Text)],
-            vec![SortOrder::Asc],
-        );
-        let tables_table = storage.table(
-            TABLES_TABLE_ID,
-            vec![
-                ("database_name".to_string(), DataType::Text),
-                ("name".to_string(), DataType::Text),
-                ("table_id".to_string(), DataType::BigInt),
-                ("columns".to_string(), DataType::Json),
-                ("system".to_string(), DataType::Boolean),
-            ],
-            vec![SortOrder::Asc, SortOrder::Asc],
-        );
+        let prefix_metadata_table =
+            storage.table(PREFIX_METADATA_TABLE_ID, 3, vec![SortOrder::Asc]);
+        let databases_table = storage.table(DATABASES_TABLE_ID, 1, vec![SortOrder::Asc]);
+        let tables_table = storage.table(TABLES_TABLE_ID, 8, vec![SortOrder::Asc, SortOrder::Asc]);
         let mut catalog = Catalog {
             storage,
             prefix_metadata_table,
@@ -73,8 +71,8 @@ impl Catalog {
         Catalog::new(Storage::new_in_mem()?)
     }
 
-    /// Returns the table with the given name
-    pub fn table(&self, database: &str, table: &str) -> Result<Table, CatalogError> {
+    /// Returns the catalog item with the given name
+    pub fn item(&self, database: &str, table: &str) -> Result<CatalogItem, CatalogError> {
         let tables_pk = [Datum::from(database), Datum::from(table)];
         let mut key_buf = vec![];
         let mut value = vec![];
@@ -89,9 +87,9 @@ impl Catalog {
                 table.to_string(),
             ));
         }
+        let table_type = value[0].as_text();
 
-        let id = value[0].as_bigint() as u32;
-        let columns: Vec<_> = value[1]
+        let columns: Vec<_> = value[4]
             .as_json()
             .iter_array()
             .unwrap()
@@ -104,25 +102,38 @@ impl Catalog {
             })
             .collect();
 
-        let prefix_pk = [value[0].clone()];
-        self.prefix_metadata_table
-            .system_point_lookup(&prefix_pk, &mut key_buf, &mut value)?
-            .unwrap();
+        let item = match table_type {
+            "table" => {
+                let id = value[3].as_bigint() as u32;
 
-        let pk = value[1]
-            .as_json()
-            .iter_array()
-            .unwrap()
-            .map(|b| {
-                if b.get_boolean().unwrap() {
-                    SortOrder::Desc
-                } else {
-                    SortOrder::Asc
-                }
-            })
-            .collect();
+                let prefix_pk = [value[3].clone()];
+                self.prefix_metadata_table
+                    .system_point_lookup(&prefix_pk, &mut key_buf, &mut value)?
+                    .unwrap();
 
-        Ok(self.storage.table(id, columns, pk))
+                let pk = value[1]
+                    .as_json()
+                    .iter_array()
+                    .unwrap()
+                    .map(|b| {
+                        if b.get_boolean().unwrap() {
+                            SortOrder::Desc
+                        } else {
+                            SortOrder::Asc
+                        }
+                    })
+                    .collect();
+
+                TableOrView::Table(self.storage.table(id, columns.len(), pk))
+            }
+            "view" => TableOrView::View(View {
+                sql: value[1].as_text().to_string(),
+                db_context: value[2].as_text().to_string(),
+            }),
+            tt => panic!("Unknown table type {}", tt),
+        };
+
+        Ok(CatalogItem { columns, item })
     }
 
     /// Called to create a database
@@ -162,7 +173,28 @@ impl Catalog {
         self.create_table_impl(database_name, table_name, id, columns, &pk, false)
     }
 
-    /// Drops a table
+    /// Creates a new view
+    pub fn create_view(
+        &mut self,
+        database_name: &str,
+        table_name: &str,
+        columns: &[(String, DataType)],
+        view_sql: &str,
+        view_context: &str,
+    ) -> Result<(), CatalogError> {
+        self.check_db_exists(database_name)?;
+        self.check_table_not_exists(database_name, table_name)?;
+        self.create_view_impl(
+            database_name,
+            table_name,
+            columns,
+            view_sql,
+            view_context,
+            false,
+        )
+    }
+
+    /// Drops a table or a view
     pub fn drop_table(
         &mut self,
         database_name: &str,
@@ -326,6 +358,9 @@ impl Catalog {
             let tuple = [
                 Datum::from(database_name),
                 Datum::from(table_name),
+                Datum::from("table"),
+                Datum::Null,
+                Datum::Null,
                 Datum::from(table_id as i64),
                 columns_datum,
                 Datum::from(system),
@@ -342,7 +377,44 @@ impl Catalog {
         Ok(())
     }
 
-    /// Drops a table but doesn't do any of the pre checks
+    /// Creates a view but doesn't do any checks around name clashes etc
+    fn create_view_impl(
+        &mut self,
+        database_name: &str,
+        table_name: &str,
+        columns: &[(String, DataType)],
+        sql: &str,
+        context: &str,
+        system: bool,
+    ) -> Result<(), CatalogError> {
+        let timestamp = LogicalTimestamp::now();
+
+        let columns_datum = Datum::from(JsonBuilder::default().array(|array| {
+            for (alias, datatype) in columns {
+                array.push_array(|col_array| {
+                    col_array.push_string(alias);
+                    col_array.push_string(&format!("{:#}", datatype));
+                })
+            }
+        }));
+
+        self.tables_table.atomic_write(|batch| {
+            let tuple = [
+                Datum::from(database_name),
+                Datum::from(table_name),
+                Datum::from("view"),
+                Datum::from(sql),
+                Datum::from(context),
+                Datum::Null,
+                columns_datum,
+                Datum::from(system),
+            ];
+            batch.write_tuple(&self.tables_table, &tuple, timestamp, 1)
+        })?;
+        Ok(())
+    }
+
+    /// Drops a table or view but doesn't do any of the pre checks
     fn drop_table_impl(
         &mut self,
         database_name: &str,
@@ -355,29 +427,42 @@ impl Catalog {
                 .range_scan(Some(&table_key), Some(&table_key), LogicalTimestamp::MAX);
 
         let (table_tuple, table_freq) = tables_iter.next()?.unwrap();
-
-        let prefix_key = &table_tuple[2..3];
-        let mut prefix_iter = self.prefix_metadata_table.range_scan(
-            Some(&prefix_key),
-            Some(&prefix_key),
-            LogicalTimestamp::MAX,
-        );
-
-        let table_id = prefix_key[0].as_bigint() as u32;
-
-        let (prefix_tuple, prefix_freq) = prefix_iter.next()?.unwrap();
-
-        // first drop the data, then the meta data
-        // TODO we should be able to genericise write batch and write batch WI so we can choose
-        // to opt into/outof read after write vs higher perf(and delete range support!)
-        self.tables_table
-            .atomic_write_without_index::<_, StorageError>(|write_batch| {
-                write_batch.delete_range(table_id.to_be_bytes(), (table_id + 2).to_be_bytes());
-                Ok(())
-            })?;
         self.tables_table.atomic_write::<_, StorageError>(|batch| {
+            match table_tuple[2].as_text() {
+                "table" => {
+                    // first drop the data, then the meta data
+                    // TODO we should be able to genericise write batch and write batch WI so we can choose
+                    // to opt into/outof read after write vs higher perf(and delete range support!)
+                    let prefix_key = &table_tuple[5..6];
+                    let mut prefix_iter = self.prefix_metadata_table.range_scan(
+                        Some(&prefix_key),
+                        Some(&prefix_key),
+                        LogicalTimestamp::MAX,
+                    );
+
+                    let table_id = prefix_key[0].as_bigint() as u32;
+
+                    let (prefix_tuple, prefix_freq) = prefix_iter.next()?.unwrap();
+
+                    self.tables_table
+                        .atomic_write_without_index::<_, StorageError>(|write_batch| {
+                            write_batch
+                                .delete_range(table_id.to_be_bytes(), (table_id + 2).to_be_bytes());
+                            Ok(())
+                        })?;
+                    batch.write_tuple(
+                        &self.prefix_metadata_table,
+                        prefix_tuple,
+                        now,
+                        -prefix_freq,
+                    )?;
+                }
+                "view" => {}
+                tt => panic!("Unknown table type {}", tt),
+            }
+
             batch.write_tuple(&self.tables_table, table_tuple, now, -table_freq)?;
-            batch.write_tuple(&self.prefix_metadata_table, prefix_tuple, now, -prefix_freq)?;
+
             Ok(())
         })?;
         Ok(())
@@ -391,24 +476,29 @@ mod tests {
     #[test]
     fn test_get_table() -> Result<(), CatalogError> {
         let catalog = Catalog::new_for_test()?;
-        let table = catalog.table("incresql", "databases")?;
-
-        assert_eq!(table.columns(), catalog.databases_table.columns());
-
-        let mut iter = table.full_scan(LogicalTimestamp::MAX);
-        assert_eq!(iter.next()?, Some(([Datum::from("default")].as_ref(), 1)));
+        let item = catalog.item("incresql", "databases")?;
+        if let TableOrView::Table(table) = item.item {
+            let mut iter = table.full_scan(LogicalTimestamp::MAX);
+            assert_eq!(iter.next()?, Some(([Datum::from("default")].as_ref(), 1)));
+        } else {
+            panic!()
+        }
         Ok(())
     }
 
     #[test]
     fn test_create_database() -> Result<(), CatalogError> {
         let mut catalog = Catalog::new_for_test()?;
-        let dbs_table = catalog.table("incresql", "databases")?;
+        let dbs_table = catalog.item("incresql", "databases")?;
 
         catalog.create_database("abc")?;
 
-        let mut iter = dbs_table.full_scan(LogicalTimestamp::MAX);
-        assert_eq!(iter.next()?, Some(([Datum::from("abc")].as_ref(), 1)));
+        if let TableOrView::Table(table) = &dbs_table.item {
+            let mut iter = table.full_scan(LogicalTimestamp::MAX);
+            assert_eq!(iter.next()?, Some(([Datum::from("abc")].as_ref(), 1)));
+        } else {
+            panic!()
+        }
 
         assert_eq!(
             catalog.create_database("abc"),
@@ -416,8 +506,13 @@ mod tests {
         );
 
         catalog.drop_database("abc")?;
-        let mut iter = dbs_table.full_scan(LogicalTimestamp::MAX);
-        assert_eq!(iter.next()?, Some(([Datum::from("default")].as_ref(), 1)));
+        if let TableOrView::Table(table) = &dbs_table.item {
+            let mut iter = table.full_scan(LogicalTimestamp::MAX);
+            assert_eq!(iter.next()?, Some(([Datum::from("default")].as_ref(), 1)));
+        } else {
+            panic!()
+        }
+
         Ok(())
     }
 
@@ -428,11 +523,33 @@ mod tests {
 
         catalog.create_table("default", "test", &columns)?;
 
-        let table = catalog.table("default", "test")?;
-        assert_eq!(table.columns(), columns.as_slice());
+        let item = catalog.item("default", "test")?;
+        assert_eq!(item.columns, columns.as_slice());
 
         catalog.drop_table("default", "test")?;
-        assert!(catalog.table("default", "test").is_err());
+        assert!(catalog.item("default", "test").is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn test_create_view() -> Result<(), CatalogError> {
+        let mut catalog = Catalog::new_for_test()?;
+        let columns = vec![("a".to_string(), DataType::Integer)];
+
+        catalog.create_view("default", "test", &columns, "hello world", "foo")?;
+
+        let item = catalog.item("default", "test")?;
+        assert_eq!(item.columns, columns.as_slice());
+        assert_eq!(
+            item.item,
+            TableOrView::View(View {
+                sql: "hello world".to_string(),
+                db_context: "foo".to_string()
+            })
+        );
+
+        catalog.drop_table("default", "test")?;
+        assert!(catalog.item("default", "test").is_err());
         Ok(())
     }
 }
