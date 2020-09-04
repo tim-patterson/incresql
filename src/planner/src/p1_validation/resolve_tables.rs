@@ -15,11 +15,15 @@ pub(super) fn resolve_tables(
     }
 
     if let LogicalOperator::TableReference(table_ref) = operator {
-        let current_db = session.current_database.read().unwrap();
-        let database = table_ref.database.as_ref().unwrap_or(&current_db);
-        let table_name = &table_ref.table;
+        // In a block to drop the lock as we need  to get write access to it further down for
+        // views
+        let item = {
+            let current_db = session.current_database.read().unwrap();
+            let database = table_ref.database.as_ref().unwrap_or(&current_db);
+            let table_name = &table_ref.table;
 
-        let item = catalog.item(database, table_name)?;
+            catalog.item(database, table_name)?
+        };
         match item.item {
             TableOrView::Table(table) => {
                 *operator = LogicalOperator::ResolvedTable(ResolvedTable {
@@ -27,16 +31,30 @@ pub(super) fn resolve_tables(
                     table,
                 })
             }
-            TableOrView::View(sql) => {
-                if let Statement::Query(view) = parser::parse(&sql).expect("Parse failed for view?")
+            TableOrView::View(view) => {
+                if let Statement::Query(op) =
+                    parser::parse(&view.sql).expect("Parse failed for view?")
                 {
-                    *operator = view;
+                    *operator = op;
                     // Run the planner over the subbed-in sql up to the current phase
                     sub_in_special_vars::sub_in_special_vars(operator);
                     column_aliases::normalize_column_aliases(operator);
+                    // Use a session with the "current" db being the same as the one the
+                    let mut current_db = view.db_context;
+                    {
+                        std::mem::swap(
+                            &mut current_db,
+                            &mut session.current_database.write().unwrap(),
+                        );
+                    }
                     for child in operator.children_mut() {
                         resolve_tables(catalog, child, session)?;
                     }
+                    // TODO on a failure this will leave the current db changed...
+                    std::mem::swap(
+                        &mut current_db,
+                        &mut session.current_database.write().unwrap(),
+                    );
                 } else {
                     panic!("Bogus view")
                 }

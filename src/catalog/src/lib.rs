@@ -22,7 +22,7 @@ pub struct Catalog {
     // name:text(pk)
     databases_table: Table,
     // Table listing tables
-    // database_id:text(pk), table_name:text(pk), type:text, sql:text, table_id:bigint, columns:json, system:bool
+    // database_name:text(pk), table_name:text(pk), type:text, sql:text, sql_context:text, table_id:bigint, columns:json, system:bool
     tables_table: Table,
 }
 
@@ -36,7 +36,13 @@ pub struct CatalogItem {
 #[derive(Debug, Eq, PartialEq)]
 pub enum TableOrView {
     Table(Table),
-    View(String),
+    View(View),
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub struct View {
+    pub sql: String,
+    pub db_context: String,
 }
 
 const PREFIX_METADATA_TABLE_ID: u32 = 0;
@@ -49,7 +55,7 @@ impl Catalog {
         let prefix_metadata_table =
             storage.table(PREFIX_METADATA_TABLE_ID, 3, vec![SortOrder::Asc]);
         let databases_table = storage.table(DATABASES_TABLE_ID, 1, vec![SortOrder::Asc]);
-        let tables_table = storage.table(TABLES_TABLE_ID, 7, vec![SortOrder::Asc, SortOrder::Asc]);
+        let tables_table = storage.table(TABLES_TABLE_ID, 8, vec![SortOrder::Asc, SortOrder::Asc]);
         let mut catalog = Catalog {
             storage,
             prefix_metadata_table,
@@ -83,7 +89,7 @@ impl Catalog {
         }
         let table_type = value[0].as_text();
 
-        let columns: Vec<_> = value[3]
+        let columns: Vec<_> = value[4]
             .as_json()
             .iter_array()
             .unwrap()
@@ -98,9 +104,9 @@ impl Catalog {
 
         let item = match table_type {
             "table" => {
-                let id = value[2].as_bigint() as u32;
+                let id = value[3].as_bigint() as u32;
 
-                let prefix_pk = [value[2].clone()];
+                let prefix_pk = [value[3].clone()];
                 self.prefix_metadata_table
                     .system_point_lookup(&prefix_pk, &mut key_buf, &mut value)?
                     .unwrap();
@@ -120,7 +126,10 @@ impl Catalog {
 
                 TableOrView::Table(self.storage.table(id, columns.len(), pk))
             }
-            "view" => TableOrView::View(value[1].as_text().to_string()),
+            "view" => TableOrView::View(View {
+                sql: value[1].as_text().to_string(),
+                db_context: value[2].as_text().to_string(),
+            }),
             tt => panic!("Unknown table type {}", tt),
         };
 
@@ -171,10 +180,18 @@ impl Catalog {
         table_name: &str,
         columns: &[(String, DataType)],
         view_sql: &str,
+        view_context: &str,
     ) -> Result<(), CatalogError> {
         self.check_db_exists(database_name)?;
         self.check_table_not_exists(database_name, table_name)?;
-        self.create_view_impl(database_name, table_name, columns, view_sql, false)
+        self.create_view_impl(
+            database_name,
+            table_name,
+            columns,
+            view_sql,
+            view_context,
+            false,
+        )
     }
 
     /// Drops a table or a view
@@ -343,6 +360,7 @@ impl Catalog {
                 Datum::from(table_name),
                 Datum::from("table"),
                 Datum::Null,
+                Datum::Null,
                 Datum::from(table_id as i64),
                 columns_datum,
                 Datum::from(system),
@@ -366,6 +384,7 @@ impl Catalog {
         table_name: &str,
         columns: &[(String, DataType)],
         sql: &str,
+        context: &str,
         system: bool,
     ) -> Result<(), CatalogError> {
         let timestamp = LogicalTimestamp::now();
@@ -385,6 +404,7 @@ impl Catalog {
                 Datum::from(table_name),
                 Datum::from("view"),
                 Datum::from(sql),
+                Datum::from(context),
                 Datum::Null,
                 columns_datum,
                 Datum::from(system),
@@ -413,7 +433,7 @@ impl Catalog {
                     // first drop the data, then the meta data
                     // TODO we should be able to genericise write batch and write batch WI so we can choose
                     // to opt into/outof read after write vs higher perf(and delete range support!)
-                    let prefix_key = &table_tuple[4..5];
+                    let prefix_key = &table_tuple[5..6];
                     let mut prefix_iter = self.prefix_metadata_table.range_scan(
                         Some(&prefix_key),
                         Some(&prefix_key),
@@ -516,11 +536,17 @@ mod tests {
         let mut catalog = Catalog::new_for_test()?;
         let columns = vec![("a".to_string(), DataType::Integer)];
 
-        catalog.create_view("default", "test", &columns, "hello world")?;
+        catalog.create_view("default", "test", &columns, "hello world", "foo")?;
 
         let item = catalog.item("default", "test")?;
         assert_eq!(item.columns, columns.as_slice());
-        assert_eq!(item.item, TableOrView::View("hello world".to_string()));
+        assert_eq!(
+            item.item,
+            TableOrView::View(View {
+                sql: "hello world".to_string(),
+                db_context: "foo".to_string()
+            })
+        );
 
         catalog.drop_table("default", "test")?;
         assert!(catalog.item("default", "test").is_err());

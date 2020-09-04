@@ -25,7 +25,7 @@ materialized views.
 - [x] Basic "point in time" order bys and group bys
 - [x] Data ingestion
 - [x] Basic "point in time" (inner/left outer) joins
-- [ ] View support
+- [x] View support
 - [ ] Basic MysqlWorkbench/Tableau/Datagrip support - This will mostly be creating system views.
 
 ### Building/Running from source

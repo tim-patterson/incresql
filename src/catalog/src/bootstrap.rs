@@ -53,6 +53,7 @@ impl Catalog {
                 ("name".to_string(), DataType::Text),
                 ("type".to_string(), DataType::Text),
                 ("sql".to_string(), DataType::Text),
+                ("sql_context".to_string(), DataType::Text),
                 ("table_id".to_string(), DataType::BigInt),
                 ("columns".to_string(), DataType::Json),
                 ("system".to_string(), DataType::Boolean),

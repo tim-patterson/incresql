@@ -98,11 +98,16 @@ impl Connection<'_> {
                 let columns: Vec<_> = fields.into_iter().map(|f| (f.alias, f.data_type)).collect();
 
                 let mut catalog = self.runtime.planner.catalog.write().unwrap();
-                let database = create_view
-                    .database
-                    .unwrap_or_else(|| self.session.current_database.read().unwrap().to_string());
+                let current_db = self.session.current_database.read().unwrap().to_string();
+                let database = create_view.database.as_ref().unwrap_or_else(|| &current_db);
 
-                catalog.create_view(&database, &create_view.name, &columns, &create_view.sql)?;
+                catalog.create_view(
+                    &database,
+                    &create_view.name,
+                    &columns,
+                    &create_view.sql,
+                    &current_db,
+                )?;
                 return Ok((vec![], empty_tuple_iter()));
             }
             Statement::CompactTable(compact_table) => {
