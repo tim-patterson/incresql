@@ -7,6 +7,7 @@ fn show_databases() {
         "
         |default|
         |incresql|
+        |information_schema|
         ",
     );
 }

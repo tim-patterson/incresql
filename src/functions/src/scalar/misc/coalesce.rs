@@ -27,7 +27,9 @@ pub fn register_builtins(registry: &mut Registry) {
         DataType::Integer,
         DataType::BigInt,
         DataType::Text,
+        DataType::ByteA,
         DataType::Date,
+        DataType::Timestamp,
         DataType::Json,
         Decimal(0, 0),
     ] {
