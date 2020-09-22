@@ -12,21 +12,15 @@ something that feels more like a standard relational database.
 The use case's in mind are BI dashboarding/reporting as well as being able to support serving per-user data to user facing apps/services.
 
 ### Project Status
-The initial code is largely based on a hacky POC of Tim's, however this project is still a long way off
+The code is largely based on a hacky POC of Tim's, however this project is still a long way off
 fulfilling its goals.
 
-The project will first attempt to support "point in time"(aka normal) queries before circling back to
-materialized views.
-- [x] Basic SQL parsing
-- [x] Mysql protocol Support
-- [x] Basic "point in time" query support, select/where/limit 
-- [x] Persistence/Table infra.
-- [x] Inserts / Deletes for tables.
-- [x] Basic "point in time" order bys and group bys
-- [x] Data ingestion
-- [x] Basic "point in time" (inner/left outer) joins
-- [x] View support
-- [ ] Basic MysqlWorkbench/Tableau/Datagrip support - This will mostly be creating system views.
+Basic point in time querying is working with groupbys, joins etc, but I came to the conclusion that for this to fully
+meet its goals it has to be able to:
+* cluster with low operational overhead.
+* offload cold data and state to cloud storage(streaming workloads can generate of state!).
+Rather than continuing on and building a single node streaming datastore(on top of rocksdb) which my hacky POC already
+did, I've decided to instead work on the distributed/cluster side of things @ https://github.com/tim-patterson/clortho
 
 ### Building/Running from source
 To build and/or run incresql from source you will first need the rust toolchain installed, the install
