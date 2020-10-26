@@ -10,7 +10,7 @@ yanked = "deny"
 notice = "warn"
 ignore = [
     # mysql-common uses this (which we only use for benchmarking)
-    "RUSTSEC-2020-0036",
+    "RUSTSEC-2020-0056"
 ]
 
 [bans]

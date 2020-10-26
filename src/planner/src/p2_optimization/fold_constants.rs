@@ -22,13 +22,11 @@ fn fold_constants_for_expr(expr: &mut Expression, session: &Session) {
 
             // Rust fmt doesn't seem to agree with clippy lol
             #[allow(clippy::blocks_in_if_conditions)]
-            if function_call.args.iter().all(|expr| {
-                if let Expression::Constant(..) = expr {
-                    true
-                } else {
-                    false
-                }
-            }) {
+            if function_call
+                .args
+                .iter()
+                .all(|expr| matches!(expr, Expression::Constant(..)))
+            {
                 let function_input: Vec<_> = function_call
                     .args
                     .iter()
