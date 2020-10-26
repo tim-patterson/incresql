@@ -99,11 +99,7 @@ impl<'a> Datum<'a> {
 
     /// Returns true if this value is null
     pub fn is_null(&self) -> bool {
-        if let Datum::Null = self {
-            true
-        } else {
-            false
-        }
+        matches!(self, Datum::Null)
     }
 
     /// Returns true if this value is equal to another.

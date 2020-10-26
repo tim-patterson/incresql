@@ -221,9 +221,7 @@ impl<'a> MysqlConnection<'a> {
 
         // A bit yuk..., sizing vec so we can just use the stream.read_exact method
         self.packet_buf.clear();
-        for _ in 0..packet_length {
-            self.packet_buf.push(0);
-        }
+        self.packet_buf.resize(packet_length as usize, 0);
         self.stream.read_exact(&mut self.packet_buf)?;
         let packet = P::read(&self.packet_buf)?;
         Ok(packet)
