@@ -8,7 +8,7 @@ use ast::rel::logical::{LogicalOperator, TableInsert, TableReference, Values};
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::combinator::{cut, map};
-use nom::multi::separated_list;
+use nom::multi::separated_list0;
 use nom::sequence::{pair, preceded, tuple};
 
 /// Parses an insert statement
@@ -43,7 +43,7 @@ fn values(input: &str) -> ParserResult<LogicalOperator> {
             alt((kw("VALUES"), kw("VALUE"))),
             cut(preceded(
                 ws_0,
-                separated_list(tuple((ws_0, tag(","), ws_0)), values_row),
+                separated_list0(tuple((ws_0, tag(","), ws_0)), values_row),
             )),
         ),
         |data| {
@@ -61,7 +61,7 @@ fn values_row(input: &str) -> ParserResult<Vec<Expression>> {
         tuple((
             tag("("),
             ws_0,
-            separated_list(tuple((ws_0, tag(","), ws_0)), literal),
+            separated_list0(tuple((ws_0, tag(","), ws_0)), literal),
             ws_0,
             tag(")"),
         )),
