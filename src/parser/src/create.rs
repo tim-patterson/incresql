@@ -8,7 +8,7 @@ use data::DataType;
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::combinator::{cut, map};
-use nom::multi::separated_list;
+use nom::multi::separated_list0;
 use nom::sequence::{pair, preceded, separated_pair, tuple};
 
 /// Parses a create statement
@@ -34,7 +34,7 @@ fn create_table(input: &str) -> ParserResult<Statement> {
                 ws_0,
                 qualified_reference,
                 tuple((ws_0, tag("("), ws_0)),
-                separated_list(tuple((ws_0, tag(","), ws_0)), column_spec),
+                separated_list0(tuple((ws_0, tag(","), ws_0)), column_spec),
                 tuple((ws_0, tag(")"))),
             ))),
         ),

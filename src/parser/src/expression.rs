@@ -8,7 +8,7 @@ use nom::branch::{alt, Alt};
 use nom::bytes::complete::tag;
 use nom::combinator::{cut, map, opt, value};
 use nom::error::VerboseError;
-use nom::multi::{many0, separated_list};
+use nom::multi::{many0, separated_list0};
 use nom::sequence::{delimited, pair, preceded, separated_pair, tuple};
 
 /// Parses a bog standard expression, ie 1 + 2
@@ -50,7 +50,7 @@ fn sort_order(input: &str) -> ParserResult<SortOrder> {
 
 /// Parse a comma separated list of expressions ie 1,2+2
 pub fn comma_sep_expressions(input: &str) -> ParserResult<Vec<Expression>> {
-    separated_list(tuple((ws_0, tag(","), ws_0)), expression)(input)
+    separated_list0(tuple((ws_0, tag(","), ws_0)), expression)(input)
 }
 
 fn expression_0(input: &str) -> ParserResult<Expression> {
@@ -204,7 +204,7 @@ fn expression_9(input: &str) -> ParserResult<Expression> {
 fn infix_many<'a, List: Alt<&'a str, &'a str, VerboseError<&'a str>>>(
     operators: List,
     higher: fn(&'a str) -> ParserResult<Expression>,
-) -> impl Fn(&'a str) -> ParserResult<Expression> {
+) -> impl FnMut(&'a str) -> ParserResult<Expression> {
     map(
         // Basically for an expression like
         // 1 + 2 * 3 + 5 + 6
@@ -230,7 +230,7 @@ fn infix_many<'a, List: Alt<&'a str, &'a str, VerboseError<&'a str>>>(
 fn infix<'a, Op: Fn(&'a str) -> ParserResult<&'a str>>(
     operator: Op,
     higher: fn(&'a str) -> ParserResult<Expression>,
-) -> impl Fn(&'a str) -> ParserResult<Expression> {
+) -> impl FnMut(&'a str) -> ParserResult<Expression> {
     map(
         // as per infix many, but as nom doesn't support tuples of size zero...
         tuple((higher, many0(tuple((ws_0, operator, ws_0, higher))))),

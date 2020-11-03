@@ -10,7 +10,7 @@ use ast::rel::logical::{
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::combinator::{cut, map, opt, value};
-use nom::multi::{many0, separated_list, separated_nonempty_list};
+use nom::multi::{many0, separated_list0, separated_list1};
 use nom::sequence::{delimited, pair, preceded, separated_pair, tuple};
 
 /// Parses a select statement, a select statement consists of potentially multiple
@@ -94,7 +94,7 @@ fn select_expr(input: &str) -> ParserResult<LogicalOperator> {
 }
 
 fn comma_sep_named_expressions(input: &str) -> ParserResult<Vec<NamedExpression>> {
-    separated_list(tuple((ws_0, tag(","), ws_0)), named_expression)(input)
+    separated_list0(tuple((ws_0, tag(","), ws_0)), named_expression)(input)
 }
 
 // The from clause of a query can get a bit tricky...
@@ -118,7 +118,7 @@ fn from_clause(input: &str) -> ParserResult<LogicalOperator> {
     map(
         preceded(
             kw("FROM"),
-            cut(separated_nonempty_list(
+            cut(separated_list1(
                 tuple((ws_0, tag(","), ws_0)),
                 preceded(ws_0, join),
             )),
@@ -223,7 +223,7 @@ pub(crate) fn order_clause(input: &str) -> ParserResult<Vec<SortExpression>> {
         tuple((kw("ORDER"), ws_0, kw("BY"))),
         cut(preceded(
             ws_0,
-            separated_list(tuple((ws_0, tag(","), ws_0)), sort_expression),
+            separated_list0(tuple((ws_0, tag(","), ws_0)), sort_expression),
         )),
     )(input)
 }
