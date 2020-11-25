@@ -341,7 +341,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "lazy_static",
- "nom 6.0.0",
+ "nom 6.0.1",
  "regex",
  "rust_decimal",
  "serde",
@@ -802,9 +802,9 @@ dependencies = [
 
 [[package]]
 name = "nom"
-version = "6.0.0"
+version = "6.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4489ccc7d668957ddf64af7cd027c081728903afa6479d35da7e99bf5728f75f"
+checksum = "88034cfd6b4a0d54dd14f4a507eceee36c0b70e5a02236c4e4df571102be17f0"
 dependencies = [
  "bitvec",
  "lexical-core",
@@ -887,7 +887,7 @@ version = "0.1.0"
 dependencies = [
  "ast",
  "data",
- "nom 6.0.0",
+ "nom 6.0.1",
 ]
 
 [[package]]
