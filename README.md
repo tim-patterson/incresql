@@ -19,9 +19,7 @@ Basic point in time querying is working with groupbys, joins etc, but I came to 
 meet its goals it has to be able to:
 * cluster with low operational overhead.
 * offload cold data and state to cloud storage(streaming workloads can generate of state!).
-Rather than continuing on and building a single node streaming datastore(on top of rocksdb) which my hacky POC already
-did, I've decided to instead work on the distributed/cluster side of things @ https://github.com/tim-patterson/clortho
-
+Rather than continuing on I've just parked for now
 ### Building/Running from source
 To build and/or run incresql from source you will first need the rust toolchain installed, the install
 instructions can be found at https://rustup.rs/
