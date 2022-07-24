@@ -9,7 +9,7 @@ publish = false
 chrono = "0.4.19"
 lazy_static = "1.4.0"
 regex = "1"
-rust_decimal = "1.7.0"
+rust_decimal = "1.25.0"
 serde = "1.0.115"
 serde_json = { version="1.0", features=["arbitrary_precision"] }
 nom = "6.0.0"
