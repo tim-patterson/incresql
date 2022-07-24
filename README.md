@@ -4,7 +4,7 @@
 A database supporting incremental updates of materialized views
 
 ### Goals
-The goal of the project is to write a functional db to explore/experiment with the incremental materialized views space.
+The goal of the project is to explore and experiment with the incremental materialized views space.
 
 Incremental materialized views can be thought of as fulfilling the same use cases as ksqlDB but with more standard sql in
 something that feels more like a standard relational database.
@@ -12,8 +12,8 @@ something that feels more like a standard relational database.
 The use case's in mind are BI dashboarding/reporting as well as being able to support serving per-user data to user facing apps/services.
 
 ### Project Status
-Basic point in time querying is working with groupbys, joins etc.
-Project is abandoned, lessons have been learned.
+Basic functionality is working with groupbys, joins etc.
+Project is abandoned, lessons have been learned...
 
 ### Building/Running from source
 To build and/or run incresql from source you will first need the rust toolchain installed, the install
