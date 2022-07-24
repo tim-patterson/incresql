@@ -13,6 +13,7 @@ The use case's in mind are BI dashboarding/reporting as well as being able to su
 
 ### Project Status
 Basic point in time querying is working with groupbys, joins etc.
+Project is abandoned, lessons have been learned.
 
 ### Building/Running from source
 To build and/or run incresql from source you will first need the rust toolchain installed, the install
@@ -86,3 +87,4 @@ cargo run  --release -- --directory target/benchmark_db
 Other similar projects are
 * https://github.com/mit-pdos/noria - More academic in nature, focusing more on traditional transactional apps used prepared statements.
 * https://github.com/MaterializeInc/materialize - Similar goals but is an in-memory system rather than leaning on rocksdb.
+
