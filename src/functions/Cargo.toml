@@ -8,4 +8,4 @@ publish = false
 [dependencies]
 data = { path = "../data" }
 
-num-traits = "0.2.12"
+num-traits = "0.2.15"
