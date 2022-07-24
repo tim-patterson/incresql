@@ -23,7 +23,7 @@ members = [
 [dependencies]
 runtime = { path = "src/runtime" }
 server = { path = "src/server" }
-clap = "2.33.3"
+clap = "2.34.0"
 
 # Non windows Deps
 [target.'cfg(not(windows))'.dependencies]
