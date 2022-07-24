@@ -27,7 +27,7 @@ clap = "2.33.3"
 
 # Non windows Deps
 [target.'cfg(not(windows))'.dependencies]
-jemallocator = { version = "0.3.2", features=["unprefixed_malloc_on_supported_platforms", "background_threads"] }
+jemallocator = { version = "0.5.0", features=["unprefixed_malloc_on_supported_platforms", "background_threads"] }
 
 # These are needed to support the integration tests and/or benchmarking
 [dev-dependencies]
