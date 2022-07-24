@@ -9,7 +9,7 @@ publish = false
 data = { path = "../data" }
 
 [dependencies.rocksdb]
-git = "https://github.com/incresql/rust-rocksdb"
+git = "https://github.com/tim-patterson/rust-rocksdb"
 branch = "feature/writebatchindex"
 default-features = false
 features = ["lz4"]

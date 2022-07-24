@@ -641,7 +641,7 @@ dependencies = [
 [[package]]
 name = "librocksdb-sys"
 version = "6.11.4"
-source = "git+https://github.com/incresql/rust-rocksdb?branch=feature/writebatchindex#30907c245c3cd600072135f86dea0255573875fa"
+source = "git+https://github.com/tim-patterson/rust-rocksdb?branch=feature/writebatchindex#30907c245c3cd600072135f86dea0255573875fa"
 dependencies = [
  "bindgen",
  "cc",
@@ -1048,7 +1048,7 @@ dependencies = [
 [[package]]
 name = "rocksdb"
 version = "0.14.0"
-source = "git+https://github.com/incresql/rust-rocksdb?branch=feature/writebatchindex#30907c245c3cd600072135f86dea0255573875fa"
+source = "git+https://github.com/tim-patterson/rust-rocksdb?branch=feature/writebatchindex#30907c245c3cd600072135f86dea0255573875fa"
 dependencies = [
  "ambassador",
  "delegate",
