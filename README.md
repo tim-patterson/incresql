@@ -4,7 +4,7 @@
 A database supporting incremental updates of materialized views
 
 ### Goals
-The goal of the project is to write a functional db to explore the incremental materialized views space.
+The goal of the project is to write a functional db to explore/experiment with the incremental materialized views space.
 
 Incremental materialized views can be thought of as fulfilling the same use cases as ksqlDB but with more standard sql in
 something that feels more like a standard relational database.
@@ -12,15 +12,7 @@ something that feels more like a standard relational database.
 The use case's in mind are BI dashboarding/reporting as well as being able to support serving per-user data to user facing apps/services.
 
 ### Project Status
-The code is largely based on a hacky POC of Tim's, however this project is still a long way off
-fulfilling its goals.
-
-Basic point in time querying is working with groupbys, joins etc, but I came to the conclusion that for this to fully
-meet its goals it has to be able to:
-* cluster with low operational overhead.
-* offload cold data and state to cloud storage(streaming workloads can generate of state!).
-Rather than continuing on and building a single node streaming datastore(on top of rocksdb) which my hacky POC already
-did, I've decided to instead work on the distributed/cluster side of things @ https://github.com/tim-patterson/clortho
+Basic point in time querying is working with groupbys, joins etc.
 
 ### Building/Running from source
 To build and/or run incresql from source you will first need the rust toolchain installed, the install
@@ -93,4 +85,4 @@ cargo run  --release -- --directory target/benchmark_db
 ### Related Work
 Other similar projects are
 * https://github.com/mit-pdos/noria - More academic in nature, focusing more on traditional transactional apps used prepared statements.
-* https://github.com/MaterializeInc/materialize - Similar goals but is an in-memory system so has different tradeoffs and therefore target usecases.
+* https://github.com/MaterializeInc/materialize - Similar goals but is an in-memory system rather than leaning on rocksdb.
